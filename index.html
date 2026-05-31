@@ -237,6 +237,15 @@
       height:54px;
       border-radius:50%;
       font-size:1.1rem;
+      opacity:0;
+      pointer-events:none;
+      transform:scale(.86);
+      transition:opacity .16s, transform .16s, background .12s;
+    }
+    body[data-can-interact="true"] #mobile-interact-btn {
+      opacity:1;
+      pointer-events:auto;
+      transform:scale(1);
     }
     body[data-controls="touch"] #mobile-controls { display:block; }
     body[data-controls="touch"] #interact-prompt { bottom:154px; }

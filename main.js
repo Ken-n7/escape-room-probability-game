@@ -39,6 +39,7 @@ let queuedLookDY = 0;
 let lastRawLookAt = 0;
 
 const LOOK_SENS = 0.0022;
+const INTERACT_FACING_DOT = 0.72;
 const DEVICE_QUERIES = {
   primaryCoarse: window.matchMedia('(pointer: coarse)'),
   primaryFine: window.matchMedia('(pointer: fine)'),
@@ -233,8 +234,10 @@ document.querySelectorAll('[data-move]').forEach(btn => {
     btn.addEventListener(type, () => set(false));
   });
 });
-document.getElementById('mobile-interact-btn').addEventListener('pointerdown', e => {
+const mobileInteractButton = document.getElementById('mobile-interact-btn');
+mobileInteractButton.addEventListener('pointerdown', e => {
   e.preventDefault();
+  if (mobileInteractButton.disabled) return;
   tryInteract();
 });
 
@@ -286,6 +289,11 @@ const elHudPlayer   = $('hud-player');
 const elOptionsConfirm = $('options-confirm');
 const elOptionsConfirmText = $('options-confirm-text');
 
+function setCanInteract(canInteract) {
+  document.body.dataset.canInteract = canInteract ? 'true' : 'false';
+  mobileInteractButton.disabled = !canInteract;
+}
+
 function primeAudio() {
   AudioManager.startLoop('ambient').catch(err => console.warn('Audio preload failed.', err));
 }
@@ -323,6 +331,7 @@ document.addEventListener('click', e => {
 function showScreen(name) {
   Object.values(screens).forEach(s => s.classList.add('hidden'));
   elHud.style.display = 'none';
+  setCanInteract(false);
   renderer.domElement.style.cursor = 'auto';   // restore cursor for UI
   unlockPointer();                              // release pointer lock for any UI
   if (name) screens[name].classList.remove('hidden');
@@ -851,12 +860,22 @@ screens.pause.addEventListener('click', () => {
 //  INTERACTION
 // ═══════════════════════════════════════════════════════════════════════════════
 let nearObject = null;
+const interactLookDir = new THREE.Vector3();
+const interactToObject = new THREE.Vector3();
 
 function findNearObject() {
-  let best = null, bestDist = CFG.player.interactR;
+  let best = null, bestScore = -Infinity;
+  camera.getWorldDirection(interactLookDir);
   interactiveObjects.forEach(obj => {
-    const d = camera.position.distanceTo(obj.position);
-    if (d < bestDist) { bestDist = d; best = obj; }
+    interactToObject.subVectors(obj.position, camera.position);
+    const d = interactToObject.length();
+    if (d > CFG.player.interactR) return;
+
+    const facing = interactToObject.normalize().dot(interactLookDir);
+    if (facing < INTERACT_FACING_DOT) return;
+
+    const score = facing - d / (CFG.player.interactR * 4);
+    if (score > bestScore) { bestScore = score; best = obj; }
   });
   return best;
 }
@@ -987,6 +1006,7 @@ function animate() {
 
   // ── Interaction prompt ────────────────────────────────────────────────────
   nearObject = findNearObject();
+  setCanInteract(Boolean(nearObject));
   if (nearObject) {
     const actionLabel = GameDevice.controls === 'touch' ? 'Tap !' : '[ E ]';
     elPrompt.textContent = nearObject.userData.isKeypad
