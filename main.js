@@ -220,7 +220,10 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Escape' || e.code === 'KeyP') {
     e.preventDefault();
     if (state === S.PLAYING) openOptions();
-    else if (state === S.PAUSED && !screens.options.classList.contains('hidden')) resumeGame();
+    else if (state === S.PAUSED) {
+      if (!screens.options.classList.contains('hidden')) resumeGame();
+      else if (!screens.settings.classList.contains('hidden') && settingsFrom === 'options') openOptions(false);
+    }
   }
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -312,6 +315,9 @@ const elOptionsConfirm = $('options-confirm');
 const elOptionsConfirmText = $('options-confirm-text');
 const elSensitivity = $('settings-sensitivity');
 const elSensitivityValue = $('settings-sensitivity-value');
+const elPersistentFsBtn = $('persistent-fs-btn');
+const elFsIconEnter = $('fs-icon-enter');
+const elFsIconExit = $('fs-icon-exit');
 
 function setCanInteract(canInteract) {
   document.body.dataset.canInteract = canInteract ? 'true' : 'false';
@@ -380,17 +386,33 @@ function hideOptionsConfirm() {
 }
 
 function updateFullscreenLabel() {
+  const isFull = Boolean(document.fullscreenElement);
+  const available = Boolean(document.fullscreenEnabled);
+
   ['btn-options-fullscreen', 'btn-settings-fullscreen'].forEach(id => {
     const btn = $(id);
     if (!btn) return;
-    if (!document.fullscreenEnabled) {
+    if (!available) {
       btn.disabled = true;
       btn.textContent = 'Fullscreen Unavailable';
       return;
     }
     btn.disabled = false;
-    btn.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+    btn.textContent = isFull ? 'Exit Fullscreen' : 'Fullscreen';
   });
+
+  if (elPersistentFsBtn) {
+    if (!available) {
+      elPersistentFsBtn.style.display = 'none';
+      return;
+    }
+    elPersistentFsBtn.style.display = '';
+    const label = isFull ? 'Exit Fullscreen' : 'Enter Fullscreen';
+    elPersistentFsBtn.title = label;
+    elPersistentFsBtn.setAttribute('aria-label', label);
+    if (elFsIconEnter) elFsIconEnter.style.display = isFull ? 'none' : '';
+    if (elFsIconExit)  elFsIconExit.style.display  = isFull ? '' : 'none';
+  }
 }
 
 function updateSensitivityUI() {
@@ -456,6 +478,10 @@ async function toggleFullscreen() {
 }
 
 document.addEventListener('fullscreenchange', updateFullscreenLabel);
+elPersistentFsBtn?.addEventListener('click', () => {
+  toggleFullscreen();
+  AudioManager.play('uiClick');
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  STORY SLIDES
@@ -606,12 +632,16 @@ function goToPlearn() {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SETTINGS
 // ═══════════════════════════════════════════════════════════════════════════════
-function openSettings() {
+let settingsFrom = 'menu';
+
+function openSettings(from = 'menu') {
+  settingsFrom = from;
   $('settings-name').value = playerName;
   $('settings-saved').textContent = '';
   updateSensitivityUI();
   updateFullscreenLabel();
   updateSettingsScores();
+  $('btn-settings-back').textContent = from === 'options' ? '← BACK TO GAME' : '← BACK TO MENU';
   showScreen('settings');
 }
 
@@ -659,11 +689,14 @@ elSensitivity.addEventListener('input', e => {
   setLookSensitivity(e.target.value, true);
 });
 
-$('btn-settings-back').onclick = () => showScreen('menu');
+$('btn-settings-back').onclick = () => {
+  if (settingsFrom === 'options') openOptions(false);
+  else showScreen('menu');
+};
 $('btn-settings-fullscreen').onclick = toggleFullscreen;
 
 // ── Settings and About icons on the menu ──────────────────────────────────────
-$('icon-settings').onclick = openSettings;
+$('icon-settings').onclick = () => openSettings('menu');
 $('icon-about').onclick    = () => showScreen('about');
 $('btn-about-back').onclick = () => showScreen('menu');
 
@@ -915,8 +948,8 @@ $('btn-play').onclick = () => {
 $('btn-plearn').onclick = goToPlearn;
 $('btn-yes').onclick    = startGame;
 $('btn-no').onclick     = () => showScreen('menu');
-$('btn-win-restart').onclick  = () => { showScreen('title'); CFG.gameplay.pLearnMode = false; };
-$('btn-lose-retry').onclick   = () => { showScreen('title'); CFG.gameplay.pLearnMode = false; };
+$('btn-win-restart').onclick  = () => { CFG.gameplay.pLearnMode = false; showScreen('menu'); };
+$('btn-lose-retry').onclick   = () => { showScreen('ready'); };
 $('hud-options-btn').onclick = () => openOptions();
 $('btn-options-resume').onclick = resumeGame;
 $('btn-options-fullscreen').onclick = toggleFullscreen;
@@ -926,6 +959,7 @@ $('btn-options-restart').onclick = () => {
 $('btn-options-home').onclick = () => {
   requestOptionsConfirm('Return to the home screen? Current run progress will be cleared.', returnHomeFromOptions);
 };
+$('btn-options-settings').onclick = () => openSettings('options');
 $('btn-options-confirm-no').onclick = hideOptionsConfirm;
 $('btn-options-confirm-yes').onclick = () => {
   const action = pendingOptionsAction;
@@ -1151,5 +1185,6 @@ function animate() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 updateMenuName();
+updateFullscreenLabel();
 showScreen('title');
 animate();

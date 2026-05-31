@@ -1503,6 +1503,32 @@
       }
     }
 
+    /* ── PERSISTENT FULLSCREEN BUTTON ───────────────────────────────────── */
+    #persistent-fs-btn {
+      position:fixed;
+      bottom:12px;
+      right:90px;
+      z-index:50;
+      width:32px;
+      height:32px;
+      border-radius:6px;
+      border:1px solid rgba(231,223,204,.18);
+      background:rgba(0,0,0,.42);
+      color:rgba(231,223,204,.55);
+      cursor:pointer;
+      padding:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      backdrop-filter:blur(2px);
+      transition:background .15s, border-color .15s, color .15s;
+    }
+    #persistent-fs-btn:hover {
+      background:rgba(0,0,0,.62);
+      border-color:rgba(231,223,204,.38);
+      color:rgba(231,223,204,.9);
+    }
+
     /* ── Keyframes ───────────────────────────────────────────────────────── */
     @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:.72} }
   </style>
@@ -1624,6 +1650,7 @@
     <h2>PAUSED</h2>
     <div class="options-actions">
       <button class="options-btn primary" id="btn-options-resume" type="button">Resume Run</button>
+      <button class="options-btn" id="btn-options-settings" type="button">Settings</button>
       <button class="options-btn" id="btn-options-fullscreen" type="button">Fullscreen</button>
       <button class="options-btn" id="btn-options-restart" type="button">Restart Run</button>
       <button class="options-btn danger" id="btn-options-home" type="button">Home Screen</button>
@@ -1765,6 +1792,16 @@
   <h1>PAUSED</h1>
   <p>Click anywhere to continue</p>
 </div>
+
+<!-- ══ PERSISTENT FULLSCREEN BUTTON ══════════════════════════════════════════ -->
+<button id="persistent-fs-btn" type="button" aria-label="Enter Fullscreen" title="Enter Fullscreen">
+  <svg id="fs-icon-enter" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4,1 L1,1 1,4 M10,1 13,1 13,4 M1,10 1,13 4,13 M13,10 13,13 10,13"/>
+  </svg>
+  <svg id="fs-icon-exit" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+    <path d="M1,4 L4,4 4,1 M13,4 10,4 10,1 M1,10 4,10 4,13 M13,10 10,10 10,13"/>
+  </svg>
+</button>
 
 <script type="module" src="main.js"></script>
 </body>
