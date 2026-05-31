@@ -543,6 +543,9 @@ function renderPlearn() {
     d.className = 'plearn-dot' + (i === plearnIdx ? ' active' : '');
     nav.appendChild(d);
   });
+
+  screens.plearn.scrollLeft = 0;
+  requestAnimationFrame(() => { screens.plearn.scrollLeft = 0; });
 }
 
 window.plearnStep = function(dir) {
@@ -655,9 +658,22 @@ function resetProgress() {
 let activeRoomIdx = -1;
 let activeQIdx    = 0;
 let wrongCount    = 0;
+let questionAdvanceTimer = null;
+let wrongFeedbackTimer = null;
+let wrongResetTimer = null;
+
+function clearQuestionTimers() {
+  if (questionAdvanceTimer) clearTimeout(questionAdvanceTimer);
+  if (wrongFeedbackTimer) clearTimeout(wrongFeedbackTimer);
+  if (wrongResetTimer) clearTimeout(wrongResetTimer);
+  questionAdvanceTimer = null;
+  wrongFeedbackTimer = null;
+  wrongResetTimer = null;
+}
 
 function openQuestion(roomIdx) {
   if (roomDone[roomIdx]) return;
+  clearQuestionTimers();
   activeRoomIdx = roomIdx;
   activeQIdx    = roomProgress[roomIdx];
   wrongCount    = 0;
@@ -694,34 +710,42 @@ function showQuestionUI() {
 
 function handleAnswer(choiceIdx) {
   const q = ROOMS[activeRoomIdx].questions[activeQIdx];
+  clearQuestionTimers();
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
 
   if (choiceIdx === q.correct) {
     document.querySelectorAll('.choice-btn')[choiceIdx].classList.add('correct');
     AudioManager.play('pickup');
 
-    setTimeout(() => {
-      activeQIdx++;
-      roomProgress[activeRoomIdx] = activeQIdx;
+    const answeredRoomIdx = activeRoomIdx;
+    activeQIdx++;
+    roomProgress[answeredRoomIdx] = activeQIdx;
 
-      if (activeQIdx >= ROOMS[activeRoomIdx].questions.length) {
-        // Room complete
-        roomDone[activeRoomIdx]   = true;
-        codeDigits[activeRoomIdx] = ROOMS[activeRoomIdx].codeDigit;
+    if (activeQIdx >= ROOMS[answeredRoomIdx].questions.length) {
+      // Room complete
+      roomDone[answeredRoomIdx]   = true;
+      codeDigits[answeredRoomIdx] = ROOMS[answeredRoomIdx].codeDigit;
 
-        // Calculate and save score
-        const score = calcScore(activeRoomIdx);
-        if (bestScores[activeRoomIdx] === null || score > bestScores[activeRoomIdx]) {
-          bestScores[activeRoomIdx] = score;
-          persistSave();
-        }
-
-        updateHUD();
-        closeQuestion();
-      } else {
-        showQuestionUI();
+      // Calculate and save score
+      const score = calcScore(answeredRoomIdx);
+      if (bestScores[answeredRoomIdx] === null || score > bestScores[answeredRoomIdx]) {
+        bestScores[answeredRoomIdx] = score;
+        persistSave();
       }
-    }, 900);
+
+      updateHUD();
+      questionAdvanceTimer = setTimeout(() => {
+        if (state === S.QUESTION && activeRoomIdx === answeredRoomIdx) {
+          closeQuestion();
+        }
+      }, 900);
+    } else {
+      questionAdvanceTimer = setTimeout(() => {
+        if (state === S.QUESTION && activeRoomIdx === answeredRoomIdx) {
+          showQuestionUI();
+        }
+      }, 900);
+    }
 
   } else {
     document.querySelectorAll('.choice-btn')[choiceIdx].classList.add('wrong');
@@ -731,23 +755,38 @@ function handleAnswer(choiceIdx) {
 
     elVignette.style.opacity    = '0.8';
     elVignette.style.background = 'rgba(80,0,0,0.92)';
-    setTimeout(() => { elVignette.style.background = ''; elVignette.style.opacity = '0'; }, 500);
+    wrongFeedbackTimer = setTimeout(() => {
+      elVignette.style.background = '';
+      elVignette.style.opacity = '0';
+      wrongFeedbackTimer = null;
+    }, 500);
 
     $('question-wrong-count').textContent =
       wrongCount >= CFG.gameplay.maxWrongAnswers
         ? '⚠ The ghost grows stronger…'
         : `✗ Wrong  (${wrongCount}/${CFG.gameplay.maxWrongAnswers})`;
 
-    setTimeout(() => {
-      document.querySelectorAll('.choice-btn').forEach(b => {
-        b.disabled = false; b.classList.remove('wrong');
-      });
+    wrongResetTimer = setTimeout(() => {
+      if (state === S.QUESTION) {
+        document.querySelectorAll('.choice-btn').forEach(b => {
+          b.disabled = false; b.classList.remove('wrong');
+        });
+      }
+      wrongResetTimer = null;
     }, 700);
   }
 }
 
+function leaveQuestion() {
+  if (state !== S.QUESTION) return;
+  AudioManager.play('uiClick');
+  closeQuestion();
+}
+
 function closeQuestion() {
+  clearQuestionTimers();
   showHUD();
+  activeRoomIdx = -1;
   state = S.PLAYING;
 }
 
@@ -846,6 +885,7 @@ $('btn-options-confirm-yes').onclick = () => {
   pendingOptionsAction = null;
   if (action) action();
 };
+$('btn-question-exit').onclick = leaveQuestion;
 
 // ── Pause screen: click to resume + re-lock ───────────────────────────────────
 screens.pause.addEventListener('click', () => {
@@ -862,6 +902,42 @@ screens.pause.addEventListener('click', () => {
 let nearObject = null;
 const interactLookDir = new THREE.Vector3();
 const interactToObject = new THREE.Vector3();
+
+function readDebugState() {
+  return {
+    state,
+    position: {
+      x: Number(camera.position.x.toFixed(2)),
+      y: Number(camera.position.y.toFixed(2)),
+      z: Number(camera.position.z.toFixed(2)),
+    },
+    yaw: Number(yaw.toFixed(2)),
+    pitch: Number(pitch.toFixed(2)),
+    canInteract: Boolean(nearObject),
+    target: nearObject?.userData || null,
+  };
+}
+
+if (import.meta.env.DEV) {
+  window.__escapeRoomDebug = {
+    getState: readDebugState,
+    setPose(nextPose = {}) {
+      const nextYaw = nextPose.yaw ?? yaw;
+      const nextPitch = nextPose.pitch ?? pitch;
+      yaw = nextYaw;
+      pitch = nextPitch;
+      camera.position.set(
+        nextPose.x ?? camera.position.x,
+        nextPose.y ?? camera.position.y,
+        nextPose.z ?? camera.position.z
+      );
+      camera.rotation.set(pitch, yaw, 0);
+      nearObject = findNearObject();
+      setCanInteract(Boolean(nearObject));
+      return readDebugState();
+    },
+  };
+}
 
 function findNearObject() {
   let best = null, bestScore = -Infinity;

@@ -231,12 +231,12 @@
     #mobile-move [data-move="KeyS"] { grid-column:2; grid-row:3; }
     #mobile-interact-btn {
       position:absolute;
-      right:20px;
-      bottom:84px;
-      width:54px;
-      height:54px;
+      right:22px;
+      bottom:22px;
+      width:64px;
+      height:64px;
       border-radius:50%;
-      font-size:1.1rem;
+      font-size:1.35rem;
       opacity:0;
       pointer-events:none;
       transform:scale(.86);
@@ -254,8 +254,13 @@
       width:54px;
       height:54px;
       right:14px;
-      bottom:14px;
+      top:14px;
+      bottom:auto;
       font-size:1.35rem;
+    }
+    body[data-controls="touch"] #code-tracker {
+      top:14px;
+      right:82px;
     }
     #rotate-phone {
       display:none;
@@ -339,6 +344,26 @@
       border:1px solid #330033; border-radius:12px;
       padding:36px 40px; max-width:720px; width:90%;
       text-align:center; position:relative;
+    }
+    #btn-question-exit {
+      position:absolute;
+      top:12px;
+      right:12px;
+      width:38px;
+      height:38px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.24);
+      background:rgba(0,0,0,.54);
+      color:#ffeecc;
+      font-family:monospace;
+      font-size:1.15rem;
+      cursor:pointer;
+      z-index:2;
+      transition:background .15s, transform .15s;
+    }
+    #btn-question-exit:hover {
+      background:rgba(80,0,0,.7);
+      transform:translateY(-1px);
     }
     #question-skull { font-size:2.5rem; position:absolute; top:-28px; left:50%; transform:translateX(-50%); }
     #question-room-label { color:#aa99bb; font-size:0.8rem; letter-spacing:2px; margin-bottom:8px; }
@@ -552,6 +577,7 @@
     .screen {
       isolation:isolate;
       overflow:hidden;
+      overflow:clip;
       padding:24px;
     }
     .screen::after {
@@ -1552,6 +1578,7 @@
 <!-- ══ QUESTION MODAL ══════════════════════════════════════════════════════════ -->
 <div id="s-question" class="screen hidden">
   <div id="question-box">
+    <button id="btn-question-exit" type="button" aria-label="Return to room">×</button>
     <div id="question-skull">💀</div>
     <div id="question-room-label">ROOM 1</div>
     <div id="question-text">Question goes here.</div>
