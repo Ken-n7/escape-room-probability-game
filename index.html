@@ -183,7 +183,7 @@
     /* ── HUD ─────────────────────────────────────────────────────────────── */
     #hud { position:fixed; inset:0; pointer-events:none; z-index:10; display:none; }
     #hud-options-btn {
-      position:absolute; right:16px; bottom:16px;
+      position:absolute; top:10px; right:10px; bottom:auto;
       width:48px; height:48px; border-radius:50%;
       pointer-events:auto; touch-action:manipulation;
       border:1px solid rgba(255,255,255,0.3);
@@ -193,7 +193,7 @@
     }
     #hud-options-btn:hover { background:rgba(80,0,0,0.7); }
     #code-tracker {
-      position:absolute; top:16px; right:16px;
+      position:absolute; top:10px; right:66px;
       color:#ffdd44; font-family:monospace; font-size:1rem;
       letter-spacing:4px; text-shadow:0 0 8px gold;
       background:rgba(0,0,0,0.5); padding:6px 14px; border-radius:6px;
@@ -275,14 +275,14 @@
     body[data-controls="touch"] #hud-options-btn {
       width:54px;
       height:54px;
-      right:14px;
-      top:14px;
+      right:10px;
+      top:10px;
       bottom:auto;
       font-size:1.35rem;
     }
     body[data-controls="touch"] #code-tracker {
-      top:14px;
-      right:82px;
+      top:10px;
+      right:72px;
     }
     #rotate-phone {
       display:none;
@@ -484,17 +484,6 @@
       transition:background 0.15s;
     }
     #btn-save-name:hover { background:#4a2200; }
-    #btn-settings-fullscreen {
-      width:100%; margin:4px 0 10px; padding:11px;
-      background:rgba(9,32,28,0.78); border:1px solid rgba(143,211,189,0.36);
-      border-radius:6px; color:#8fd3bd; font-family:monospace;
-      font-size:0.85rem; letter-spacing:2px; cursor:pointer;
-      transition:background 0.15s;
-    }
-    #btn-settings-fullscreen:hover:not(:disabled) { background:rgba(17,58,49,0.9); }
-    #btn-settings-fullscreen:disabled {
-      opacity:.45; cursor:default;
-    }
     #settings-scores {
       clear:both; margin:22px 0; padding:16px;
       background:rgba(30,15,5,0.8); border:1px solid #441100;
@@ -831,8 +820,8 @@
     }
     #menu-icons {
       flex-direction:row;
-      top:18px;
-      right:18px;
+      top:10px;
+      right:54px;
     }
     #menu-icons span,
     .nav-home,
@@ -1104,9 +1093,6 @@
       border-color:rgba(212,155,69,.5);
       color:var(--paper);
     }
-    #btn-settings-fullscreen {
-      border-radius:8px;
-    }
     #settings-scores {
       border-radius:8px;
       background:rgba(0,0,0,.28);
@@ -1273,8 +1259,9 @@
       #hud-options-btn {
         width:54px;
         height:54px;
-        right:14px;
-        bottom:14px;
+        right:10px;
+        top:10px;
+        bottom:auto;
         font-size:1.35rem;
       }
       #mobile-controls { display:block; }
@@ -1404,7 +1391,6 @@
         margin-top:0;
       }
       #btn-save-name,
-      #btn-settings-fullscreen,
       #btn-reset-progress {
         min-height:38px;
         padding:8px 12px;
@@ -1432,7 +1418,6 @@
         margin:0;
       }
       #btn-reset-progress,
-      #btn-settings-fullscreen,
       #settings-saved {
         grid-column:1;
       }
@@ -1506,15 +1491,15 @@
     /* ── PERSISTENT FULLSCREEN BUTTON ───────────────────────────────────── */
     #persistent-fs-btn {
       position:fixed;
-      bottom:12px;
-      right:90px;
+      top:10px;
+      right:10px;
       z-index:50;
-      width:32px;
-      height:32px;
-      border-radius:6px;
-      border:1px solid rgba(231,223,204,.18);
-      background:rgba(0,0,0,.42);
-      color:rgba(231,223,204,.55);
+      width:36px;
+      height:36px;
+      border-radius:50%;
+      border:1px solid rgba(231,223,204,.22);
+      background:rgba(0,0,0,.46);
+      color:rgba(231,223,204,.6);
       cursor:pointer;
       padding:0;
       display:flex;
@@ -1524,9 +1509,18 @@
       transition:background .15s, border-color .15s, color .15s;
     }
     #persistent-fs-btn:hover {
-      background:rgba(0,0,0,.62);
-      border-color:rgba(231,223,204,.38);
+      background:rgba(181,31,35,.25);
+      border-color:rgba(231,223,204,.46);
       color:rgba(231,223,204,.9);
+    }
+    /* During gameplay: FS btn stacks below the burger, centered under it */
+    body[data-hud-visible="true"] #persistent-fs-btn {
+      top:68px;   /* 48px burger + 10px gap */
+      right:16px; /* (10 + 48/2) - 36/2 = centers 36px btn under 48px burger */
+    }
+    body[data-controls="touch"][data-hud-visible="true"] #persistent-fs-btn {
+      top:74px;   /* 54px burger + 10px gap */
+      right:19px; /* (10 + 54/2) - 36/2 = centers 36px btn under 54px burger */
     }
 
     /* ── Keyframes ───────────────────────────────────────────────────────── */
@@ -1651,7 +1645,6 @@
     <div class="options-actions">
       <button class="options-btn primary" id="btn-options-resume" type="button">Resume Run</button>
       <button class="options-btn" id="btn-options-settings" type="button">Settings</button>
-      <button class="options-btn" id="btn-options-fullscreen" type="button">Fullscreen</button>
       <button class="options-btn" id="btn-options-restart" type="button">Restart Run</button>
       <button class="options-btn danger" id="btn-options-home" type="button">Home Screen</button>
     </div>
@@ -1712,8 +1705,6 @@
       </label>
       <input id="settings-sensitivity" type="range" min="45" max="180" step="5" value="100"/>
     </div>
-
-    <button id="btn-settings-fullscreen" type="button">Fullscreen</button>
 
     <div id="settings-scores">
       <h3>ROOM SCORES</h3>

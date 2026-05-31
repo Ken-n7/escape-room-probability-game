@@ -361,6 +361,7 @@ document.addEventListener('click', e => {
 function showScreen(name) {
   Object.values(screens).forEach(s => s.classList.add('hidden'));
   elHud.style.display = 'none';
+  document.body.dataset.hudVisible = 'false';
   setCanInteract(false);
   renderer.domElement.style.cursor = 'auto';   // restore cursor for UI
   unlockPointer();                              // release pointer lock for any UI
@@ -370,6 +371,7 @@ function showScreen(name) {
 function showHUD() {
   Object.values(screens).forEach(s => s.classList.add('hidden'));
   elHud.style.display = 'block';
+  document.body.dataset.hudVisible = 'true';
   renderer.domElement.style.cursor = GameDevice.usePointerLock ? 'none' : 'auto';
   _prevX = null; _prevY = null;                // prevent delta-mode jump
   // Note: pointer is (re-)locked by lockPointer() called separately
@@ -389,30 +391,17 @@ function updateFullscreenLabel() {
   const isFull = Boolean(document.fullscreenElement);
   const available = Boolean(document.fullscreenEnabled);
 
-  ['btn-options-fullscreen', 'btn-settings-fullscreen'].forEach(id => {
-    const btn = $(id);
-    if (!btn) return;
-    if (!available) {
-      btn.disabled = true;
-      btn.textContent = 'Fullscreen Unavailable';
-      return;
-    }
-    btn.disabled = false;
-    btn.textContent = isFull ? 'Exit Fullscreen' : 'Fullscreen';
-  });
-
-  if (elPersistentFsBtn) {
-    if (!available) {
-      elPersistentFsBtn.style.display = 'none';
-      return;
-    }
-    elPersistentFsBtn.style.display = '';
-    const label = isFull ? 'Exit Fullscreen' : 'Enter Fullscreen';
-    elPersistentFsBtn.title = label;
-    elPersistentFsBtn.setAttribute('aria-label', label);
-    if (elFsIconEnter) elFsIconEnter.style.display = isFull ? 'none' : '';
-    if (elFsIconExit)  elFsIconExit.style.display  = isFull ? '' : 'none';
+  if (!elPersistentFsBtn) return;
+  if (!available) {
+    elPersistentFsBtn.style.display = 'none';
+    return;
   }
+  elPersistentFsBtn.style.display = '';
+  const label = isFull ? 'Exit Fullscreen' : 'Enter Fullscreen';
+  elPersistentFsBtn.title = label;
+  elPersistentFsBtn.setAttribute('aria-label', label);
+  if (elFsIconEnter) elFsIconEnter.style.display = isFull ? 'none' : '';
+  if (elFsIconExit)  elFsIconExit.style.display  = isFull ? '' : 'none';
 }
 
 function updateSensitivityUI() {
@@ -693,8 +682,6 @@ $('btn-settings-back').onclick = () => {
   if (settingsFrom === 'options') openOptions(false);
   else showScreen('menu');
 };
-$('btn-settings-fullscreen').onclick = toggleFullscreen;
-
 // ── Settings and About icons on the menu ──────────────────────────────────────
 $('icon-settings').onclick = () => openSettings('menu');
 $('icon-about').onclick    = () => showScreen('about');
@@ -952,7 +939,6 @@ $('btn-win-restart').onclick  = () => { CFG.gameplay.pLearnMode = false; showScr
 $('btn-lose-retry').onclick   = () => { showScreen('ready'); };
 $('hud-options-btn').onclick = () => openOptions();
 $('btn-options-resume').onclick = resumeGame;
-$('btn-options-fullscreen').onclick = toggleFullscreen;
 $('btn-options-restart').onclick = () => {
   requestOptionsConfirm('Restart this run? Current room progress will be cleared.', () => startGame());
 };
