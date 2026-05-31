@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Escape Room Game</title>
+  <style>
+    /* ── Reset ───────────────────────────────────────────────────────────── */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#000; overflow:hidden; font-family:'Georgia',serif; }
+    canvas {
+      display:block;
+      position:fixed;
+      inset:0;
+      z-index:0;
+      touch-action:none;
+    }
+
+    /* ── Full-screen panel base ──────────────────────────────────────────── */
+    .screen {
+      position:fixed; inset:0;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      z-index:20;
+    }
+    .screen.hidden { display:none !important; }
+
+    /* ── TITLE ───────────────────────────────────────────────────────────── */
+    #s-title {
+      background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #0a0e0a;
+      cursor:pointer;
+    }
+    #s-title::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.55); }
+    #title-content { position:relative; text-align:center; }
+    #title-content h1 {
+      font-family:monospace; font-size:clamp(2.5rem,6vw,4.5rem);
+      color:#cc1111; text-shadow:0 0 30px #ff0000,0 0 60px #660000;
+      letter-spacing:6px; line-height:1.1;
+    }
+    #title-arrow {
+      position:fixed; bottom:32px; right:40px;
+      width:54px; height:54px; border-radius:50%;
+      border:2px solid #cc1111; color:#cc1111;
+      font-size:1.5rem; display:flex; align-items:center; justify-content:center;
+      cursor:pointer; z-index:30; transition:background 0.2s;
+    }
+    #title-arrow:hover { background:rgba(200,0,0,0.2); }
+
+    /* ── MAIN MENU ───────────────────────────────────────────────────────── */
+    #s-menu { background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #0a0e0a; }
+    #s-menu::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.55); }
+    #menu-content { position:relative; display:flex; flex-direction:column; gap:16px; align-items:center; }
+    #menu-icons { position:fixed; top:16px; right:16px; display:flex; flex-direction:column; gap:8px; z-index:25; }
+    #menu-icons span {
+      font-size:2rem; cursor:pointer; filter:drop-shadow(0 0 4px gold);
+      transition:transform 0.15s;
+    }
+    #menu-icons span:hover { transform:scale(1.15); }
+    .menu-btn {
+      display:flex; align-items:center; gap:12px; padding:12px 36px;
+      border-radius:999px; background:rgba(255,255,255,0.88);
+      font-family:monospace; font-size:1.3rem; font-weight:700;
+      color:#cc1111; letter-spacing:2px; cursor:pointer; border:none;
+      text-shadow:0 0 6px #ff0000; transition:transform 0.15s,background 0.15s;
+      min-width:220px;
+    }
+    .menu-btn:hover { transform:scale(1.04); background:#fff; }
+    .menu-btn .icon { font-size:1.5rem; }
+    #menu-player-name {
+      position:fixed; top:14px; left:16px; z-index:25;
+      color:rgba(255,200,100,0.7); font-family:monospace; font-size:0.8rem;
+      letter-spacing:1px;
+    }
+
+    /* ── SHARED back/home nav ─────────────────────────────────────────────── */
+    .nav-home {
+      position:fixed; top:14px; left:14px; z-index:25;
+      font-size:1.6rem; cursor:pointer; filter:drop-shadow(0 0 6px gold);
+    }
+    .nav-back {
+      position:fixed; bottom:28px; left:36px;
+      font-size:2rem; color:#cc1111; cursor:pointer; z-index:25;
+    }
+    .nav-fwd {
+      position:fixed; bottom:20px; right:36px;
+      font-size:2rem; color:#cc1111; cursor:pointer; z-index:25;
+    }
+
+    /* ── STORY SLIDES ────────────────────────────────────────────────────── */
+    #s-story { background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c08; }
+    #s-story::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.62); }
+    #story-text {
+      position:relative; max-width:700px; color:#fff;
+      font-size:clamp(1rem,2.2vw,1.35rem); text-align:center;
+      line-height:1.75; text-shadow:1px 1px 4px #000; padding:0 24px;
+    }
+    #story-nav  { position:fixed; bottom:28px; display:flex; gap:24px; z-index:25; }
+    .story-dot  { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.3); }
+    .story-dot.active { background:#cc1111; }
+
+    /* ── P-LEARN LESSON SLIDES ───────────────────────────────────────────── */
+    #s-plearn {
+      background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c12;
+    }
+    #s-plearn::before { content:''; position:absolute; inset:0; background:rgba(0,0,10,0.72); }
+    #plearn-box {
+      position:relative; max-width:740px; width:90%;
+      background:rgba(5,10,30,0.88); border:1px solid #334488;
+      border-radius:14px; padding:32px 40px; text-align:center;
+    }
+    #plearn-slide-label {
+      color:#8899cc; font-family:monospace; font-size:0.75rem;
+      letter-spacing:3px; margin-bottom:10px;
+    }
+    #plearn-title {
+      color:#aabbff; font-family:monospace; font-size:clamp(1.2rem,3vw,1.7rem);
+      letter-spacing:2px; margin-bottom:18px;
+      text-shadow:0 0 12px #4466ff;
+    }
+    #plearn-body {
+      color:#ccd4ee; font-size:clamp(0.9rem,1.8vw,1.05rem);
+      line-height:1.8; text-align:left; margin-bottom:16px;
+    }
+    #plearn-note {
+      background:rgba(30,50,100,0.7); border:1px solid #334488;
+      border-radius:8px; padding:12px 18px;
+      color:#aaddff; font-family:monospace; font-size:1rem;
+      letter-spacing:1px; text-align:center; margin-top:12px;
+      display:none;
+    }
+    #plearn-nav { position:fixed; bottom:28px; display:flex; gap:20px; z-index:25; }
+    .plearn-dot { width:9px; height:9px; border-radius:50%; background:rgba(100,130,255,0.3); }
+    .plearn-dot.active { background:#4488ff; }
+    #btn-plearn-ready {
+      display:none; margin-top:20px;
+      padding:12px 28px; border-radius:999px;
+      background:rgba(30,80,200,0.85); border:1px solid #4488ff;
+      color:#aabbff; font-family:monospace; font-size:1rem;
+      letter-spacing:2px; cursor:pointer; transition:background 0.15s;
+    }
+    #btn-plearn-ready:hover { background:rgba(50,120,255,0.9); }
+
+    /* ── ARE YOU READY ───────────────────────────────────────────────────── */
+    #s-ready { background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c08; }
+    #s-ready::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.6); }
+    #ready-content { position:relative; text-align:center; }
+    #ready-content h2 {
+      color:#cc1111; font-family:monospace; font-size:clamp(2rem,5vw,3.5rem);
+      letter-spacing:4px; text-shadow:0 0 20px #ff0000; margin-bottom:2rem;
+    }
+    .ready-btn {
+      display:block; width:260px; margin:10px auto; padding:14px;
+      border-radius:10px; border:none; font-family:monospace;
+      font-size:1.1rem; font-weight:700; letter-spacing:3px;
+      cursor:pointer; transition:transform 0.15s;
+    }
+    .ready-btn:hover { transform:scale(1.04); }
+    #btn-yes { background:rgba(0,0,0,0.75); color:#fff; }
+    #btn-no  { background:rgba(0,0,0,0.75); color:#888; }
+
+    /* ── HUD ─────────────────────────────────────────────────────────────── */
+    #hud { position:fixed; inset:0; pointer-events:none; z-index:10; display:none; }
+    #hud-options-btn {
+      position:absolute; right:16px; bottom:16px;
+      width:48px; height:48px; border-radius:50%;
+      pointer-events:auto; touch-action:manipulation;
+      border:1px solid rgba(255,255,255,0.3);
+      background:rgba(0,0,0,0.56); color:#ffeecc;
+      font-family:monospace; font-size:1.2rem;
+      cursor:pointer; z-index:15;
+    }
+    #hud-options-btn:hover { background:rgba(80,0,0,0.7); }
+    #code-tracker {
+      position:absolute; top:16px; right:16px;
+      color:#ffdd44; font-family:monospace; font-size:1rem;
+      letter-spacing:4px; text-shadow:0 0 8px gold;
+      background:rgba(0,0,0,0.5); padding:6px 14px; border-radius:6px;
+    }
+    #room-progress { position:absolute; top:16px; left:16px; display:flex; gap:10px; }
+    .room-pip {
+      width:12px; height:12px; border-radius:50%;
+      background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);
+    }
+    .room-pip.done { background:#44ff44; border-color:#44ff44; box-shadow:0 0 6px #44ff44; }
+    #crosshair {
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      color:rgba(255,255,255,0.5); font-size:0.9rem; line-height:1;
+    }
+    #interact-prompt {
+      position:absolute; bottom:80px; left:50%; transform:translateX(-50%);
+      color:#ffeecc; font-family:monospace; font-size:0.9rem; letter-spacing:2px;
+      background:rgba(0,0,0,0.6); padding:6px 18px; border-radius:20px;
+      opacity:0; transition:opacity 0.2s;
+    }
+    #hud-player {
+      position:absolute; bottom:16px; left:16px;
+      color:rgba(255,200,100,0.5); font-family:monospace; font-size:0.75rem;
+    }
+    #mobile-controls {
+      display:none;
+      pointer-events:auto;
+    }
+    #mobile-move {
+      position:absolute;
+      left:16px;
+      bottom:18px;
+      width:132px;
+      height:132px;
+      display:grid;
+      grid-template-columns:repeat(3, 44px);
+      grid-template-rows:repeat(3, 44px);
+      gap:0;
+    }
+    .mobile-control-btn {
+      width:42px;
+      height:42px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,0.24);
+      background:rgba(0,0,0,0.48);
+      color:#ffeecc;
+      font-family:monospace;
+      font-size:1rem;
+      touch-action:none;
+    }
+    .mobile-control-btn:active {
+      background:rgba(80,0,0,0.72);
+    }
+    #mobile-move [data-move="KeyW"] { grid-column:2; grid-row:1; }
+    #mobile-move [data-move="KeyA"] { grid-column:1; grid-row:2; }
+    #mobile-move [data-move="KeyD"] { grid-column:3; grid-row:2; }
+    #mobile-move [data-move="KeyS"] { grid-column:2; grid-row:3; }
+    #mobile-interact-btn {
+      position:absolute;
+      right:20px;
+      bottom:84px;
+      width:54px;
+      height:54px;
+      border-radius:50%;
+      font-size:1.1rem;
+    }
+    body[data-controls="touch"] #mobile-controls { display:block; }
+    body[data-controls="touch"] #interact-prompt { bottom:154px; }
+    body[data-controls="touch"] #hud-player { display:none; }
+    body[data-controls="touch"] #hud-options-btn {
+      width:54px;
+      height:54px;
+      right:14px;
+      bottom:14px;
+      font-size:1.35rem;
+    }
+    #rotate-phone {
+      display:none;
+      position:fixed;
+      inset:0;
+      z-index:80;
+      align-items:center;
+      justify-content:center;
+      padding:28px;
+      text-align:center;
+      pointer-events:auto;
+      background:
+        linear-gradient(180deg, rgba(0,0,0,.76), rgba(24,2,4,.92)),
+        url('/assets/hallway_bg.jpg') center/cover no-repeat,
+        #050607;
+      color:#e7dfcc;
+    }
+    #rotate-phone::before {
+      content:'';
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 50% 35%, transparent 0 28%, rgba(0,0,0,.62) 78%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 5px);
+      pointer-events:none;
+    }
+    #rotate-phone-box {
+      position:relative;
+      width:min(330px, 88vw);
+      border:1px solid rgba(231,223,204,.2);
+      border-left:4px solid rgba(181,31,35,.82);
+      background:rgba(4,6,7,.78);
+      border-radius:8px;
+      padding:24px 22px;
+      box-shadow:0 24px 80px rgba(0,0,0,.55);
+    }
+    .rotate-phone-icon {
+      width:74px;
+      height:46px;
+      margin:0 auto 18px;
+      border:3px solid rgba(231,223,204,.78);
+      border-radius:12px;
+      position:relative;
+      box-shadow:0 0 24px rgba(181,31,35,.42);
+    }
+    .rotate-phone-icon::after {
+      content:'';
+      position:absolute;
+      right:7px;
+      top:50%;
+      width:5px;
+      height:5px;
+      border-radius:50%;
+      background:rgba(231,223,204,.78);
+      transform:translateY(-50%);
+    }
+    #rotate-phone h2 {
+      font-family:Impact, Haettenschweiler, 'Arial Black', sans-serif;
+      font-size:2.1rem;
+      line-height:1;
+      color:#e7dfcc;
+      text-shadow:0 0 24px rgba(181,31,35,.72);
+      margin-bottom:12px;
+    }
+    #rotate-phone p {
+      color:#c8b98e;
+      font-size:.96rem;
+      line-height:1.55;
+    }
+    body[data-must-rotate="true"] #rotate-phone { display:flex; }
+    #vignette {
+      position:fixed; inset:0; pointer-events:none; z-index:5;
+      background:radial-gradient(ellipse at center, transparent 40%, rgba(60,0,0,0.92) 100%);
+      opacity:0; transition:opacity 0.5s;
+    }
+
+    /* ── QUESTION MODAL ──────────────────────────────────────────────────── */
+    #s-question { background:rgba(0,0,0,0.88); backdrop-filter:blur(4px); }
+    #question-box {
+      background: url('/assets/spiderweb_bg.jpg') center/cover, #15101a;
+      border:1px solid #330033; border-radius:12px;
+      padding:36px 40px; max-width:720px; width:90%;
+      text-align:center; position:relative;
+    }
+    #question-skull { font-size:2.5rem; position:absolute; top:-28px; left:50%; transform:translateX(-50%); }
+    #question-room-label { color:#aa99bb; font-size:0.8rem; letter-spacing:2px; margin-bottom:8px; }
+    #question-text {
+      color:#fff; font-size:clamp(1rem,2vw,1.2rem); line-height:1.7;
+      margin:16px 0 24px; background:rgba(60,50,80,0.7);
+      border-radius:8px; padding:16px 20px; white-space:pre-line;
+    }
+    #hint-box {
+      color:#ccbbff; font-size:0.88rem; margin-bottom:18px;
+      background:rgba(40,30,60,0.8); padding:10px 16px;
+      border-radius:6px; display:none;
+    }
+    #choices-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .choice-btn {
+      padding:14px 16px; border-radius:8px; border:1px solid #553355;
+      background:rgba(60,40,80,0.75); color:#ddd;
+      font-family:monospace; font-size:0.95rem; cursor:pointer;
+      transition:background 0.15s,transform 0.1s; text-align:left;
+    }
+    .choice-btn:hover:not(:disabled) { background:rgba(100,60,120,0.9); transform:scale(1.02); }
+    .choice-btn.correct { background:#1a4a1a !important; border-color:#44ff44; color:#aaffaa; }
+    .choice-btn.wrong   { background:#4a1a1a !important; border-color:#ff4444; color:#ffaaaa; }
+    .choice-btn:disabled { cursor:default; }
+    #question-wrong-count { color:#ff6666; font-size:0.8rem; margin-top:10px; min-height:20px; }
+
+    /* ── CODE INPUT ──────────────────────────────────────────────────────── */
+    #s-code { background:rgba(0,0,0,0.9); }
+    #code-box {
+      background:#0a1a0a; border:1px solid #226622; border-radius:12px;
+      padding:36px 44px; text-align:center; max-width:400px; width:90%;
+    }
+    #code-box h2 { color:#44ff88; font-family:monospace; font-size:1.3rem; letter-spacing:4px; margin-bottom:20px; }
+    #code-input {
+      width:100%; padding:14px; text-align:center;
+      background:#001800; border:1px solid #226622; border-radius:6px;
+      color:#44ff88; font-family:monospace; font-size:2rem;
+      letter-spacing:12px; outline:none; margin-bottom:14px;
+    }
+    #code-error { color:#ff6666; font-size:0.85rem; min-height:20px; margin-bottom:10px; }
+    #btn-code-submit {
+      width:100%; padding:12px; background:#113311;
+      border:1px solid #44ff44; color:#44ff88;
+      font-family:monospace; font-size:1rem; letter-spacing:3px;
+      cursor:pointer; border-radius:6px; transition:background 0.15s;
+    }
+    #btn-code-submit:hover { background:#1a4a1a; }
+    #btn-code-cancel {
+      width:100%; padding:10px; background:transparent; border:none;
+      color:#556655; font-family:monospace; font-size:0.85rem;
+      cursor:pointer; margin-top:8px;
+    }
+
+    /* ── SETTINGS ────────────────────────────────────────────────────────── */
+    #s-settings {
+      background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #0a0e0a;
+    }
+    #s-settings::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.72); }
+    #settings-box {
+      position:relative; background:rgba(10,8,5,0.95);
+      border:1px solid #552200; border-radius:14px;
+      padding:36px 44px; max-width:480px; width:90%; text-align:center;
+    }
+    #settings-box h2 {
+      color:#cc6622; font-family:monospace; font-size:1.4rem;
+      letter-spacing:4px; margin-bottom:26px;
+      text-shadow:0 0 10px #cc4400;
+    }
+    .settings-row { margin-bottom:18px; text-align:left; }
+    .settings-row label {
+      display:block; color:#aa8866; font-family:monospace;
+      font-size:0.8rem; letter-spacing:2px; margin-bottom:6px;
+    }
+    #settings-name {
+      width:100%; padding:10px 14px; background:#1a1008;
+      border:1px solid #553322; border-radius:6px;
+      color:#ffcc88; font-family:monospace; font-size:1rem;
+      letter-spacing:2px; outline:none;
+    }
+    #btn-save-name {
+      margin-top:8px; padding:8px 20px; background:#331500;
+      border:1px solid #cc4400; border-radius:6px;
+      color:#ff8844; font-family:monospace; font-size:0.85rem;
+      letter-spacing:2px; cursor:pointer; float:right;
+      transition:background 0.15s;
+    }
+    #btn-save-name:hover { background:#4a2200; }
+    #settings-scores {
+      clear:both; margin:22px 0; padding:16px;
+      background:rgba(30,15,5,0.8); border:1px solid #441100;
+      border-radius:8px; text-align:left;
+    }
+    #settings-scores h3 {
+      color:#aa6633; font-family:monospace; font-size:0.8rem;
+      letter-spacing:3px; margin-bottom:12px;
+    }
+    .score-row {
+      display:flex; justify-content:space-between; align-items:center;
+      margin-bottom:8px; color:#886644; font-family:monospace; font-size:0.85rem;
+    }
+    .score-row .score-val { color:#ffaa55; letter-spacing:1px; }
+    .score-row .score-val.perfect { color:#44ff88; text-shadow:0 0 6px #44ff88; }
+    #btn-reset-progress {
+      width:100%; margin-top:6px; padding:11px;
+      background:rgba(80,0,0,0.5); border:1px solid #550000;
+      border-radius:6px; color:#cc3333; font-family:monospace;
+      font-size:0.85rem; letter-spacing:2px; cursor:pointer;
+      transition:background 0.15s;
+    }
+    #btn-reset-progress:hover { background:rgba(120,0,0,0.7); }
+    #settings-saved {
+      color:#44cc88; font-family:monospace; font-size:0.75rem;
+      letter-spacing:1px; min-height:20px; margin-top:6px;
+    }
+
+    /* ── ABOUT US ────────────────────────────────────────────────────────── */
+    #s-about {
+      background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #0a0e0a;
+    }
+    #s-about::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.72); }
+    #about-box {
+      position:relative; background:rgba(5,5,12,0.95);
+      border:1px solid #222255; border-radius:14px;
+      padding:36px 44px; max-width:560px; width:92%;
+      text-align:center; max-height:88vh; overflow-y:auto;
+    }
+    #about-box h2 {
+      color:#6677cc; font-family:monospace; font-size:1.3rem;
+      letter-spacing:4px; margin-bottom:6px;
+      text-shadow:0 0 10px #4455aa;
+    }
+    #about-box h3 {
+      color:#cc1111; font-family:monospace; font-size:1rem;
+      letter-spacing:2px; margin:18px 0 10px;
+      text-shadow:0 0 8px #880000;
+    }
+    #about-box p {
+      color:#9999bb; font-size:0.9rem; line-height:1.7;
+      margin-bottom:10px; text-align:left;
+    }
+    .about-section {
+      background:rgba(15,15,30,0.8); border:1px solid #222244;
+      border-radius:8px; padding:14px 18px; margin-bottom:14px; text-align:left;
+    }
+    .about-section-title {
+      color:#4466aa; font-family:monospace; font-size:0.75rem;
+      letter-spacing:3px; margin-bottom:8px;
+    }
+
+    /* ── WIN / LOSE ──────────────────────────────────────────────────────── */
+    #s-win { background:rgba(0,8,0,0.96); color:#33ff55; }
+    #s-win h1 { font-family:monospace; font-size:clamp(2rem,5vw,3rem); letter-spacing:6px; text-shadow:0 0 20px #00ff44; }
+    #s-win p  { color:#558855; margin-top:10px; font-size:0.9rem; }
+    #win-scores {
+      margin:16px 0; padding:16px 24px;
+      background:rgba(0,20,0,0.7); border:1px solid #224422;
+      border-radius:8px; font-family:monospace; font-size:0.85rem;
+    }
+    #win-scores div { color:#44cc44; margin:4px 0; letter-spacing:1px; }
+
+    #s-lose { background:rgba(10,0,0,0.97); color:#ff1111; }
+    #s-lose h1 { font-family:monospace; font-size:clamp(2rem,5vw,3rem); letter-spacing:6px; text-shadow:0 0 30px #ff0000; animation:flicker .08s infinite; }
+    #scary-face {
+      width:220px; height:220px; margin:1.2rem 0;
+      background:#0a0000; border:1px solid #440000;
+      display:flex; align-items:center; justify-content:center;
+      color:#331111; font-size:0.7rem; text-align:center; padding:1rem;
+    }
+
+    /* ── PAUSE ───────────────────────────────────────────────────────────── */
+    #s-pause { background:rgba(0,0,4,0.78); color:#4466aa; cursor:pointer; user-select:none; }
+    #s-pause h1 { font-family:monospace; font-size:2.5rem; letter-spacing:8px; }
+    #s-pause p  { color:#334466; margin-top:0.6rem; font-size:0.85rem; }
+
+    /* ── Shared buttons ──────────────────────────────────────────────────── */
+    .action-btn {
+      margin-top:1.6rem; padding:12px 32px; background:transparent;
+      border:1px solid currentColor; color:inherit;
+      font-family:monospace; font-size:0.95rem; letter-spacing:3px;
+      cursor:pointer; border-radius:4px; transition:background 0.15s;
+    }
+    .action-btn:hover { background:rgba(255,255,255,0.07); }
+    .modal-back-btn {
+      margin-top:20px; padding:9px 22px; background:transparent;
+      border:1px solid #443322; border-radius:6px;
+      color:#886644; font-family:monospace; font-size:0.8rem;
+      letter-spacing:2px; cursor:pointer; transition:background 0.15s;
+    }
+    .modal-back-btn:hover { background:rgba(80,40,0,0.3); }
+
+    /* ── THEME REFRESH: non-game screens ─────────────────────────────────── */
+    :root {
+      --ink: #050709;
+      --panel: rgba(8, 11, 12, 0.82);
+      --panel-strong: rgba(8, 10, 12, 0.92);
+      --line: rgba(209, 183, 126, 0.28);
+      --line-red: rgba(177, 30, 30, 0.45);
+      --bone: #e7dfcc;
+      --paper: #c8b98e;
+      --muted: #9b927c;
+      --blood: #b51f23;
+      --amber: #d49b45;
+      --chalk: #8fd3bd;
+      --green: #5fae72;
+    }
+
+    body { font-family: Georgia, 'Times New Roman', serif; color:var(--bone); }
+    button, input { font:inherit; }
+    * { letter-spacing:0 !important; }
+
+    .screen {
+      isolation:isolate;
+      overflow:hidden;
+      padding:24px;
+    }
+    .screen::after {
+      content:'';
+      position:absolute;
+      inset:-12%;
+      pointer-events:none;
+      z-index:0;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 4px),
+        radial-gradient(circle at 50% 46%, transparent 0 34%, rgba(0,0,0,0.45) 72%, rgba(0,0,0,0.9) 100%);
+      opacity:.72;
+      mix-blend-mode:screen;
+    }
+    .screen > * { position:relative; z-index:1; }
+
+    #s-title,
+    #s-menu,
+    #s-story {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.84), rgba(0,0,0,.34) 48%, rgba(0,0,0,.86)),
+        linear-gradient(180deg, rgba(37,3,5,.34), rgba(0,0,0,.22) 48%, rgba(0,0,0,.82)),
+        url('/assets/hallway_bg.jpg') center/cover no-repeat,
+        #050607;
+    }
+    #s-plearn,
+    #s-question,
+    #s-code {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.82), rgba(0,0,0,.28) 52%, rgba(0,0,0,.78)),
+        linear-gradient(180deg, rgba(0,28,22,.35), rgba(0,0,0,.68)),
+        url('/assets/classroom_bg.jpg') center/cover no-repeat,
+        #050807;
+    }
+    #s-ready {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.85), rgba(0,0,0,.28) 54%, rgba(0,0,0,.85)),
+        linear-gradient(180deg, rgba(83,10,13,.25), rgba(0,0,0,.74)),
+        url('/assets/ready_bg.jpg') center/cover no-repeat,
+        #080607;
+    }
+    #s-settings,
+    #s-about {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.82), rgba(0,0,0,.36) 52%, rgba(0,0,0,.82)),
+        linear-gradient(180deg, rgba(30,21,8,.36), rgba(0,0,0,.78)),
+        url('/assets/about_bg.jpg') center/cover no-repeat,
+        #080706;
+    }
+    #s-win {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.74), rgba(0,0,0,.28) 48%, rgba(0,0,0,.74)),
+        linear-gradient(180deg, rgba(8,58,35,.35), rgba(0,0,0,.68)),
+        url('/assets/ending_bg.jpg') center/cover no-repeat,
+        #020805;
+    }
+    #s-lose {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.75), rgba(0,0,0,.22) 50%, rgba(0,0,0,.78)),
+        linear-gradient(180deg, rgba(96,0,0,.46), rgba(0,0,0,.7)),
+        url('/assets/spiderweb_bg.jpg') center/cover no-repeat,
+        #090202;
+    }
+
+    #s-title::before,
+    #s-menu::before,
+    #s-story::before,
+    #s-plearn::before,
+    #s-ready::before,
+    #s-settings::before,
+    #s-about::before {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.78), rgba(0,0,0,.18) 44%, rgba(0,0,0,.72)),
+        radial-gradient(circle at 50% 45%, transparent 0 34%, rgba(0,0,0,.56) 100%);
+    }
+
+    #title-content {
+      width:min(900px, 92vw);
+      text-align:left;
+      padding-left:clamp(0px, 5vw, 64px);
+    }
+    .case-stamp {
+      display:inline-flex;
+      align-items:center;
+      height:28px;
+      padding:0 12px;
+      border:1px solid rgba(212,155,69,.42);
+      color:var(--amber);
+      background:rgba(0,0,0,.42);
+      font-family:monospace;
+      font-size:.76rem;
+      text-transform:uppercase;
+    }
+    #title-content h1 {
+      margin:.75rem 0 1rem;
+      font-family:Impact, Haettenschweiler, 'Arial Black', sans-serif;
+      font-size:4.7rem;
+      line-height:.88;
+      color:var(--bone);
+      text-shadow:0 3px 0 #1b0708, 0 0 30px rgba(181,31,35,.75);
+      max-width:720px;
+    }
+    .title-copy {
+      width:min(540px, 90vw);
+      color:var(--paper);
+      line-height:1.55;
+      font-size:1rem;
+      text-shadow:0 2px 10px #000;
+    }
+    .title-status {
+      margin-top:1.4rem;
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      font-family:monospace;
+      color:rgba(231,223,204,.78);
+      font-size:.78rem;
+    }
+    .title-status span {
+      border:1px solid rgba(231,223,204,.16);
+      background:rgba(0,0,0,.42);
+      padding:6px 10px;
+    }
+    #title-arrow {
+      position:relative;
+      inset:auto;
+      z-index:1;
+      margin-top:1.45rem;
+      min-width:240px;
+      height:52px;
+      border-radius:8px;
+      border:1px solid rgba(231,223,204,.28);
+      background:linear-gradient(90deg, rgba(181,31,35,.72), rgba(6,8,9,.76));
+      color:var(--bone);
+      box-shadow:inset 4px 0 0 rgba(212,155,69,.75), 0 18px 52px rgba(0,0,0,.45);
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:22px;
+      padding:0 18px;
+      font-family:monospace;
+      font-size:.92rem;
+      text-transform:uppercase;
+      transition:transform .15s, background .15s, border-color .15s;
+    }
+    #title-arrow:hover {
+      background:linear-gradient(90deg, rgba(205,44,47,.88), rgba(18,22,24,.82));
+      border-color:rgba(231,223,204,.48);
+      transform:translateX(3px);
+    }
+    #title-arrow .title-arrow-icon {
+      width:28px;
+      height:28px;
+      border-radius:50%;
+      border:1px solid rgba(231,223,204,.25);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    #menu-content {
+      width:min(460px, 92vw);
+      align-items:stretch;
+      gap:12px;
+    }
+    #menu-content::before {
+      content:'SELECT FILE';
+      color:var(--amber);
+      font-family:monospace;
+      font-size:.78rem;
+      border-bottom:1px solid var(--line);
+      padding-bottom:10px;
+      margin-bottom:6px;
+    }
+    .menu-btn,
+    .ready-btn,
+    .action-btn,
+    #btn-plearn-ready,
+    #btn-code-submit,
+    #btn-reset-progress,
+    #btn-save-name,
+    .modal-back-btn {
+      border-radius:8px;
+      min-height:44px;
+      text-shadow:none;
+    }
+    .menu-btn {
+      min-width:0;
+      width:100%;
+      justify-content:space-between;
+      gap:16px;
+      padding:15px 18px;
+      border:1px solid rgba(231,223,204,.2);
+      background:rgba(5,7,8,.72);
+      color:var(--bone);
+      box-shadow:inset 4px 0 0 rgba(181,31,35,.75);
+    }
+    .menu-btn:hover {
+      background:rgba(181,31,35,.25);
+      transform:translateX(3px);
+    }
+    .menu-btn .icon {
+      color:var(--amber);
+      font-size:1rem;
+    }
+    #menu-icons {
+      flex-direction:row;
+      top:18px;
+      right:18px;
+    }
+    #menu-icons span,
+    .nav-home,
+    .nav-back,
+    .nav-fwd {
+      position:fixed;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width:42px;
+      height:42px;
+      border:1px solid rgba(231,223,204,.22);
+      border-radius:50%;
+      background:rgba(0,0,0,.46);
+      color:var(--bone);
+      font-family:monospace;
+      font-size:1.05rem;
+      filter:none;
+      transition:transform .15s, background .15s, border-color .15s;
+    }
+    #menu-icons span {
+      position:static;
+    }
+    #menu-icons span:hover,
+    .nav-home:hover,
+    .nav-back:hover,
+    .nav-fwd:hover {
+      background:rgba(181,31,35,.25);
+      border-color:rgba(231,223,204,.46);
+      transform:translateY(-1px);
+    }
+    .nav-back,
+    .nav-fwd { bottom:26px; }
+    .nav-back { left:28px; }
+    .nav-fwd { right:28px; }
+    .nav-home { top:18px; left:18px; }
+    #menu-player-name {
+      top:18px;
+      left:18px;
+      padding:8px 12px;
+      border:1px solid rgba(231,223,204,.16);
+      background:rgba(0,0,0,.45);
+      color:var(--paper);
+      font-size:.78rem;
+    }
+
+    #story-text {
+      max-width:760px;
+      background:rgba(0,0,0,.42);
+      border:1px solid rgba(231,223,204,.16);
+      border-left:4px solid rgba(181,31,35,.72);
+      padding:24px 28px;
+      text-align:left;
+      color:var(--bone);
+      font-size:1.08rem;
+      line-height:1.75;
+      text-shadow:0 2px 8px #000;
+    }
+    #story-nav,
+    #plearn-nav {
+      bottom:36px;
+      padding:8px 10px;
+      border:1px solid rgba(231,223,204,.14);
+      background:rgba(0,0,0,.42);
+      gap:10px;
+    }
+    .story-dot,
+    .plearn-dot {
+      width:28px;
+      height:4px;
+      border-radius:0;
+      background:rgba(231,223,204,.22);
+    }
+    .story-dot.active,
+    .plearn-dot.active {
+      background:var(--blood);
+      box-shadow:0 0 12px rgba(181,31,35,.45);
+    }
+
+    #plearn-box,
+    #question-box,
+    #code-box,
+    #settings-box,
+    #about-box {
+      border-radius:8px;
+      background:var(--panel-strong);
+      border:1px solid var(--line);
+      box-shadow:0 24px 80px rgba(0,0,0,.55);
+      backdrop-filter:blur(5px);
+    }
+    #plearn-box {
+      max-width:780px;
+      padding:30px 34px;
+      text-align:left;
+    }
+    #plearn-controls {
+      margin-top:20px;
+      display:grid;
+      grid-template-columns:minmax(92px, auto) 1fr minmax(92px, auto);
+      align-items:center;
+      gap:12px;
+      border-top:1px solid rgba(231,223,204,.12);
+      padding-top:16px;
+    }
+    .lesson-nav-btn {
+      height:42px;
+      border-radius:8px;
+      border:1px solid rgba(231,223,204,.2);
+      background:rgba(5,7,8,.72);
+      color:var(--bone);
+      font-family:monospace;
+      font-size:.86rem;
+      cursor:pointer;
+      transition:background .15s, transform .15s, opacity .15s;
+    }
+    .lesson-nav-btn:hover:not(:disabled) {
+      background:rgba(181,31,35,.22);
+      transform:translateY(-1px);
+    }
+    .lesson-nav-btn:disabled {
+      cursor:default;
+      opacity:.36;
+    }
+    #s-plearn #plearn-nav {
+      position:static;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:0;
+      border:0;
+      background:transparent;
+      gap:8px;
+    }
+    #plearn-slide-label,
+    #question-room-label,
+    #settings-scores h3,
+    .about-section-title {
+      color:var(--amber);
+      font-family:monospace;
+      font-size:.76rem;
+      text-transform:uppercase;
+    }
+    #plearn-title,
+    #settings-box h2,
+    #about-box h2,
+    #code-box h2 {
+      color:var(--bone);
+      text-shadow:0 0 20px rgba(143,211,189,.18);
+      font-family:monospace;
+      font-size:1.45rem;
+      margin-bottom:18px;
+    }
+    #plearn-body,
+    #about-box p {
+      color:var(--paper);
+      font-size:1rem;
+      line-height:1.72;
+    }
+    #plearn-note {
+      border-radius:8px;
+      background:rgba(9,32,28,.78);
+      border:1px solid rgba(143,211,189,.35);
+      color:var(--chalk);
+    }
+    #btn-plearn-ready {
+      width:100%;
+      margin-top:14px;
+      background:rgba(9,32,28,.86);
+      border-color:rgba(143,211,189,.42);
+      color:var(--chalk);
+    }
+
+    #ready-content {
+      width:min(520px, 92vw);
+      padding:28px;
+      background:rgba(0,0,0,.34);
+      border:1px solid rgba(231,223,204,.16);
+      border-radius:8px;
+    }
+    #ready-content h2 {
+      color:var(--bone);
+      font-size:2.6rem;
+      text-shadow:0 0 26px rgba(181,31,35,.72);
+      margin-bottom:1.3rem;
+    }
+    .ready-btn {
+      width:100%;
+      border:1px solid rgba(231,223,204,.2);
+      color:var(--bone);
+      background:rgba(4,6,7,.72);
+    }
+    #btn-yes { border-color:rgba(143,211,189,.38); color:var(--chalk); }
+    #btn-no { color:var(--muted); }
+
+    #question-box {
+      background:
+        linear-gradient(180deg, rgba(6,7,9,.9), rgba(6,7,9,.8)),
+        url('/assets/spiderweb_bg.jpg') center/cover;
+      max-width:760px;
+    }
+    #question-skull {
+      top:-22px;
+      width:52px;
+      height:52px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:50%;
+      background:rgba(0,0,0,.78);
+      border:1px solid var(--line-red);
+      font-size:1.7rem;
+    }
+    #question-text {
+      background:rgba(0,0,0,.38);
+      border:1px solid rgba(231,223,204,.16);
+      border-radius:8px;
+      color:var(--bone);
+    }
+    #hint-box {
+      background:rgba(9,32,28,.72);
+      border:1px solid rgba(143,211,189,.26);
+      color:var(--chalk);
+      border-radius:8px;
+    }
+    .choice-btn {
+      border-radius:8px;
+      background:rgba(5,7,8,.78);
+      border:1px solid rgba(231,223,204,.18);
+      color:var(--paper);
+    }
+    .choice-btn:hover:not(:disabled) {
+      background:rgba(181,31,35,.22);
+      transform:translateY(-1px);
+    }
+
+    #code-box {
+      max-width:430px;
+      background:rgba(2,12,8,.92);
+      border-color:rgba(143,211,189,.3);
+    }
+    #code-input {
+      border-radius:8px;
+      background:#020b08;
+      border-color:rgba(143,211,189,.34);
+      color:var(--chalk);
+      letter-spacing:.22em !important;
+    }
+    #btn-code-submit {
+      background:rgba(11,55,36,.82);
+      border-color:rgba(143,211,189,.5);
+      color:var(--chalk);
+    }
+
+    #settings-box,
+    #about-box {
+      max-width:620px;
+      text-align:left;
+    }
+    #settings-name {
+      border-radius:8px;
+      background:rgba(0,0,0,.42);
+      border-color:rgba(231,223,204,.22);
+      color:var(--bone);
+    }
+    #btn-save-name {
+      float:none;
+      width:100%;
+      background:rgba(91,55,16,.72);
+      border-color:rgba(212,155,69,.5);
+      color:var(--paper);
+    }
+    #settings-scores {
+      border-radius:8px;
+      background:rgba(0,0,0,.28);
+      border-color:rgba(231,223,204,.14);
+    }
+    .score-row { color:var(--muted); }
+    .score-row .score-val { color:var(--amber); }
+    #btn-reset-progress {
+      background:rgba(78,7,9,.52);
+      border-color:rgba(181,31,35,.4);
+      color:#d98977;
+    }
+    .about-section {
+      border:0;
+      border-left:3px solid rgba(212,155,69,.38);
+      border-radius:0;
+      background:transparent;
+      padding:4px 0 4px 14px;
+    }
+
+    #s-win,
+    #s-lose,
+    #s-pause {
+      text-align:center;
+    }
+    #s-win h1,
+    #s-lose h1,
+    #s-pause h1 {
+      font-family:Impact, Haettenschweiler, 'Arial Black', sans-serif;
+      font-size:3.2rem;
+      line-height:1;
+      color:var(--bone);
+    }
+    #s-win h1 { text-shadow:0 0 26px rgba(95,174,114,.72); }
+    #s-lose h1 { text-shadow:0 0 30px rgba(181,31,35,.86); }
+    #s-win p,
+    #s-lose p,
+    #s-pause p { color:var(--paper); }
+    #win-scores {
+      border-radius:8px;
+      background:rgba(0,0,0,.48);
+      border-color:rgba(95,174,114,.35);
+    }
+    #win-scores div { color:#a8ddb5; }
+    #scary-face {
+      border-radius:8px;
+      background:rgba(0,0,0,.48);
+      border-color:rgba(181,31,35,.4);
+      color:#d98977;
+    }
+    #s-options {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.82), rgba(0,0,0,.5)),
+        url('/assets/hallway_bg.jpg') center/cover no-repeat;
+      color:var(--bone);
+    }
+    #options-box {
+      width:min(430px, 92vw);
+      background:var(--panel-strong);
+      border:1px solid var(--line);
+      border-radius:8px;
+      padding:26px;
+      box-shadow:0 24px 80px rgba(0,0,0,.58);
+      backdrop-filter:blur(5px);
+    }
+    #options-box h2 {
+      margin:14px 0 16px;
+      font-family:Impact, Haettenschweiler, 'Arial Black', sans-serif;
+      font-size:2.2rem;
+      line-height:1;
+      color:var(--bone);
+      text-shadow:0 0 26px rgba(181,31,35,.58);
+    }
+    .options-actions {
+      display:grid;
+      gap:10px;
+    }
+    .options-btn {
+      min-height:46px;
+      border-radius:8px;
+      border:1px solid rgba(231,223,204,.2);
+      background:rgba(5,7,8,.72);
+      color:var(--bone);
+      font-family:monospace;
+      font-size:.92rem;
+      cursor:pointer;
+      text-align:left;
+      padding:0 14px;
+      transition:background .15s, transform .15s, border-color .15s;
+    }
+    .options-btn:hover {
+      background:rgba(181,31,35,.22);
+      border-color:rgba(231,223,204,.42);
+      transform:translateY(-1px);
+    }
+    .options-btn:disabled {
+      cursor:default;
+      opacity:.45;
+      transform:none;
+    }
+    .options-btn.primary {
+      background:rgba(9,32,28,.84);
+      border-color:rgba(143,211,189,.42);
+      color:var(--chalk);
+    }
+    .options-btn.danger {
+      color:#d98977;
+      border-color:rgba(181,31,35,.4);
+    }
+    #options-confirm {
+      margin-top:14px;
+      border:1px solid rgba(181,31,35,.32);
+      background:rgba(30,3,4,.68);
+      border-radius:8px;
+      padding:14px;
+    }
+    #options-confirm.hidden { display:none; }
+    #options-confirm-text {
+      color:var(--paper);
+      line-height:1.45;
+      font-size:.92rem;
+      margin-bottom:12px;
+    }
+    .options-confirm-actions {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    #s-pause {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.78), rgba(0,0,0,.54)),
+        url('/assets/hallway_bg.jpg') center/cover no-repeat;
+      color:var(--bone);
+    }
+
+    @media (max-width: 720px) {
+      .screen { padding:18px; }
+      #title-content {
+        padding-left:0;
+        text-align:left;
+      }
+      #title-content h1 { font-size:3.1rem; }
+      .title-copy { font-size:.95rem; }
+      #title-arrow {
+        width:100%;
+        min-width:0;
+      }
+      #story-text,
+      #plearn-box,
+      #question-box,
+      #settings-box,
+      #about-box {
+        width:94vw;
+        padding:22px;
+      }
+      #choices-grid { grid-template-columns:1fr; }
+      #ready-content h2,
+      #s-win h1,
+      #s-lose h1,
+      #s-pause h1 { font-size:2.25rem; }
+      #plearn-controls {
+        grid-template-columns:1fr 1fr;
+      }
+      #hud-options-btn {
+        width:54px;
+        height:54px;
+        right:14px;
+        bottom:14px;
+        font-size:1.35rem;
+      }
+      #mobile-controls { display:block; }
+      #interact-prompt { bottom:154px; }
+      #hud-player { display:none; }
+      #options-box { padding:22px; }
+      #s-plearn #plearn-nav {
+        grid-column:1 / -1;
+        grid-row:1;
+        padding-bottom:4px;
+      }
+      #btn-plearn-prev,
+      #btn-plearn-next {
+        grid-row:2;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 520px) {
+      .screen {
+        padding:12px 18px;
+      }
+      #title-content h1 {
+        font-size:3.35rem;
+      }
+      .title-copy {
+        font-size:.9rem;
+        line-height:1.38;
+      }
+      .title-status {
+        margin-top:.85rem;
+      }
+      #title-arrow {
+        height:44px;
+        margin-top:.95rem;
+      }
+      #menu-content {
+        width:min(380px, 84vw);
+      }
+      #story-text {
+        max-height:calc(100svh - 106px);
+        overflow-y:auto;
+        padding:18px 22px;
+        font-size:.92rem;
+        line-height:1.55;
+      }
+      #story-nav,
+      #plearn-nav {
+        bottom:18px;
+      }
+      .nav-back,
+      .nav-fwd {
+        bottom:14px;
+      }
+      #plearn-box,
+      #settings-box,
+      #about-box,
+      #question-box,
+      #code-box {
+        max-height:calc(100svh - 28px);
+        overflow-y:auto;
+        padding:14px 20px;
+      }
+      #plearn-box {
+        width:min(720px, 82vw);
+      }
+      #plearn-slide-label,
+      #question-room-label,
+      #settings-scores h3,
+      .about-section-title {
+        font-size:.68rem;
+      }
+      #plearn-title,
+      #settings-box h2,
+      #about-box h2,
+      #code-box h2 {
+        font-size:1.12rem;
+        margin-bottom:8px;
+      }
+      #plearn-body,
+      #about-box p {
+        font-size:.86rem;
+        line-height:1.35;
+      }
+      #plearn-body br {
+        line-height:.85;
+      }
+      #plearn-note {
+        margin-top:8px;
+        padding:8px 10px;
+        font-size:.82rem;
+      }
+      #plearn-controls {
+        margin-top:10px;
+        padding-top:10px;
+        gap:8px;
+      }
+      .lesson-nav-btn,
+      #btn-plearn-ready,
+      .modal-back-btn {
+        min-height:38px;
+        height:38px;
+      }
+      #btn-plearn-ready {
+        margin-top:10px;
+      }
+      .settings-row {
+        margin-bottom:10px;
+      }
+      .settings-row label {
+        margin-bottom:4px;
+      }
+      #settings-name {
+        padding:8px 12px;
+        font-size:.92rem;
+      }
+      #btn-save-name,
+      #btn-reset-progress {
+        min-height:38px;
+        padding:8px 12px;
+      }
+      #settings-scores {
+        margin:12px 0;
+        padding:12px;
+      }
+      #settings-box {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:10px 14px;
+        align-items:start;
+      }
+      #settings-box h2 {
+        grid-column:1 / -1;
+        margin-bottom:0;
+      }
+      #settings-box .settings-row {
+        grid-column:1;
+      }
+      #settings-scores {
+        grid-column:2;
+        grid-row:2 / span 3;
+        margin:0;
+      }
+      #btn-reset-progress,
+      #settings-saved {
+        grid-column:1;
+      }
+      #settings-saved {
+        min-height:0;
+        margin:0;
+      }
+      #btn-settings-back {
+        grid-column:1 / -1;
+        position:static;
+        margin-top:0;
+      }
+      .score-row {
+        margin-bottom:5px;
+        font-size:.78rem;
+      }
+      .about-section {
+        margin:10px 0;
+      }
+      .modal-back-btn {
+        position:sticky;
+        bottom:0;
+        width:100%;
+        background:rgba(5,7,8,.94);
+        backdrop-filter:blur(5px);
+        z-index:2;
+      }
+      #options-box {
+        width:min(620px, 88vw);
+        max-height:calc(100svh - 28px);
+        overflow-y:auto;
+        padding:16px 20px;
+      }
+      #options-box h2 {
+        margin:8px 0 12px;
+        font-size:1.75rem;
+      }
+      .options-actions {
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+      }
+      .options-btn {
+        min-height:38px;
+        font-size:.82rem;
+      }
+      #options-confirm {
+        margin-top:10px;
+        padding:10px;
+      }
+      #options-confirm-text {
+        margin-bottom:8px;
+        font-size:.82rem;
+      }
+      .options-confirm-actions {
+        gap:8px;
+      }
+      #ready-content {
+        width:min(460px, 72vw);
+        padding:20px;
+      }
+      #ready-content h2 {
+        font-size:2rem;
+        margin-bottom:1rem;
+      }
+      .ready-btn {
+        min-height:40px;
+        padding:10px;
+      }
+    }
+
+    /* ── Keyframes ───────────────────────────────────────────────────────── */
+    @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:.72} }
+  </style>
+</head>
+<body>
+
+<div id="rotate-phone" aria-live="polite">
+  <div id="rotate-phone-box">
+    <div class="rotate-phone-icon"></div>
+    <h2>ROTATE PHONE</h2>
+    <p>Turn your phone sideways to enter the escape room.</p>
+  </div>
+</div>
+
+<!-- ══ TITLE ══════════════════════════════════════════════════════════════════ -->
+<div id="s-title" class="screen">
+  <div id="title-content">
+    <div class="case-stamp">Room 308 / Probability Case</div>
+    <h1>ESCAPE<br>ROOM</h1>
+    <p class="title-copy">Three classrooms are locked behind questions, whispers, and a code the building does not want you to find.</p>
+    <div class="title-status">
+      <span>SUBJECT: SIMPLE PROBABILITY</span>
+      <span>STATUS: UNRESOLVED</span>
+      <span>TIME: LIMITED</span>
+    </div>
+    <button id="title-arrow" type="button"
+      onclick="document.getElementById('s-title').classList.add('hidden');
+               document.getElementById('s-menu').classList.remove('hidden');">
+      <span>Open Case File</span>
+      <span class="title-arrow-icon">→</span>
+    </button>
+  </div>
+</div>
+
+<!-- ══ MAIN MENU ══════════════════════════════════════════════════════════════ -->
+<div id="s-menu" class="screen hidden">
+  <div id="menu-icons">
+    <span title="Settings" id="icon-settings">⚙</span>
+    <span title="About Us" id="icon-about">?</span>
+  </div>
+  <div id="menu-player-name"></div>
+  <div id="menu-content">
+    <button class="menu-btn" id="btn-play">
+      <span>PLAY</span><span class="icon">▶</span>
+    </button>
+    <button class="menu-btn" id="btn-plearn">
+      <span>P-LEARN</span><span class="icon">◆</span>
+    </button>
+  </div>
+  <div class="nav-back"
+    onclick="document.getElementById('s-menu').classList.add('hidden');
+             document.getElementById('s-title').classList.remove('hidden');">←</div>
+</div>
+
+<!-- ══ STORY SLIDES ════════════════════════════════════════════════════════════ -->
+<div id="s-story" class="screen hidden">
+  <span class="nav-home" onclick="goHome()">⌂</span>
+  <p id="story-text"></p>
+  <div id="story-nav"></div>
+  <div class="nav-back"  onclick="storyStep(-1)">←</div>
+  <div class="nav-fwd"   onclick="storyStep(1)">→</div>
+</div>
+
+<!-- ══ P-LEARN LESSON SLIDES ══════════════════════════════════════════════════ -->
+<div id="s-plearn" class="screen hidden">
+  <span class="nav-home" onclick="goHome()">⌂</span>
+  <div id="plearn-box">
+    <div id="plearn-slide-label">LESSON 1 / 6</div>
+    <h2  id="plearn-title">What is Probability?</h2>
+    <div id="plearn-body"></div>
+    <div id="plearn-note"></div>
+    <div id="plearn-controls">
+      <button class="lesson-nav-btn" id="btn-plearn-prev" type="button" onclick="plearnStep(-1)">Back</button>
+      <div id="plearn-nav"></div>
+      <button class="lesson-nav-btn" id="btn-plearn-next" type="button" onclick="plearnStep(1)">Next</button>
+    </div>
+    <button id="btn-plearn-ready" onclick="startGameFromLesson()">I'M READY TO ESCAPE →</button>
+  </div>
+</div>
+
+<!-- ══ ARE YOU READY ══════════════════════════════════════════════════════════ -->
+<div id="s-ready" class="screen hidden">
+  <span class="nav-home" onclick="goHome()">⌂</span>
+  <div id="ready-content">
+    <h2>ARE YOU READY?</h2>
+    <button class="ready-btn" id="btn-yes">YES</button>
+    <button class="ready-btn" id="btn-no">NO, I'M SCARED.</button>
+  </div>
+</div>
+
+<!-- ══ HUD ═════════════════════════════════════════════════════════════════════ -->
+<div id="hud">
+  <button id="hud-options-btn" type="button" aria-label="Open options">☰</button>
+  <div id="room-progress">
+    <div class="room-pip" id="pip-0"></div>
+    <div class="room-pip" id="pip-1"></div>
+    <div class="room-pip" id="pip-2"></div>
+  </div>
+  <div id="code-tracker">CODE: _ _ _</div>
+  <div id="crosshair">·</div>
+  <div id="interact-prompt">[ E ] Examine</div>
+  <div id="hud-player"></div>
+  <div id="mobile-controls">
+    <div id="mobile-move">
+      <button class="mobile-control-btn" type="button" data-move="KeyW">▲</button>
+      <button class="mobile-control-btn" type="button" data-move="KeyA">◀</button>
+      <button class="mobile-control-btn" type="button" data-move="KeyD">▶</button>
+      <button class="mobile-control-btn" type="button" data-move="KeyS">▼</button>
+    </div>
+    <button class="mobile-control-btn" id="mobile-interact-btn" type="button" aria-label="Interact">!</button>
+  </div>
+</div>
+<div id="vignette"></div>
+
+<!-- ══ OPTIONS ════════════════════════════════════════════════════════════════ -->
+<div id="s-options" class="screen hidden">
+  <div id="options-box">
+    <div class="case-stamp">Run Options</div>
+    <h2>PAUSED</h2>
+    <div class="options-actions">
+      <button class="options-btn primary" id="btn-options-resume" type="button">Resume Run</button>
+      <button class="options-btn" id="btn-options-fullscreen" type="button">Fullscreen</button>
+      <button class="options-btn" id="btn-options-restart" type="button">Restart Run</button>
+      <button class="options-btn danger" id="btn-options-home" type="button">Home Screen</button>
+    </div>
+    <div id="options-confirm" class="hidden">
+      <p id="options-confirm-text"></p>
+      <div class="options-confirm-actions">
+        <button class="options-btn" id="btn-options-confirm-no" type="button">Cancel</button>
+        <button class="options-btn danger" id="btn-options-confirm-yes" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ QUESTION MODAL ══════════════════════════════════════════════════════════ -->
+<div id="s-question" class="screen hidden">
+  <div id="question-box">
+    <div id="question-skull">💀</div>
+    <div id="question-room-label">ROOM 1</div>
+    <div id="question-text">Question goes here.</div>
+    <div id="hint-box"></div>
+    <div id="choices-grid">
+      <button class="choice-btn" data-idx="0"></button>
+      <button class="choice-btn" data-idx="1"></button>
+      <button class="choice-btn" data-idx="2"></button>
+      <button class="choice-btn" data-idx="3"></button>
+    </div>
+    <div id="question-wrong-count"></div>
+  </div>
+</div>
+
+<!-- ══ CODE INPUT ══════════════════════════════════════════════════════════════ -->
+<div id="s-code" class="screen hidden">
+  <div id="code-box">
+    <h2>ENTER CODE</h2>
+    <input id="code-input" type="text" maxlength="3" placeholder="_ _ _" autocomplete="off"/>
+    <div id="code-error"></div>
+    <button id="btn-code-submit">UNLOCK</button>
+    <button id="btn-code-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ SETTINGS ════════════════════════════════════════════════════════════════ -->
+<div id="s-settings" class="screen hidden">
+  <div id="settings-box">
+    <h2>SETTINGS</h2>
+
+    <div class="settings-row">
+      <label>PLAYER NAME</label>
+      <input id="settings-name" type="text" maxlength="20" placeholder="Enter your name"/>
+      <button id="btn-save-name">SAVE</button>
+    </div>
+
+    <div id="settings-scores">
+      <h3>ROOM SCORES</h3>
+      <div class="score-row">
+        <span>Room 1 · Easy</span>
+        <span class="score-val" id="score-room-0">—</span>
+      </div>
+      <div class="score-row">
+        <span>Room 2 · Moderate</span>
+        <span class="score-val" id="score-room-1">—</span>
+      </div>
+      <div class="score-row">
+        <span>Room 3 · Hard</span>
+        <span class="score-val" id="score-room-2">—</span>
+      </div>
+    </div>
+
+    <button id="btn-reset-progress">RESET ALL PROGRESS</button>
+    <div id="settings-saved"></div>
+    <button class="modal-back-btn" id="btn-settings-back">← BACK TO MENU</button>
+  </div>
+</div>
+
+<!-- ══ ABOUT US ════════════════════════════════════════════════════════════════ -->
+<div id="s-about" class="screen hidden">
+  <div id="about-box">
+    <h2>CASE NOTES</h2>
+    <h3>ESCAPE ROOM: PROBABILITY CHALLENGE</h3>
+
+    <div class="about-section">
+      <div class="about-section-title">PURPOSE</div>
+      <p>An interactive 3D escape room game designed as an educational intervention for Grade 8 students studying Simple Probability. Learners solve probability problems to escape from haunted classrooms.</p>
+    </div>
+
+    <div class="about-section">
+      <div class="about-section-title">DIFFICULTY LEVELS</div>
+      <p><strong style="color:#cc6622">Room 1 — Easy:</strong> Introduces basic probability concepts, definitions, and key terms.</p>
+      <p><strong style="color:#cc8822">Room 2 — Moderate:</strong> Applies the probability formula with given favorable and total outcomes.</p>
+      <p><strong style="color:#cc1111">Room 3 — Hard:</strong> Solves real-life word problems by independently identifying data and computing probability.</p>
+    </div>
+
+    <div class="about-section">
+      <div class="about-section-title">FEATURES</div>
+      <p><strong style="color:#aabbff">▶ Play</strong> — Full escape room challenge across 3 difficulty levels.</p>
+      <p><strong style="color:#aabbff">🎲 P-Learn</strong> — Reviews discussions, examples, and the probability formula before gameplay.</p>
+      <p><strong style="color:#aabbff">⚙ Settings</strong> — Edit your profile name and track your room scores.</p>
+    </div>
+
+    <div class="about-section">
+      <div class="about-section-title">BENEFITS FOR STUDENTS</div>
+      <p>Builds conceptual understanding through game-based learning, promotes self-paced review, and develops problem-solving skills in a motivating, low-anxiety environment.</p>
+    </div>
+
+    <button class="modal-back-btn" id="btn-about-back">← BACK TO MENU</button>
+  </div>
+</div>
+
+<!-- ══ WIN ═════════════════════════════════════════════════════════════════════ -->
+<div id="s-win" class="screen hidden">
+  <h1>YOU ESCAPED!</h1>
+  <p>All rooms cleared. The ghost is free.</p>
+  <div id="win-scores"></div>
+  <button class="action-btn" id="btn-win-restart">PLAY AGAIN</button>
+</div>
+
+<!-- ══ LOSE ════════════════════════════════════════════════════════════════════ -->
+<div id="s-lose" class="screen hidden">
+  <h1>TRAPPED.</h1>
+  <!-- Replace div below with <img src="/assets/scary_face.png" style="width:220px"> -->
+  <div id="scary-face">[ SCARY FACE ]<br>replace with<br>/assets/scary_face.png</div>
+  <button class="action-btn" id="btn-lose-retry">TRY AGAIN</button>
+</div>
+
+<!-- ══ PAUSE ═══════════════════════════════════════════════════════════════════ -->
+<div id="s-pause" class="screen hidden">
+  <h1>PAUSED</h1>
+  <p>Click anywhere to continue</p>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
