@@ -37,8 +37,11 @@ let suppressPointerUnlockPause = false;
 let queuedLookDX = 0;
 let queuedLookDY = 0;
 let lastRawLookAt = 0;
+let lookSensitivity = 1;
 
-const LOOK_SENS = 0.0022;
+const BASE_LOOK_SENS = 0.0022;
+const MIN_LOOK_SENSITIVITY = 0.45;
+const MAX_LOOK_SENSITIVITY = 1.8;
 const INTERACT_FACING_DOT = 0.72;
 const DEVICE_QUERIES = {
   primaryCoarse: window.matchMedia('(pointer: coarse)'),
@@ -104,8 +107,8 @@ function capturePointer(el, pointerId) {
 }
 
 function applyLookDelta(dx, dy, multiplier = 1) {
-  yaw   -= dx * LOOK_SENS * multiplier;
-  pitch -= dy * LOOK_SENS * multiplier;
+  yaw   -= dx * BASE_LOOK_SENS * lookSensitivity * multiplier;
+  pitch -= dy * BASE_LOOK_SENS * lookSensitivity * multiplier;
   pitch  = Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.45, pitch));
   camera.rotation.set(pitch, yaw, 0);
 }
@@ -241,6 +244,18 @@ mobileInteractButton.addEventListener('pointerdown', e => {
   tryInteract();
 });
 
+function isEditableTarget(target) {
+  return Boolean(target?.closest?.('input, textarea, [contenteditable="true"]'));
+}
+
+document.addEventListener('selectstart', e => {
+  if (!isEditableTarget(e.target)) e.preventDefault();
+});
+
+document.addEventListener('contextmenu', e => {
+  if (GameDevice.hasTouch && !isEditableTarget(e.target)) e.preventDefault();
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LOCAL STORAGE — persistent profile & scores
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -253,12 +268,19 @@ function writeSave(data) {
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
 }
 
+function normalizeLookSensitivity(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(MAX_LOOK_SENSITIVITY, Math.max(MIN_LOOK_SENSITIVITY, n));
+}
+
 let _save       = loadSave();
 let playerName  = _save.playerName  || 'Student';
 let bestScores  = _save.bestScores  || [null, null, null]; // null = not yet completed
+lookSensitivity = normalizeLookSensitivity(_save.lookSensitivity);
 
 function persistSave() {
-  writeSave({ playerName, bestScores });
+  writeSave({ playerName, bestScores, lookSensitivity });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -288,6 +310,8 @@ const elCodeTracker = $('code-tracker');
 const elHudPlayer   = $('hud-player');
 const elOptionsConfirm = $('options-confirm');
 const elOptionsConfirmText = $('options-confirm-text');
+const elSensitivity = $('settings-sensitivity');
+const elSensitivityValue = $('settings-sensitivity-value');
 
 function setCanInteract(canInteract) {
   document.body.dataset.canInteract = canInteract ? 'true' : 'false';
@@ -356,14 +380,30 @@ function hideOptionsConfirm() {
 }
 
 function updateFullscreenLabel() {
-  const btn = $('btn-options-fullscreen');
-  if (!document.fullscreenEnabled) {
-    btn.disabled = true;
-    btn.textContent = 'Fullscreen Unavailable';
-    return;
-  }
-  btn.disabled = false;
-  btn.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+  ['btn-options-fullscreen', 'btn-settings-fullscreen'].forEach(id => {
+    const btn = $(id);
+    if (!btn) return;
+    if (!document.fullscreenEnabled) {
+      btn.disabled = true;
+      btn.textContent = 'Fullscreen Unavailable';
+      return;
+    }
+    btn.disabled = false;
+    btn.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+  });
+}
+
+function updateSensitivityUI() {
+  if (!elSensitivity || !elSensitivityValue) return;
+  const percent = Math.round(lookSensitivity * 100);
+  elSensitivity.value = String(percent);
+  elSensitivityValue.textContent = percent + '%';
+}
+
+function setLookSensitivity(value, shouldPersist = false) {
+  lookSensitivity = normalizeLookSensitivity(Number(value) / 100);
+  updateSensitivityUI();
+  if (shouldPersist) persistSave();
 }
 
 function openOptions(playSound = true) {
@@ -569,6 +609,8 @@ function goToPlearn() {
 function openSettings() {
   $('settings-name').value = playerName;
   $('settings-saved').textContent = '';
+  updateSensitivityUI();
+  updateFullscreenLabel();
   updateSettingsScores();
   showScreen('settings');
 }
@@ -613,7 +655,12 @@ $('btn-reset-progress').onclick = () => {
   setTimeout(() => { $('settings-saved').textContent = ''; }, 2000);
 };
 
+elSensitivity.addEventListener('input', e => {
+  setLookSensitivity(e.target.value, true);
+});
+
 $('btn-settings-back').onclick = () => showScreen('menu');
+$('btn-settings-fullscreen').onclick = toggleFullscreen;
 
 // ── Settings and About icons on the menu ──────────────────────────────────────
 $('icon-settings').onclick = openSettings;
@@ -913,6 +960,7 @@ function readDebugState() {
     },
     yaw: Number(yaw.toFixed(2)),
     pitch: Number(pitch.toFixed(2)),
+    lookSensitivity: Number(lookSensitivity.toFixed(2)),
     canInteract: Boolean(nearObject),
     target: nearObject?.userData || null,
   };

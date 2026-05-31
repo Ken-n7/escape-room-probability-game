@@ -8,6 +8,28 @@
     /* ── Reset ───────────────────────────────────────────────────────────── */
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:#000; overflow:hidden; font-family:'Georgia',serif; }
+    html,
+    body,
+    canvas,
+    .screen,
+    #hud,
+    button,
+    .nav-home,
+    .nav-back,
+    .nav-fwd,
+    #menu-icons span {
+      -webkit-user-select:none;
+      user-select:none;
+      -webkit-touch-callout:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    input,
+    textarea,
+    [contenteditable="true"] {
+      -webkit-user-select:text;
+      user-select:text;
+      -webkit-touch-callout:default;
+    }
     canvas {
       display:block;
       position:fixed;
@@ -437,11 +459,22 @@
       display:block; color:#aa8866; font-family:monospace;
       font-size:0.8rem; letter-spacing:2px; margin-bottom:6px;
     }
+    .settings-label-line {
+      display:flex; justify-content:space-between; align-items:center; gap:12px;
+    }
     #settings-name {
       width:100%; padding:10px 14px; background:#1a1008;
       border:1px solid #553322; border-radius:6px;
       color:#ffcc88; font-family:monospace; font-size:1rem;
       letter-spacing:2px; outline:none;
+    }
+    #settings-sensitivity {
+      width:100%; accent-color:#d49b45; touch-action:pan-x;
+      cursor:pointer;
+    }
+    #settings-sensitivity-value {
+      color:#ffaa55; font-family:monospace; font-size:0.75rem;
+      white-space:nowrap;
     }
     #btn-save-name {
       margin-top:8px; padding:8px 20px; background:#331500;
@@ -451,6 +484,17 @@
       transition:background 0.15s;
     }
     #btn-save-name:hover { background:#4a2200; }
+    #btn-settings-fullscreen {
+      width:100%; margin:4px 0 10px; padding:11px;
+      background:rgba(9,32,28,0.78); border:1px solid rgba(143,211,189,0.36);
+      border-radius:6px; color:#8fd3bd; font-family:monospace;
+      font-size:0.85rem; letter-spacing:2px; cursor:pointer;
+      transition:background 0.15s;
+    }
+    #btn-settings-fullscreen:hover:not(:disabled) { background:rgba(17,58,49,0.9); }
+    #btn-settings-fullscreen:disabled {
+      opacity:.45; cursor:default;
+    }
     #settings-scores {
       clear:both; margin:22px 0; padding:16px;
       background:rgba(30,15,5,0.8); border:1px solid #441100;
@@ -572,6 +616,7 @@
 
     body { font-family: Georgia, 'Times New Roman', serif; color:var(--bone); }
     button, input { font:inherit; }
+    button { touch-action:manipulation; }
     * { letter-spacing:0 !important; }
 
     .screen {
@@ -1059,6 +1104,9 @@
       border-color:rgba(212,155,69,.5);
       color:var(--paper);
     }
+    #btn-settings-fullscreen {
+      border-radius:8px;
+    }
     #settings-scores {
       border-radius:8px;
       background:rgba(0,0,0,.28);
@@ -1335,6 +1383,15 @@
       .settings-row {
         margin-bottom:10px;
       }
+      #settings-box .settings-row:first-of-type {
+        display:grid;
+        grid-template-columns:1fr 88px;
+        gap:6px 8px;
+        align-items:end;
+      }
+      #settings-box .settings-row:first-of-type label {
+        grid-column:1 / -1;
+      }
       .settings-row label {
         margin-bottom:4px;
       }
@@ -1342,7 +1399,12 @@
         padding:8px 12px;
         font-size:.92rem;
       }
+      #btn-save-name {
+        width:auto;
+        margin-top:0;
+      }
       #btn-save-name,
+      #btn-settings-fullscreen,
       #btn-reset-progress {
         min-height:38px;
         padding:8px 12px;
@@ -1370,6 +1432,7 @@
         margin:0;
       }
       #btn-reset-progress,
+      #btn-settings-fullscreen,
       #settings-saved {
         grid-column:1;
       }
@@ -1614,6 +1677,16 @@
       <input id="settings-name" type="text" maxlength="20" placeholder="Enter your name"/>
       <button id="btn-save-name">SAVE</button>
     </div>
+
+    <div class="settings-row">
+      <label class="settings-label-line" for="settings-sensitivity">
+        <span>LOOK SENSITIVITY</span>
+        <span id="settings-sensitivity-value">100%</span>
+      </label>
+      <input id="settings-sensitivity" type="range" min="45" max="180" step="5" value="100"/>
+    </div>
+
+    <button id="btn-settings-fullscreen" type="button">Fullscreen</button>
 
     <div id="settings-scores">
       <h3>ROOM SCORES</h3>
