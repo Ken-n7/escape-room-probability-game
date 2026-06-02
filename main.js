@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { CFG }    from './config.js';
 import { ROOMS, EXIT_CODE }    from './questions.js';
 import { buildWorld, flickerLights } from './world.js';
@@ -126,7 +128,7 @@ function flushLookInput() {
 }
 
 function queueMouseLook(e) {
-  if (state !== S.PLAYING) return;
+  if (state !== S.PLAYING && state !== S.CHASE) return;
   let dx, dy;
   if (document.pointerLockElement === renderer.domElement) {
     dx = e.movementX || 0;
@@ -217,6 +219,11 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
   }
   if (e.code === 'KeyE') tryInteract();
+  if (e.code === 'KeyR' && (state === S.WIN || state === S.LOSE)) {
+    e.preventDefault();
+    if (state === S.WIN) $('btn-win-restart').click();
+    else $('btn-lose-retry').click();
+  }
   if (e.code === 'Escape' || e.code === 'KeyP') {
     e.preventDefault();
     if (state === S.PLAYING) openOptions();
@@ -240,13 +247,6 @@ document.querySelectorAll('[data-move]').forEach(btn => {
     btn.addEventListener(type, () => set(false));
   });
 });
-const mobileInteractButton = document.getElementById('mobile-interact-btn');
-mobileInteractButton.addEventListener('pointerdown', e => {
-  e.preventDefault();
-  if (mobileInteractButton.disabled) return;
-  tryInteract();
-});
-
 function isEditableTarget(target) {
   return Boolean(target?.closest?.('input, textarea, [contenteditable="true"]'));
 }
@@ -280,10 +280,11 @@ function normalizeLookSensitivity(value) {
 let _save       = loadSave();
 let playerName  = _save.playerName  || 'Student';
 let bestScores  = _save.bestScores  || [null, null, null]; // null = not yet completed
+let bestTime    = _save.bestTime    || null;               // null = never finished
 lookSensitivity = normalizeLookSensitivity(_save.lookSensitivity);
 
 function persistSave() {
-  writeSave({ playerName, bestScores, lookSensitivity });
+  writeSave({ playerName, bestScores, bestTime, lookSensitivity });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -321,8 +322,12 @@ const elFsIconExit = $('fs-icon-exit');
 
 function setCanInteract(canInteract) {
   document.body.dataset.canInteract = canInteract ? 'true' : 'false';
-  mobileInteractButton.disabled = !canInteract;
 }
+
+elPrompt.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  tryInteract();
+});
 
 function primeAudio() {
   AudioManager.startLoop('ambient').catch(err => console.warn('Audio preload failed.', err));
@@ -645,6 +650,8 @@ function updateSettingsScores() {
       el.className = 'score-val' + (score === 100 ? ' perfect' : '');
     }
   });
+  const btEl = $('score-best-time');
+  if (btEl) btEl.textContent = bestTime !== null ? formatTime(bestTime) : '—';
 }
 
 function updateMenuName() {
@@ -667,6 +674,7 @@ $('btn-save-name').onclick = () => {
 $('btn-reset-progress').onclick = () => {
   if (!confirm('Reset all progress and scores?')) return;
   bestScores = [null, null, null];
+  bestTime   = null;
   persistSave();
   updateSettingsScores();
   resetProgress();
@@ -690,13 +698,117 @@ $('btn-about-back').onclick = () => showScreen('menu');
 // ═══════════════════════════════════════════════════════════════════════════════
 //  GAME STATE
 // ═══════════════════════════════════════════════════════════════════════════════
-const S = { MENU:0, PLAYING:1, PAUSED:2, QUESTION:3, CODE:4, WIN:5, LOSE:6 };
+const S = { MENU:0, PLAYING:1, PAUSED:2, QUESTION:3, CODE:4, WIN:5, LOSE:6, CHASE:7 };
 let state = S.MENU;
 
-let roomProgress  = [0, 0, 0];
-let roomDone      = [false, false, false];
-let codeDigits    = ['_', '_', '_'];
-let roomWrong     = [0, 0, 0];   // wrong answers accumulated per room this run
+let roomProgress      = [0, 0, 0];
+let roomDone          = [false, false, false];
+let codeDigits        = ['_', '_', '_'];
+let roomWrong         = [0, 0, 0];   // wrong answers accumulated per room this run
+let correctStreak     = 0;
+let gameStartTime     = 0;
+let shuffledQuestions = ROOMS.map(r => [...r.questions]);
+
+function shuffleRooms() {
+  shuffledQuestions = ROOMS.map(r => {
+    const a = [...r.questions];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  });
+}
+
+// Fear stages indexed by per-room wrong count (0 = calm, 1 = uneasy, 2 = frightened)
+// Hitting maxWrongAnswers triggers the jump scare instead of a stage lookup
+const FEAR_STAGES = [
+  { enemyVol: 0,    fogDensity: CFG.fog.density, vigOpacity: 0,    vigBg: '' },
+  { enemyVol: 0.30, fogDensity: 0.095,           vigOpacity: 0.16, vigBg: 'radial-gradient(ellipse at center, transparent 36%, rgba(48,0,8,0.62) 100%)' },
+  { enemyVol: 0.70, fogDensity: 0.16,            vigOpacity: 0.30, vigBg: 'radial-gradient(ellipse at center, transparent 24%, rgba(62,0,5,0.72) 100%)' },
+];
+
+function applyFear(level) {
+  const stageIdx = Math.min(level, FEAR_STAGES.length - 1);
+  const stage = FEAR_STAGES[stageIdx];
+  AudioManager.setVolume('enemyNear', stage.enemyVol, 1.2);
+  scene.fog.density = stage.fogDensity;
+  elVignette.style.transition = 'opacity 1.5s, background 1.5s';
+  elVignette.style.background = stage.vigBg;
+  elVignette.style.opacity    = String(stage.vigOpacity);
+}
+
+function resetFear() {
+  AudioManager.setVolume('enemyNear', 0, 2.0);
+  scene.fog.density = CFG.fog.density;
+  elVignette.style.transition = 'opacity 2s, background 2s';
+  elVignette.style.background = '';
+  elVignette.style.opacity    = '0';
+}
+
+function flashWrongVignette(fearLevel) {
+  const stage = FEAR_STAGES[Math.min(fearLevel, FEAR_STAGES.length - 1)];
+  if (wrongFeedbackTimer) { clearTimeout(wrongFeedbackTimer); wrongFeedbackTimer = null; }
+  elVignette.style.transition = 'none';
+  elVignette.style.background = 'radial-gradient(ellipse at center, transparent 18%, rgba(84,0,0,0.72) 100%)';
+  elVignette.style.opacity    = '0.58';
+  wrongFeedbackTimer = setTimeout(() => {
+    elVignette.style.transition = 'opacity 0.6s, background 0.6s';
+    elVignette.style.background = stage.vigBg;
+    elVignette.style.opacity    = String(stage.vigOpacity);
+    wrongFeedbackTimer = null;
+  }, 350);
+}
+
+function triggerJumpScare() {
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+  clearQuestionTimers();
+
+  // Phase 1 — brief silence (the contrast is what triggers the startle reflex)
+  AudioManager.setVolume('ambient',    0, 0.05);
+  AudioManager.setVolume('enemyNear',  0, 0.05);
+  scene.fog.density = 0.48; // near-blindness in the 3D world
+
+  setTimeout(() => {
+    // Phase 2 — THE SLAM
+    const overlay = document.getElementById('jumpscare-overlay');
+    overlay.classList.add('active');
+    overlay.style.opacity = '1';
+
+    document.body.classList.add('screenshake');
+    renderer.domElement.style.filter = 'blur(2px) saturate(2.5) brightness(1.4)';
+
+    elVignette.style.transition = 'none';
+    elVignette.style.background = 'rgba(255,228,215,1)';
+    elVignette.style.opacity    = '1';
+
+    AudioManager.play('jumpscare');
+    AudioManager.playScream();
+
+    // Phase 3 — flash cuts to near-black (130ms after slam)
+    setTimeout(() => {
+      document.body.classList.remove('screenshake');
+      renderer.domElement.style.filter = '';
+      elVignette.style.transition = 'background 0.35s, opacity 0.35s';
+      elVignette.style.background = 'rgba(4,0,0,1)';
+    }, 130);
+
+    // Phase 4 — ghost face fades out (700ms after slam)
+    setTimeout(() => {
+      overlay.style.transition = 'opacity 0.9s';
+      overlay.style.opacity    = '0';
+    }, 700);
+
+    // Phase 5 — clean up + lose screen (1700ms after slam)
+    setTimeout(() => {
+      overlay.classList.remove('active');
+      overlay.style.transition = '';
+      overlay.style.opacity    = '';
+      triggerLose();
+    }, 1700);
+
+  }, 220); // 220ms silence before the scare hits
+}
 
 function calcScore(roomIdx) {
   const totalQ = ROOMS[roomIdx].questions.length;
@@ -704,18 +816,43 @@ function calcScore(roomIdx) {
   return Math.max(0, Math.round((1 - roomWrong[roomIdx] / (totalQ * 2)) * 100));
 }
 
+function getElapsedSeconds() {
+  return Math.floor((Date.now() - gameStartTime) / 1000);
+}
+
+function formatTime(s) {
+  if (s < 60) return s + 's';
+  return Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's';
+}
+
 function updateHUD() {
   elCodeTracker.textContent = 'CODE: ' + codeDigits.join(' ');
+  elCodeTracker.classList.toggle('complete', roomDone.every(Boolean));
   roomDone.forEach((done, i) => {
     $('pip-' + i).className = 'room-pip' + (done ? ' done' : '');
   });
+  const qEl = $('hud-q-progress');
+  if (qEl) {
+    const ri = state === S.QUESTION
+      ? activeRoomIdx
+      : roomDone.findIndex((done, i) => !done && roomProgress[i] > 0);
+    qEl.textContent = ri >= 0 && !roomDone[ri]
+      ? 'Q ' + (roomProgress[ri] + 1) + '/' + ROOMS[ri].questions.length
+      : '';
+  }
+  const sEl = $('hud-streak');
+  if (sEl) sEl.textContent = correctStreak >= 2 ? '+ ' + correctStreak + ' streak' : '';
 }
 
 function resetProgress() {
-  roomProgress = [0, 0, 0];
-  roomDone     = [false, false, false];
-  codeDigits   = ['_', '_', '_'];
-  roomWrong    = [0, 0, 0];
+  roomProgress  = [0, 0, 0];
+  roomDone      = [false, false, false];
+  codeDigits    = ['_', '_', '_'];
+  roomWrong     = [0, 0, 0];
+  correctStreak = 0;
+  shuffleRooms();
+  resetAmbientScares();
+  _cleanupChase();
   updateHUD();
 }
 
@@ -740,17 +877,20 @@ function clearQuestionTimers() {
 
 function openQuestion(roomIdx) {
   if (roomDone[roomIdx]) return;
+  _clearScareSprite();
   clearQuestionTimers();
   activeRoomIdx = roomIdx;
   activeQIdx    = roomProgress[roomIdx];
   wrongCount    = 0;
   state = S.QUESTION;   // set BEFORE showScreen so pointerlockchange doesn't trigger pause
+  applyFear(roomWrong[roomIdx]);
   showQuestionUI();
 }
 
 function showQuestionUI() {
   const room = ROOMS[activeRoomIdx];
-  const q    = room.questions[activeQIdx];
+  const q    = shuffledQuestions[activeRoomIdx][activeQIdx];
+  updateHUD();
 
   $('question-room-label').textContent =
     room.name + ' · ' + room.label + '  —  ' + (activeQIdx+1) + ' / ' + room.questions.length;
@@ -776,13 +916,16 @@ function showQuestionUI() {
 }
 
 function handleAnswer(choiceIdx) {
-  const q = ROOMS[activeRoomIdx].questions[activeQIdx];
+  const q = shuffledQuestions[activeRoomIdx][activeQIdx];
   clearQuestionTimers();
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
 
   if (choiceIdx === q.correct) {
     document.querySelectorAll('.choice-btn')[choiceIdx].classList.add('correct');
     AudioManager.play('pickup');
+    correctStreak++;
+    if (correctStreak === 3) AudioManager.play('pickup');
+    if (correctStreak === 5 && import.meta.env.DEV) console.log('[streak] 5 correct in a row!');
 
     const answeredRoomIdx = activeRoomIdx;
     activeQIdx++;
@@ -800,7 +943,10 @@ function handleAnswer(choiceIdx) {
         persistSave();
       }
 
+      resetFear();
       updateHUD();
+      const flashEl = $('room-clear-flash');
+      if (flashEl) { flashEl.classList.remove('active'); void flashEl.offsetWidth; flashEl.classList.add('active'); }
       questionAdvanceTimer = setTimeout(() => {
         if (state === S.QUESTION && activeRoomIdx === answeredRoomIdx) {
           closeQuestion();
@@ -816,22 +962,32 @@ function handleAnswer(choiceIdx) {
 
   } else {
     document.querySelectorAll('.choice-btn')[choiceIdx].classList.add('wrong');
+    correctStreak = 0;
+    updateHUD();
     wrongCount++;
     roomWrong[activeRoomIdx]++;
-    AudioManager.play('jumpscare');
+    const roomWrongNow = roomWrong[activeRoomIdx];
+    const max = CFG.gameplay.maxWrongAnswers;
 
-    elVignette.style.opacity    = '0.8';
-    elVignette.style.background = 'rgba(80,0,0,0.92)';
-    wrongFeedbackTimer = setTimeout(() => {
-      elVignette.style.background = '';
-      elVignette.style.opacity = '0';
-      wrongFeedbackTimer = null;
-    }, 500);
+    if (roomWrongNow >= max) {
+      triggerChase();
+      return;
+    }
 
+    applyFear(roomWrongNow);
+    // Brief ghost-breath spike — builds dread without burning the jump scare sound
+    const fearStageVol = FEAR_STAGES[roomWrongNow].enemyVol;
+    AudioManager.setVolume('enemyNear', Math.min(1, fearStageVol + 0.42), 0.02);
+    setTimeout(() => AudioManager.setVolume('enemyNear', fearStageVol, 0.7), 380);
+    flashWrongVignette(roomWrongNow);
+
+    const msgs = [
+      '',
+      '⚠ The ghost stirs…',
+      '⚠ The ghost grows stronger…',
+    ];
     $('question-wrong-count').textContent =
-      wrongCount >= CFG.gameplay.maxWrongAnswers
-        ? '⚠ The ghost grows stronger…'
-        : `✗ Wrong  (${wrongCount}/${CFG.gameplay.maxWrongAnswers})`;
+      `${msgs[Math.min(roomWrongNow, msgs.length - 1)]}  (${roomWrongNow}/${max})`;
 
     wrongResetTimer = setTimeout(() => {
       if (state === S.QUESTION) {
@@ -897,6 +1053,13 @@ function buildWinScores() {
 function triggerWin() {
   state = S.WIN;
   buildWinScores();
+  const elapsed = getElapsedSeconds();
+  const isNewBest = bestTime === null || elapsed < bestTime;
+  if (isNewBest) { bestTime = elapsed; persistSave(); }
+  const bestLabel = bestTime !== null ? '  Best: ' + formatTime(bestTime) + (isNewBest ? ' (new!)' : '') : '';
+  $('win-time').textContent = 'Time: ' + formatTime(elapsed) + bestLabel;
+  const isPerfect = bestScores.every(s => s === 100);
+  $('s-win').classList.toggle('perfect', isPerfect);
   showScreen('win');
   AudioManager.stopAll();
   AudioManager.play('win');
@@ -904,8 +1067,8 @@ function triggerWin() {
 
 function triggerLose() {
   state = S.LOSE;
-  elVignette.style.background = 'rgba(50,0,0,0.94)';
-  elVignette.style.opacity    = '1';
+  elVignette.style.background = 'rgba(14,0,0,0.55)';
+  elVignette.style.opacity    = '0.7';
   showScreen('lose');
   AudioManager.stopAll();
   AudioManager.play('jumpscare');
@@ -917,11 +1080,14 @@ function triggerLose() {
 function startGame() {
   resetProgress();
   camera.position.set(0, CFG.player.eyeH, 2);
-  yaw = 0; pitch = 0;
-  camera.rotation.set(0, 0, 0);
+  yaw = Math.PI; pitch = 0;
+  camera.rotation.set(0, Math.PI, 0);
+  scene.fog.density = CFG.fog.density;
+  AudioManager.setVolume('enemyNear', 0, 0.1);
   elVignette.style.cssText = 'opacity:0';
   elHudPlayer.textContent = playerName;
   showHUD();
+  gameStartTime = Date.now();
   state = S.PLAYING;
   lockPointer();   // called from btn-yes click = valid user gesture
   AudioManager.init().catch(err => console.warn('Audio init failed.', err));
@@ -1078,10 +1244,11 @@ function updateThreatAudio(dt) {
     return;
   }
 
-  const wrongTotal = roomWrong.reduce((sum, count) => sum + count, 0);
-  const solvedRooms = roomDone.filter(Boolean).length;
-  const threat = Math.min(0.38, wrongTotal * 0.055 + solvedRooms * 0.035);
-  AudioManager.setVolume('enemyNear', threat, 0.8);
+  // World fear = worst mistake count in any incomplete room
+  const maxWrong = roomWrong.reduce((m, w, i) => roomDone[i] ? m : Math.max(m, w), 0);
+  const stage = FEAR_STAGES[Math.min(maxWrong, FEAR_STAGES.length - 1)];
+  AudioManager.setVolume('enemyNear', stage.enemyVol, 0.8);
+  scene.fog.density = stage.fogDensity;
 }
 
 // Skip GPU work when tab is hidden
@@ -1093,7 +1260,8 @@ function animate() {
 
   // No GPU work during tab-switch or fullscreen opaque menus
   if (_tabHidden) return;
-  if (state === S.MENU || state === S.WIN || state === S.LOSE) return;
+  if (state === S.LOSE) { _initLoseCanvas(); _updateLoseCanvas(); return; }
+  if (state === S.MENU || state === S.WIN) return;
 
   const now = performance.now();
   const dt  = Math.min((now - prevTime) / 1000, 0.05);
@@ -1101,17 +1269,38 @@ function animate() {
   const t   = now * 0.001;
 
   // ── Flickering lights (hall fluorescents + room candles) ──────────────────
-  flickerLights.forEach(({ light, base, speed, amp, type }) => {
+  flickerLights.forEach(flicker => {
+    const { light, base, speed, amp, type } = flicker;
+    let intensity;
+
     if (type === 'candle') {
-      light.intensity = base + Math.sin(t * speed) * amp * 0.5 + Math.random() * amp * 0.5;
+      intensity = base + Math.sin(t * speed) * amp * 0.5 + Math.random() * amp * 0.5;
     } else {
-      // Broken fluorescent: slow wave + rare sudden cut
-      light.intensity = base + Math.sin(t * speed) * amp * 0.3
-        + (Math.random() < 0.008 ? -(base * 0.6) : 0);
+      // Broken fluorescent: slow wave + short blackout pulses.
+      flicker.cutTimer = Math.max(0, (flicker.cutTimer || 0) - dt);
+      if (flicker.cutTimer <= 0 && Math.random() < 0.012) {
+        flicker.cutTimer = 0.05 + Math.random() * 0.14;
+      }
+      const cut = flicker.cutTimer > 0 ? 0.08 : 1;
+      intensity = (base + Math.sin(t * speed) * amp * 0.25) * cut;
+    }
+
+    light.intensity = Math.max(0.02, intensity);
+    const sync = Math.max(0.02, light.intensity / base);
+
+    if (flicker.emissiveMaterials?.length) {
+      flicker.emissiveMaterials.forEach(mat => { mat.emissiveIntensity = flicker.emissiveBase * sync; });
+    }
+    if (flicker.glowMaterials?.length) {
+      flicker.glowMaterials.forEach(mat => { mat.opacity = Math.min(0.34, 0.035 + sync * 0.24); });
     }
   });
 
   updateThreatAudio(dt);
+  updateAmbientScares(dt);
+
+  // ── Chase state ───────────────────────────────────────────────────────────
+  if (state === S.CHASE) { _updateChase(dt); renderer.render(scene, camera); return; }
 
   // ── Movement only while actively playing ──────────────────────────────────
   if (state !== S.PLAYING) { renderer.render(scene, camera); return; }
@@ -1169,8 +1358,426 @@ function animate() {
   renderer.render(scene, camera);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AMBIENT SCARE SYSTEM
+//  Watches player turn velocity and steady forward walking. When triggered,
+//  briefly spawns a creepy entity near where the player is looking.
+//  Cooldown is short because the playable map is compact.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const randomScareCooldown = () => 8 + Math.random() * 7;
+const WALK_SCARE_DELAY = 1.1;
+// The filenames are misleading: this is the pale horror-woman model in-game.
+const RANDOM_SCARE_MODEL_PATH = '/assets/3D/the_unvermeidlich_ghost_darkness_of_eclipse.glb';
+const RANDOM_SCARE_SCALE = 0.88;
+const RANDOM_SCARE_Y_OFFSET = -0.08;
+const RANDOM_SCARE_SOUNDS = ['randomScareWhisper', 'randomScareHit'];
+
+const _scare = {
+  cooldown:    randomScareCooldown(),
+  sprite:      null,
+  mixer:       null,
+  fadeTimer:   null,
+  prevYaw:     null,
+  turnAccum:   0,
+  turnWindow:  0,
+  walkTime:    0,
+};
+
+let _randomScareGltf = null;
+let _randomScareLoader = null;
+
+function _getRandomScareLoader() {
+  if (!_randomScareLoader) _randomScareLoader = new GLTFLoader();
+  return _randomScareLoader;
+}
+
+function _loadRandomScareModel(cb) {
+  if (_randomScareGltf) { cb(_randomScareGltf); return; }
+  _getRandomScareLoader().load(RANDOM_SCARE_MODEL_PATH, gltf => { _randomScareGltf = gltf; cb(gltf); });
+}
+
+function _clearScareSprite() {
+  if (_scare.fadeTimer) { clearTimeout(_scare.fadeTimer); _scare.fadeTimer = null; }
+  if (_scare.sprite)    { scene.remove(_scare.sprite); _scare.sprite = null; }
+  if (_scare.mixer)     { _scare.mixer.stopAllAction(); _scare.mixer = null; }
+}
+
+function playRandomScareAudio() {
+  const sound = RANDOM_SCARE_SOUNDS[Math.floor(Math.random() * RANDOM_SCARE_SOUNDS.length)];
+  AudioManager.play(sound);
+}
+
+function tuneScareMaterials(root, emissiveIntensity = 0.18) {
+  root.traverse(child => {
+    if (!child.isMesh || !child.material) return;
+    child.frustumCulled = false;
+    const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
+    const tunedMaterials = sourceMaterials.map(mat => {
+      const tuned = mat.clone();
+      if (tuned.emissive) {
+        tuned.emissive.setHex(0x1f120f);
+        tuned.emissiveIntensity = Math.max(tuned.emissiveIntensity || 0, emissiveIntensity);
+      }
+      if ('roughness' in tuned) tuned.roughness = Math.min(tuned.roughness ?? 1, 0.82);
+      return tuned;
+    });
+    child.material = Array.isArray(child.material) ? tunedMaterials : tunedMaterials[0];
+  });
+}
+
+function addScareDetailLights(root, keyIntensity = 6.4, rimIntensity = 1.8) {
+  const keyLight = new THREE.PointLight(0xffdcc4, keyIntensity, 7, 1.45);
+  keyLight.position.set(0, 1.35, 0.65);
+  root.add(keyLight);
+
+  const rimLight = new THREE.PointLight(0xff2d18, rimIntensity, 4.6, 1.7);
+  rimLight.position.set(0, 1.65, -0.8);
+  root.add(rimLight);
+}
+
+function _spawnScare(turnDir) {
+  if (_scare.sprite) return;
+
+  _loadRandomScareModel(gltf => {
+    if (_scare.sprite) return;
+
+    const sinY = Math.sin(yaw), cosY = Math.cos(yaw);
+    const dist    = 3.2;
+    const lateral = -turnDir * 1.0;
+    const px = camera.position.x + (-sinY * dist) + (cosY  * lateral);
+    const pz = camera.position.z + (-cosY * dist) + (-sinY * lateral);
+
+    const clone = skeletonClone(gltf.scene);
+    tuneScareMaterials(clone, 0.2);
+    addScareDetailLights(clone, 6.6, 2.1);
+    clone.visible = true;
+    clone.scale.setScalar(RANDOM_SCARE_SCALE);
+    clone.position.set(px, RANDOM_SCARE_Y_OFFSET, pz);
+    clone.rotation.y = Math.atan2(camera.position.x - px, camera.position.z - pz);
+    scene.add(clone);
+    _scare.sprite = clone;
+    _scare.mixer  = new THREE.AnimationMixer(clone);
+    if (gltf.animations.length) _scare.mixer.clipAction(gltf.animations[0]).play();
+    renderer.render(scene, camera); // force immediate frame
+    playRandomScareAudio();
+
+    const totalDuration = 900 + Math.random() * 650;
+    const fadeInTime    = 120;
+    const fadeOutTime   = 250;
+    const start = performance.now();
+
+    const tick = () => {
+      if (!_scare.sprite || _scare.sprite !== clone) return;
+      const elapsed = performance.now() - start;
+      if (elapsed < fadeInTime) {
+        clone.visible = true; // show immediately on first tick
+      } else if (elapsed > totalDuration - fadeOutTime) {
+        clone.visible = false; // hide before removal
+      }
+      if (elapsed < totalDuration) {
+        _scare.fadeTimer = setTimeout(tick, 16);
+      } else {
+        _clearScareSprite();
+      }
+    };
+    _scare.fadeTimer = setTimeout(tick, 16);
+  });
+}
+
+function updateAmbientScares(dt) {
+  if (state !== S.PLAYING) return;
+
+  _scare.cooldown -= dt;
+
+  if (_scare.prevYaw === null) { _scare.prevYaw = yaw; return; }
+  const dyaw = yaw - _scare.prevYaw;
+  _scare.prevYaw = yaw;
+
+  // Rolling 0.28s window — accumulate turn delta
+  _scare.turnAccum  += dyaw;
+  _scare.turnWindow += dt;
+  if (_scare.turnWindow > 0.28) {
+    _scare.turnAccum  = dyaw;
+    _scare.turnWindow = 0;
+  }
+
+  const isWalking =
+    keys['KeyW'] || keys['ArrowUp'] ||
+    keys['KeyS'] || keys['ArrowDown'] ||
+    keys['KeyA'] || keys['ArrowLeft'] ||
+    keys['KeyD'] || keys['ArrowRight'];
+
+  if (isWalking) {
+    _scare.walkTime += dt;
+  } else {
+    _scare.walkTime = 0;
+  }
+
+  // Trigger when turning fast enough + cooldown expired + no sprite active.
+  if (Math.abs(_scare.turnAccum) > 0.26 && _scare.cooldown <= 0 && !_scare.sprite) {
+    _spawnScare(Math.sign(_scare.turnAccum));
+    _scare.cooldown  = randomScareCooldown();
+    _scare.turnAccum = 0;
+    _scare.walkTime  = 0;
+  }
+
+  // Also trigger during general walking after the same cooldown.
+  if (_scare.walkTime >= WALK_SCARE_DELAY && _scare.cooldown <= 0 && !_scare.sprite) {
+    _spawnScare(0);
+    _scare.cooldown  = randomScareCooldown();
+    _scare.turnAccum = 0;
+    _scare.walkTime  = 0;
+  }
+
+  // Tick the run animation while scare is active
+  if (_scare.sprite && _scare.mixer) _scare.mixer.update(dt);
+}
+
+function resetAmbientScares() {
+  _clearScareSprite();
+  _scare.prevYaw    = null;
+  _scare.turnAccum  = 0;
+  _scare.turnWindow = 0;
+  _scare.walkTime   = 0;
+  _scare.cooldown   = randomScareCooldown();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  LOSE-SCREEN MONSTER CANVAS
+//  Renders smily_horror_monster.glb in a mini Three.js scene on #lose-canvas.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let _loseRenderer = null;
+let _loseScene    = null;
+let _loseCamera   = null;
+let _loseMixer    = null;
+const _loseClock  = new THREE.Clock(false);
+
+function _initLoseCanvas() {
+  if (_loseRenderer) return; // already initialised
+  const canvas = document.getElementById('lose-canvas');
+  if (!canvas) return;
+
+  _loseRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  _loseRenderer.setSize(400, 400, false); // false = don't override CSS sizing
+  _loseRenderer.setClearColor(0x000000, 0);
+
+  _loseScene  = new THREE.Scene();
+  _loseCamera = new THREE.PerspectiveCamera(50, 1, 0.001, 500);
+
+  _loseScene.add(new THREE.AmbientLight(0xffffff, 2.5));
+  const dl1 = new THREE.DirectionalLight(0xff3311, 4); dl1.position.set(0, 1, 1); _loseScene.add(dl1);
+  const dl2 = new THREE.DirectionalLight(0xffffff, 1.5); dl2.position.set(0, 1, -1); _loseScene.add(dl2);
+
+  _getMonsterLoader().load('/assets/3D/smily_horror_monster.glb', gltf => {
+    const m = gltf.scene;
+    _loseScene.add(m);
+
+    // Auto-fit: scale so largest dimension = 2 units, then centre
+    const box1 = new THREE.Box3().setFromObject(m);
+    const sz   = new THREE.Vector3(); box1.getSize(sz);
+    m.scale.setScalar(2 / Math.max(sz.x, sz.y, sz.z));
+
+    const box2   = new THREE.Box3().setFromObject(m);
+    const centre = new THREE.Vector3(); box2.getCenter(centre);
+    const sz2    = new THREE.Vector3(); box2.getSize(sz2);
+    m.position.sub(centre);
+
+    _loseCamera.position.set(0, 0.1, Math.max(sz2.x, sz2.y) * 1.75);
+    _loseCamera.lookAt(0, 0.1, 0);
+
+    _loseMixer = new THREE.AnimationMixer(m);
+    if (gltf.animations.length) _loseMixer.clipAction(gltf.animations[0]).play();
+    _loseClock.start();
+  });
+}
+
+function _updateLoseCanvas() {
+  if (!_loseRenderer || !_loseScene || !_loseCamera) return;
+  const dt = _loseClock.getDelta();
+  _loseMixer?.update(dt);
+  _loseRenderer.render(_loseScene, _loseCamera);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MONSTER CHASE SYSTEM
+//  Triggered when player exhausts wrong answers on a question.
+//  Phase 0 — forced 180° camera turn (1.8s eased).
+//  Phase 1 — monster runs toward player; scream volume rises with proximity.
+//  Caught   — screen fades black → lose screen.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CHASE_TURN_DURATION  = 1.8;   // seconds for forced turn
+const CHASE_MONSTER_SPEED  = 8.5;   // units / second
+const CHASE_SPAWN_DIST     = 13;    // units ahead when monster appears
+const CHASE_COLLISION_DIST = 1.1;   // units — caught threshold
+const CHASE_MONSTER_SCALE  = 1.8;   // multiplier on top of baked 0.01 scale
+// The filenames are misleading: this is the dark ghost/darkness model in-game.
+const CHASE_MONSTER_PATH   = '/assets/3D/horror-woman.glb';
+
+let _chasePhase      = 0;     // 0 = turning, 1 = monster running
+let _chaseElapsed    = 0;
+let _chaseStartYaw   = 0;
+let _chaseCaught     = false;
+let _chaseMonster    = null;  // THREE.Group in scene
+let _chaseMixer      = null;  // AnimationMixer
+let _chaseScreamT    = 0;     // countdown to next periodic scream
+let _monsterGltf     = null;  // cached loaded GLTF
+let _monsterLoader   = null;  // GLTFLoader instance
+
+function _getMonsterLoader() {
+  if (!_monsterLoader) _monsterLoader = new GLTFLoader();
+  return _monsterLoader;
+}
+
+function _loadMonster(cb) {
+  if (_monsterGltf) { cb(_monsterGltf); return; }
+  _getMonsterLoader().load(CHASE_MONSTER_PATH, gltf => { _monsterGltf = gltf; cb(gltf); });
+}
+
+function _spawnMonster() {
+  const gltf = _monsterGltf;
+  if (!gltf) return;
+
+  // Re-use cached scene (remove first if already in scene)
+  if (_chaseMonster) scene.remove(_chaseMonster);
+  _chaseMonster = gltf.scene;
+
+  // Position: straight ahead of player's current facing, at spawn distance
+  const sinY = Math.sin(yaw), cosY = Math.cos(yaw);
+  const px   = camera.position.x + (-sinY * CHASE_SPAWN_DIST);
+  const pz   = camera.position.z + (-cosY * CHASE_SPAWN_DIST);
+  // Clamp X to hallway centre (avoid spawning inside room walls)
+  _chaseMonster.position.set(Math.max(-2.2, Math.min(2.2, px)), 0, pz);
+  _chaseMonster.scale.setScalar(CHASE_MONSTER_SCALE); // baked 0.01 still applies
+
+  // Face toward player on Y axis only (model faces +Z by default in this GLB)
+  const dx = camera.position.x - _chaseMonster.position.x;
+  const dz = camera.position.z - _chaseMonster.position.z;
+  _chaseMonster.rotation.y = Math.atan2(dx, dz);
+
+  scene.add(_chaseMonster);
+
+  // Start run animation
+  _chaseMixer = new THREE.AnimationMixer(_chaseMonster);
+  if (gltf.animations.length) _chaseMixer.clipAction(gltf.animations[0]).play();
+
+  // Start ghost-scream clip — first 3s plays over the chase, rest carries into trapped screen
+  AudioManager.play('ghostScream');
+  AudioManager.setVolume('enemyNear', 0.25, 0.2);
+  _chaseScreamT = 999; // disable periodic synth screams — ghostScream handles it
+}
+
+function triggerChase() {
+  // Disable question UI cleanly
+  clearQuestionTimers();
+  showHUD();
+  state         = S.CHASE;
+  _chasePhase   = 0;
+  _chaseElapsed = 0;
+  _chaseCaught  = false;
+  _chaseStartYaw = yaw;
+
+  // Subtle pre-scare — brief silence
+  AudioManager.setVolume('ambient',   0, 0.08);
+  AudioManager.setVolume('enemyNear', 0, 0.08);
+
+  // Pre-load monster so it's ready the moment the turn finishes
+  _loadMonster(() => {/* ready */});
+}
+
+function _triggerCaught() {
+  if (_chaseCaught) return;
+  _chaseCaught = true;
+  AudioManager.stopAll(); // stops loops (ambient, enemyNear) — ghostScream is one-shot so keeps playing
+
+  // Fade to black
+  elVignette.style.transition = 'opacity 0.45s';
+  elVignette.style.background = '#000';
+  elVignette.style.opacity    = '1';
+
+  setTimeout(() => {
+    _cleanupChase();
+    state = S.LOSE;
+    showScreen('lose');
+  }, 500);
+}
+
+function _cleanupChase() {
+  if (_chaseMonster) { scene.remove(_chaseMonster); _chaseMonster = null; }
+  if (_chaseMixer)   { _chaseMixer.stopAllAction(); _chaseMixer = null; }
+  _chasePhase   = 0;
+  _chaseElapsed = 0;
+  _chaseCaught  = false;
+}
+
+function _updateChase(dt) {
+  _chaseElapsed += dt;
+
+  if (_chasePhase === 0) {
+    // ── Phase 0: Forced 180° camera turn ─────────────────────────────────────
+    const t      = Math.min(1, _chaseElapsed / CHASE_TURN_DURATION);
+    const eased  = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // ease-in-out
+    yaw   = _chaseStartYaw + eased * Math.PI;
+    pitch = 0;
+    camera.rotation.set(0, yaw, 0);
+
+    if (t >= 1) {
+      _chasePhase   = 1;
+      _chaseElapsed = 0;
+      _spawnMonster();
+    }
+
+  } else {
+    // ── Phase 1: Monster runs — player can look but not move ──────────────────
+    flushLookInput();   // allow mouse look so player can watch
+
+    if (_chaseMonster && !_chaseCaught) {
+      // Move monster toward player on XZ plane
+      const dx   = camera.position.x - _chaseMonster.position.x;
+      const dz   = camera.position.z - _chaseMonster.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      if (dist > 0.2) {
+        const step = CHASE_MONSTER_SPEED * dt;
+        _chaseMonster.position.x += (dx / dist) * step;
+        _chaseMonster.position.z += (dz / dist) * step;
+        _chaseMonster.rotation.y  = Math.atan2(dx, dz);
+      }
+
+      // Scale enemy audio with proximity (0.1 far → 1.0 at collision)
+      const vol = Math.min(1, Math.max(0.1, 1 - (dist - CHASE_COLLISION_DIST) / (CHASE_SPAWN_DIST - CHASE_COLLISION_DIST)));
+      AudioManager.setVolume('enemyNear', vol, 0.12);
+
+      // Periodic screams — more frequent as it closes in
+      _chaseScreamT -= dt;
+      if (_chaseScreamT <= 0) {
+        AudioManager.playScream();
+        _chaseScreamT = Math.max(0.8, 1.4 + (dist / CHASE_SPAWN_DIST) * 2);
+      }
+
+      // Update run animation
+      _chaseMixer?.update(dt);
+
+      // Caught
+      if (dist < CHASE_COLLISION_DIST) _triggerCaught();
+    }
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 updateMenuName();
 updateFullscreenLabel();
 showScreen('title');
 animate();
+if (import.meta.env.DEV) {
+  const devScareBtn = $('dev-scare-btn');
+  devScareBtn?.removeAttribute('hidden');
+  devScareBtn?.addEventListener('click', () => {
+    _scare.cooldown = 0;
+    _spawnScare(Math.random() < 0.5 ? 1 : -1);
+    _scare.cooldown = 5;
+  });
+  window.__devPlay = () => { resetProgress(); startGame(); };
+}

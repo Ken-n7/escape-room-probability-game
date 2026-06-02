@@ -1,9 +1,13 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG } from './config.js';
 
 const { hallW, hallH, hallL, roomW, roomH, doorW, doorH, rooms, exitZ } = CFG.world;
 const HALF_W = hallW / 2;
+const ROOM_LIGHT_COLORS = [0xffaa44, 0x4488ff, 0x44ff88];
+const FLUORESCENT_MODEL_PATH = '/assets/3D/fluorescent/mounted_fluorescent_lights_1k.gltf';
+const HALL_LIGHT_ZS = [5.5, 16.5, 27, 38, 49];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CANVAS TEXTURES
@@ -86,12 +90,13 @@ function lockerTex() {
 //  Large surfaces (walls, floor, ceiling) → MeshLambertMaterial so point lights
 //  create the horror atmosphere (dark corners, candle glow, flickering).
 //  Small furniture → MeshBasicMaterial (zero lighting cost, invisible diff).
+//  Hallway lockers stay Lambert so fluorescent flicker visibly changes the hall.
 // ═══════════════════════════════════════════════════════════════════════════════
 const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#181818') });
 const floorMat     = new THREE.MeshLambertMaterial({ map: floorTex() });
 const ceilMat      = new THREE.MeshLambertMaterial({ color: 0x060606 });
 // — furniture stays MeshBasicMaterial (saves lighting calc on tiny geometry) —
-const lockerMat    = new THREE.MeshBasicMaterial({ map: lockerTex() });
+const lockerMat    = new THREE.MeshLambertMaterial({ map: lockerTex() });
 const deskMat      = new THREE.MeshBasicMaterial({ color: 0x2e2010 });
 const darkMat      = new THREE.MeshBasicMaterial({ color: 0x0e0e0e });
 const doorFrameMat = new THREE.MeshBasicMaterial({ color: 0x1c1208 });
@@ -168,7 +173,7 @@ function buildHallway() {
   for (let z = 0.5; z < hl - 1; z += lW + 0.05)
     bx(lW, lH, lD, -hw+lD/2, lH/2, z+lW/2, lockerMat);
 
-  bx(0.3, 0.08, hl*0.9, 0, hh-0.04, hl/2, ceilLightMat);
+  // Fluorescent fixtures are loaded as GLTF in addLights().
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -289,16 +294,97 @@ function buildExitDoor(scene, interactiveObjects) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export const flickerLights = [];   // populated below; main.js updates intensity each frame
 
+let fluorescentTemplate = null;
+let fluorescentLoading = false;
+const pendingFluorescentFixtures = [];
+
+function collectEmissiveMaterials(root) {
+  const materials = [];
+  root.traverse(obj => {
+    if (!obj.isMesh || !obj.material) return;
+    const sourceMats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    const clonedMats = sourceMats.map(mat => mat.clone());
+    obj.material = Array.isArray(obj.material) ? clonedMats : clonedMats[0];
+    clonedMats.forEach(mat => {
+      const name = (mat.name || '').toLowerCase();
+      const canGlow = mat.emissive && (mat.emissiveMap || name.includes('glass') || name.includes('light'));
+      if (!canGlow) return;
+      mat.emissive = new THREE.Color(0xcde9ff);
+      mat.emissiveIntensity = 0.42;
+      mat.needsUpdate = true;
+      materials.push(mat);
+    });
+  });
+  return materials;
+}
+
+function addFluorescentFixture(scene, z, syncTarget) {
+  if (!fluorescentTemplate) {
+    pendingFluorescentFixtures.push({ scene, z, syncTarget });
+    if (!fluorescentLoading) {
+      fluorescentLoading = true;
+      new GLTFLoader().load(FLUORESCENT_MODEL_PATH, gltf => {
+        fluorescentTemplate = gltf.scene;
+        pendingFluorescentFixtures.splice(0).forEach(item => addFluorescentFixture(item.scene, item.z, item.syncTarget));
+      }, undefined, err => console.warn('Fluorescent light asset failed to load.', err));
+    }
+    return;
+  }
+
+  const fixture = fluorescentTemplate.clone(true);
+  const emissiveMaterials = collectEmissiveMaterials(fixture);
+  fixture.scale.setScalar(2.1);
+
+  const box = new THREE.Box3().setFromObject(fixture);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  fixture.position.sub(center);
+
+  const group = new THREE.Group();
+  group.position.set(0, hallH - 0.14, z);
+  group.add(fixture);
+  scene.add(group);
+
+  syncTarget.emissiveMaterials.push(...emissiveMaterials);
+}
+
 function addLights(scene) {
   // Very dim cool ambient — keeps absolute-black areas just barely visible
-  scene.add(new THREE.AmbientLight(0x080814, 1));
+  scene.add(new THREE.AmbientLight(0x05060a, 0.42));
 
   // Hallway fluorescents — cool blue-white, occasional sudden dim (broken tubes)
-  [hallL * 0.28, hallL * 0.72].forEach(z => {
-    const l = new THREE.PointLight(0x9aabcc, 3.5, 24);
+  HALL_LIGHT_ZS.forEach(z => {
+    const l = new THREE.PointLight(0x9aabcc, 1.2, 13.5);
     l.position.set(0, hallH - 0.3, z);
     scene.add(l);
-    flickerLights.push({ light: l, base: 3.5, speed: 6 + Math.random()*3, amp: 0.7, type: 'hall' });
+    const syncTarget = {
+      light: l,
+      base: 1.2,
+      speed: 6 + Math.random()*3,
+      amp: 0.7,
+      type: 'hall',
+      cutTimer: 0,
+      emissiveMaterials: [],
+      glowMaterials: [],
+      emissiveBase: 0.42,
+    };
+    flickerLights.push(syncTarget);
+
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xcde9ff,
+      transparent: true,
+      opacity: 0.22,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.5), glowMat);
+    glow.position.set(0, hallH - 0.22, z);
+    glow.rotation.x = Math.PI / 2;
+    scene.add(glow);
+    syncTarget.glowMaterials.push(glowMat);
+
+    addFluorescentFixture(scene, z, syncTarget);
   });
 
   // Candle per room — warm orange, gentle organic flicker
@@ -344,6 +430,11 @@ export function buildWorld(scene) {
   buildHallway();
   const interactiveObjects = [];
   rooms.forEach((_,i) => buildRoom(scene, i, interactiveObjects));
+  rooms.forEach(([zS, zE], i) => {
+    const light = new THREE.PointLight(ROOM_LIGHT_COLORS[i], 0.6, 10, 2);
+    light.position.set(HALF_W + roomW / 2, 2.0, (zS + zE) / 2);
+    scene.add(light);
+  });
   buildExitDoor(scene, interactiveObjects);
   addLights(scene);
   _flush(scene);   // merge all batched geometry → ~15 draw calls total

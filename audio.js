@@ -124,6 +124,10 @@ export const AudioManager = {
     src.start();
   },
 
+  playScream() {
+    this.play('ghostScream');
+  },
+
   /**
    * Smoothly ramp the volume of a looping sound.
    * Used for tension fade-in / fade-out.

@@ -183,13 +183,13 @@
     /* ── HUD ─────────────────────────────────────────────────────────────── */
     #hud { position:fixed; inset:0; pointer-events:none; z-index:10; display:none; }
     #hud-options-btn {
-      position:absolute; top:10px; right:10px; bottom:auto;
+      position:fixed; top:10px; right:10px; bottom:auto;
       width:48px; height:48px; border-radius:50%;
       pointer-events:auto; touch-action:manipulation;
       border:1px solid rgba(255,255,255,0.3);
       background:rgba(0,0,0,0.56); color:#ffeecc;
       font-family:monospace; font-size:1.2rem;
-      cursor:pointer; z-index:15;
+      cursor:pointer; z-index:70;
     }
     #hud-options-btn:hover { background:rgba(80,0,0,0.7); }
     #code-tracker {
@@ -198,12 +198,19 @@
       letter-spacing:4px; text-shadow:0 0 8px gold;
       background:rgba(0,0,0,0.5); padding:6px 14px; border-radius:6px;
     }
+    #code-tracker.complete { animation:codePulse 1.4s ease-in-out infinite; }
+    @keyframes codePulse {
+      0%,100% { box-shadow:0 0 0px #44ff88; border-color:transparent; }
+      50%      { box-shadow:0 0 14px #44ff88; border:1px solid #44ff88; }
+    }
     #room-progress { position:absolute; top:16px; left:16px; display:flex; gap:10px; }
     .room-pip {
       width:12px; height:12px; border-radius:50%;
       background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);
     }
     .room-pip.done { background:#44ff44; border-color:#44ff44; box-shadow:0 0 6px #44ff44; }
+    #hud-q-progress { position:absolute; top:34px; left:16px; color:#ffaa55; font-size:0.65rem; letter-spacing:1px; pointer-events:none; }
+    #hud-streak { position:absolute; top:48px; left:16px; color:#66ff99; font-size:0.65rem; letter-spacing:1px; pointer-events:none; }
     #crosshair {
       position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
       color:rgba(255,255,255,0.5); font-size:0.9rem; line-height:1;
@@ -212,7 +219,18 @@
       position:absolute; bottom:80px; left:50%; transform:translateX(-50%);
       color:#ffeecc; font-family:monospace; font-size:0.9rem; letter-spacing:2px;
       background:rgba(0,0,0,0.6); padding:6px 18px; border-radius:20px;
-      opacity:0; transition:opacity 0.2s;
+      opacity:0; transition:opacity 0.2s, background 0.1s, transform 0.1s;
+      border:none; cursor:pointer; pointer-events:none; white-space:nowrap;
+    }
+    #interact-prompt:hover {
+      background:rgba(40,20,0,0.8);
+    }
+    #interact-prompt:active {
+      background:rgba(80,40,0,0.9);
+      transform:translateX(-50%) scale(0.95);
+    }
+    body[data-can-interact="true"] #interact-prompt {
+      pointer-events:auto;
     }
     #hud-player {
       position:absolute; bottom:16px; left:16px;
@@ -251,26 +269,8 @@
     #mobile-move [data-move="KeyA"] { grid-column:1; grid-row:2; }
     #mobile-move [data-move="KeyD"] { grid-column:3; grid-row:2; }
     #mobile-move [data-move="KeyS"] { grid-column:2; grid-row:3; }
-    #mobile-interact-btn {
-      position:absolute;
-      right:22px;
-      bottom:22px;
-      width:64px;
-      height:64px;
-      border-radius:50%;
-      font-size:1.35rem;
-      opacity:0;
-      pointer-events:none;
-      transform:scale(.86);
-      transition:opacity .16s, transform .16s, background .12s;
-    }
-    body[data-can-interact="true"] #mobile-interact-btn {
-      opacity:1;
-      pointer-events:auto;
-      transform:scale(1);
-    }
     body[data-controls="touch"] #mobile-controls { display:block; }
-    body[data-controls="touch"] #interact-prompt { bottom:154px; }
+    body[data-controls="touch"] #interact-prompt { bottom:154px; font-size:1.1rem; padding:10px 24px; }
     body[data-controls="touch"] #hud-player { display:none; }
     body[data-controls="touch"] #hud-options-btn {
       width:54px;
@@ -356,7 +356,48 @@
     #vignette {
       position:fixed; inset:0; pointer-events:none; z-index:5;
       background:radial-gradient(ellipse at center, transparent 40%, rgba(60,0,0,0.92) 100%);
-      opacity:0; transition:opacity 0.5s;
+      opacity:0; transition:opacity 0.5s, background 0.5s;
+    }
+    @keyframes screenshake {
+      0%,100% { transform:translate(0,0) rotate(0deg); }
+      15%     { transform:translate(-9px,-4px) rotate(-1.5deg); }
+      30%     { transform:translate(9px,5px) rotate(1.5deg); }
+      45%     { transform:translate(-7px,4px) rotate(-1deg); }
+      60%     { transform:translate(7px,-5px) rotate(1deg); }
+      75%     { transform:translate(-4px,3px) rotate(-0.5deg); }
+      90%     { transform:translate(4px,-2px) rotate(0.5deg); }
+    }
+    body.screenshake { animation:screenshake 0.55s cubic-bezier(.36,.07,.19,.97) both; }
+
+    /* ── ROOM CLEAR FLASH ───────────────────────────────────────────────────── */
+    #room-clear-flash { position:fixed; inset:0; z-index:150; background:#44ff88; pointer-events:none; opacity:0; }
+    #room-clear-flash.active { animation:roomClearFlash 0.7s ease-out forwards; }
+    @keyframes roomClearFlash { 0% { opacity:0.4; } 100% { opacity:0; } }
+
+    /* ── JUMP SCARE ──────────────────────────────────────────────────────────── */
+    #jumpscare-overlay {
+      position:fixed; inset:0; z-index:200;
+      display:flex; align-items:center; justify-content:center;
+      pointer-events:none; opacity:0;
+    }
+    #jumpscare-face {
+      width:min(72vw,72vh); height:auto;
+      transform-origin:center;
+    }
+    #jumpscare-overlay.active #jumpscare-face {
+      animation:
+        scare-enter     0.22s cubic-bezier(0.05,0.85,0.1,1.4) both,
+        chromatic-split 0.11s linear 0.22s infinite;
+    }
+    @keyframes scare-enter {
+      from { transform:scale(0.04) rotate(-10deg); opacity:0; }
+      to   { transform:scale(1)    rotate(  0deg); opacity:1; }
+    }
+    @keyframes chromatic-split {
+      0%   { filter:drop-shadow(-5px 0   0 rgba(255,0,0,0.88)) drop-shadow( 5px  0   0 rgba(0,210,255,0.88)); }
+      33%  { filter:drop-shadow( 7px 0   0 rgba(255,0,0,0.95)) drop-shadow(-7px  0   0 rgba(0,210,255,0.95)); }
+      67%  { filter:drop-shadow(-4px 2px 0 rgba(255,0,0,0.75)) drop-shadow( 4px -2px 0 rgba(0,210,255,0.75)); }
+      100% { filter:drop-shadow(-5px 0   0 rgba(255,0,0,0.88)) drop-shadow( 5px  0   0 rgba(0,210,255,0.88)); }
     }
 
     /* ── QUESTION MODAL ──────────────────────────────────────────────────── */
@@ -556,14 +597,26 @@
       border-radius:8px; font-family:monospace; font-size:0.85rem;
     }
     #win-scores div { color:#44cc44; margin:4px 0; letter-spacing:1px; }
+    #win-time { font-family:monospace; font-size:0.8rem; color:#558855; letter-spacing:1px; margin-top:8px; }
+    #win-perfect { font-family:monospace; font-size:1.1rem; color:#ffdd00; letter-spacing:4px; text-shadow:0 0 12px #ffdd00; margin:10px 0; display:none; }
+    #s-win.perfect #win-perfect { display:block; }
+    .screen-hint { font-size:0.7rem; color:rgba(255,255,255,0.25); letter-spacing:2px; margin-top:14px; }
 
-    #s-lose { background:rgba(10,0,0,0.97); color:#ff1111; }
-    #s-lose h1 { font-family:monospace; font-size:clamp(2rem,5vw,3rem); letter-spacing:6px; text-shadow:0 0 30px #ff0000; animation:flicker .08s infinite; }
-    #scary-face {
-      width:220px; height:220px; margin:1.2rem 0;
-      background:#0a0000; border:1px solid #440000;
-      display:flex; align-items:center; justify-content:center;
-      color:#331111; font-size:0.7rem; text-align:center; padding:1rem;
+    #s-lose { background:rgba(4,0,0,0.98); color:#ff1111; }
+    #s-lose h1 { font-family:monospace; font-size:clamp(1.6rem,5vw,3rem); letter-spacing:6px; text-shadow:0 0 30px #ff0000, 0 0 80px #880000; animation:flicker .08s infinite; margin:0 0 0.2rem; }
+    #s-lose p  { color:#bb2222; font-family:monospace; letter-spacing:2px; margin:0.2rem 0 0.5rem; font-size:0.85rem; }
+    #s-lose .screen-hint { margin-top:0.4rem; }
+    #lose-canvas {
+      width:clamp(120px, min(30vh, 38vw), 230px);
+      height:clamp(120px, min(30vh, 38vw), 230px);
+      max-width:100%; flex-shrink:0;
+      display:block; margin:0.4rem auto;
+      filter:drop-shadow(0 0 18px rgba(200,0,0,0.9)) drop-shadow(0 0 40px rgba(150,0,0,0.5));
+      animation:lose-float 3.5s ease-in-out infinite;
+    }
+    @keyframes lose-float {
+      0%,100% { transform:translateY(0)   rotate(-1.2deg); }
+      50%     { transform:translateY(-12px) rotate(1.2deg); }
     }
 
     /* ── PAUSE ───────────────────────────────────────────────────────────── */
@@ -670,8 +723,8 @@
     }
     #s-lose {
       background:
-        linear-gradient(90deg, rgba(0,0,0,.75), rgba(0,0,0,.22) 50%, rgba(0,0,0,.78)),
-        linear-gradient(180deg, rgba(96,0,0,.46), rgba(0,0,0,.7)),
+        linear-gradient(90deg, rgba(0,0,0,.68), rgba(0,0,0,.18) 50%, rgba(0,0,0,.72)),
+        linear-gradient(180deg, rgba(42,0,0,.24), rgba(0,0,0,.58)),
         url('/assets/spiderweb_bg.jpg') center/cover no-repeat,
         #090202;
     }
@@ -1265,7 +1318,7 @@
         font-size:1.35rem;
       }
       #mobile-controls { display:block; }
-      #interact-prompt { bottom:154px; }
+      #interact-prompt { bottom:154px; font-size:1.1rem; padding:10px 24px; }
       #hud-player { display:none; }
       #options-box { padding:22px; }
       #s-plearn #plearn-nav {
@@ -1616,14 +1669,17 @@
 <!-- ══ HUD ═════════════════════════════════════════════════════════════════════ -->
 <div id="hud">
   <button id="hud-options-btn" type="button" aria-label="Open options">☰</button>
+  <button id="dev-scare-btn" type="button" hidden style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.7);color:#fff;border:1px solid #f00;padding:6px 14px;font-size:0.75rem;letter-spacing:1px;cursor:pointer;z-index:99;pointer-events:all;">TEST SCARE</button>
   <div id="room-progress">
     <div class="room-pip" id="pip-0"></div>
     <div class="room-pip" id="pip-1"></div>
     <div class="room-pip" id="pip-2"></div>
   </div>
+  <div id="hud-q-progress"></div>
+  <div id="hud-streak"></div>
   <div id="code-tracker">CODE: _ _ _</div>
   <div id="crosshair">·</div>
-  <div id="interact-prompt">[ E ] Examine</div>
+  <button id="interact-prompt" type="button" aria-label="Interact">[ E ] Examine</button>
   <div id="hud-player"></div>
   <div id="mobile-controls">
     <div id="mobile-move">
@@ -1632,10 +1688,118 @@
       <button class="mobile-control-btn" type="button" data-move="KeyD">▶</button>
       <button class="mobile-control-btn" type="button" data-move="KeyS">▼</button>
     </div>
-    <button class="mobile-control-btn" id="mobile-interact-btn" type="button" aria-label="Interact">!</button>
   </div>
 </div>
 <div id="vignette"></div>
+
+<!-- ══ JUMP SCARE OVERLAY ════════════════════════════════════════════════════ -->
+<div id="room-clear-flash"></div>
+<div id="jumpscare-overlay">
+  <svg id="jumpscare-face" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" aria-hidden="true">
+    <defs>
+      <!-- Face: lit from top-left, deep shadow at edges (corpse pallor) -->
+      <radialGradient id="jg-skin" cx="38%" cy="22%" r="70%">
+        <stop offset="0%"   stop-color="#c4beb4"/>
+        <stop offset="46%"  stop-color="#948e86"/>
+        <stop offset="80%"  stop-color="#545050"/>
+        <stop offset="100%" stop-color="#1a1614"/>
+      </radialGradient>
+      <!-- Eye socket: deep red glow fading to black -->
+      <radialGradient id="jg-eye" cx="50%" cy="55%" r="52%">
+        <stop offset="0%"   stop-color="#bf1200" stop-opacity="0.88"/>
+        <stop offset="40%"  stop-color="#520000" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+      </radialGradient>
+      <!-- Mouth: shallow light fading to void -->
+      <radialGradient id="jg-maw" cx="50%" cy="16%" r="74%">
+        <stop offset="0%"   stop-color="#1a0606"/>
+        <stop offset="100%" stop-color="#000000"/>
+      </radialGradient>
+      <!-- Organic warp — makes geometry look like flesh, not a drawing -->
+      <filter id="jf-warp" x="-6%" y="-6%" width="112%" height="112%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.032 0.048" numOctaves="3" seed="11" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+      <!-- Eye glow bloom -->
+      <filter id="jf-glow" x="-55%" y="-55%" width="210%" height="210%">
+        <feGaussianBlur stdDeviation="7" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <!-- FACE BASE — elongated skull, slightly lopsided, gradient-shaded -->
+    <path filter="url(#jf-warp)"
+      d="M100,20 C154,18 182,58 181,110 C180,164 170,215 151,244
+         C136,267 116,280 100,280 C84,280 64,267 49,244
+         C30,215 20,164 19,110 C18,58 46,18 100,20Z"
+      fill="url(#jg-skin)"/>
+
+    <!-- Sunken hollow cheeks -->
+    <ellipse cx="50"  cy="182" rx="26" ry="15" fill="#0c0808" opacity="0.42" filter="url(#jf-warp)"/>
+    <ellipse cx="150" cy="185" rx="22" ry="13" fill="#0c0808" opacity="0.36" filter="url(#jf-warp)"/>
+
+    <!-- Brow ridge shadow (left side — the lit side) -->
+    <path d="M42,100 Q66,84 98,88" fill="#18120e" opacity="0.48"/>
+
+    <!-- LEFT EYE — the only exposed eye, hollow and glowing -->
+    <path filter="url(#jf-warp)"
+      d="M44,112 Q50,88 76,84 Q103,83 108,106 Q113,124 101,139
+         Q86,152 62,148 Q40,142 38,124 Q37,116 44,112Z"
+      fill="#040101"/>
+    <ellipse cx="74" cy="115" rx="23" ry="28" fill="url(#jg-eye)" filter="url(#jf-glow)"/>
+    <!-- Single glint — the only sign of something staring back -->
+    <circle cx="65" cy="106" r="3.5" fill="#ff5533" opacity="0.62"/>
+
+    <!-- NOSE — two collapsed dark cavities -->
+    <path d="M88,172 Q95,157 100,154 Q105,157 112,172 Q105,181 100,182 Q95,181 88,172Z"
+      fill="#080202"/>
+
+    <!-- MOUTH — jaw-unhinged screaming maw -->
+    <path filter="url(#jf-warp)"
+      d="M50,194 Q60,175 100,172 Q140,175 150,194
+         Q168,220 160,252 Q143,278 100,278 Q57,278 40,252
+         Q32,220 50,194Z"
+      fill="url(#jg-maw)"/>
+    <!-- Throat void -->
+    <ellipse cx="100" cy="252" rx="28" ry="18" fill="#000"/>
+    <!-- Upper teeth — triangular, irregular, not rects -->
+    <path d="M62,188 L67,212 L75,189"  fill="#d4cec0"/>
+    <path d="M77,183 L83,214 L91,184"  fill="#ddd6c8"/>
+    <path d="M93,181 L100,215 L107,181" fill="#d4cec0"/>
+    <path d="M109,183 L117,214 L122,188" fill="#cec8ba"/>
+    <!-- Lower teeth (barely visible in the dark) -->
+    <path d="M65,255 L72,240 L78,256"  fill="#a8a29c" opacity="0.52"/>
+    <path d="M84,258 L91,242 L97,258"  fill="#b0aaa4" opacity="0.48"/>
+    <path d="M103,258 L109,242 L115,258" fill="#a8a29c" opacity="0.48"/>
+
+    <!-- HAIR — drawn last so it sits on top of everything -->
+    <!-- Dark crown mass -->
+    <path d="M55,20 Q78,2 100,0 Q122,2 148,20 Q128,8 100,10 Q72,8 55,20Z" fill="#060404"/>
+
+    <!-- Left side — sparse strands -->
+    <path d="M40,50 Q16,92  8,152 Q4,192 12,235"
+      stroke="#060404" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M48,36 Q22,76 14,128 Q8,168 16,208"
+      stroke="#070505" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M56,26 Q34,62 26,102 Q20,138 28,176"
+      stroke="#060404" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+    <!-- Right side — HEAVY curtain obscuring the right eye entirely -->
+    <path d="M162,44 Q185,86 190,142 Q194,184 186,230"
+      stroke="#050303" stroke-width="11" stroke-linecap="round" fill="none"/>
+    <path d="M153,30 Q178,70 182,122 Q187,166 179,210"
+      stroke="#060404" stroke-width="9"  stroke-linecap="round" fill="none"/>
+    <path d="M143,20 Q166,56 170,106 Q175,152 168,198"
+      stroke="#050303" stroke-width="10" stroke-linecap="round" fill="none"/>
+    <path d="M133,16 Q154,50 158,98 Q163,144 156,190 Q150,222 145,256"
+      stroke="#060404" stroke-width="7"  stroke-linecap="round" fill="none"/>
+    <!-- Strands crossing face center (partial mouth coverage) -->
+    <path d="M120,18 Q126,62 124,110 Q122,152 120,196 Q118,232 116,272"
+      stroke="#050303" stroke-width="3"  stroke-linecap="round" fill="none" opacity="0.68"/>
+    <path d="M112,16 Q115,58 113,102 Q111,144 109,186 Q107,224 105,268"
+      stroke="#060404" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.58"/>
+  </svg>
+</div>
 
 <!-- ══ OPTIONS ════════════════════════════════════════════════════════════════ -->
 <div id="s-options" class="screen hidden">
@@ -1720,6 +1884,10 @@
         <span>Room 3 · Hard</span>
         <span class="score-val" id="score-room-2">—</span>
       </div>
+      <div class="score-row">
+        <span>BEST TIME</span>
+        <span id="score-best-time" class="score-val">—</span>
+      </div>
     </div>
 
     <button id="btn-reset-progress">RESET ALL PROGRESS</button>
@@ -1766,16 +1934,20 @@
 <div id="s-win" class="screen hidden">
   <h1>YOU ESCAPED!</h1>
   <p>All rooms cleared. The ghost is free.</p>
+  <div id="win-perfect">PERFECT RUN</div>
   <div id="win-scores"></div>
+  <div id="win-time"></div>
   <button class="action-btn" id="btn-win-restart">PLAY AGAIN</button>
+  <div class="screen-hint">[ R ] PLAY AGAIN</div>
 </div>
 
 <!-- ══ LOSE ════════════════════════════════════════════════════════════════════ -->
 <div id="s-lose" class="screen hidden">
   <h1>TRAPPED.</h1>
-  <!-- Replace div below with <img src="/assets/scary_face.png" style="width:220px"> -->
-  <div id="scary-face">[ SCARY FACE ]<br>replace with<br>/assets/scary_face.png</div>
+  <canvas id="lose-canvas" width="400" height="400" aria-hidden="true"></canvas>
+  <p>The ghost has claimed you.</p>
   <button class="action-btn" id="btn-lose-retry">TRY AGAIN</button>
+  <div class="screen-hint">[ R ] TRY AGAIN</div>
 </div>
 
 <!-- ══ PAUSE ═══════════════════════════════════════════════════════════════════ -->

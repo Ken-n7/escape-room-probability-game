@@ -37,6 +37,21 @@ export const AUDIO_ASSETS = {
     loop: false,
     vol: 1,
   },
+  ghostScream: {
+    src: `${AUDIO_DIR}jumpscares/sound_effects75-eyesaur-jumpscare-sound-482110.mp3`,
+    loop: false,
+    vol: 1,
+  },
+  randomScareWhisper: {
+    src: `${AUDIO_DIR}jumpscares/dragon-studio-creepy-ghost-whisper-410564.mp3`,
+    loop: false,
+    vol: 0.95,
+  },
+  randomScareHit: {
+    src: `${AUDIO_DIR}jumpscares/sound_effects75-eyesaur-jumpscare-sound-482110.mp3`,
+    loop: false,
+    vol: 1,
+  },
   win: {
     src: `${AUDIO_DIR}win_chime.wav`,
     loop: false,

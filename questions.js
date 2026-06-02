@@ -39,6 +39,18 @@ export const ROOMS = [
         correct: 2,
         hint: 'Getting exactly a 4 when rolling a single die is one specific, single result.',
       },
+      {
+        text: 'Which probability value means an event is CERTAIN to happen?',
+        choices: ['0', '1', '1/2', 'Impossible'],
+        correct: 1,
+        hint: 'A probability of 1 means the event will always happen. A probability of 0 means it cannot happen.',
+      },
+      {
+        text: 'What do we call one possible result of a probability experiment?',
+        choices: ['Outcome', 'Formula', 'Question', 'Prediction'],
+        correct: 0,
+        hint: 'When rolling a die, getting a 2 is one possible result. That single result is called an outcome.',
+      },
     ],
   },
 
@@ -67,6 +79,18 @@ export const ROOMS = [
         correct: 2,
         hint: 'Favorable outcomes = green sections = 2.  Total sections = 8.  Apply the formula.',
       },
+      {
+        text: 'A bag contains 12 letter tiles. 5 tiles are vowels and 7 are consonants. What is the probability of randomly picking a VOWEL?\n[Favorable = 5, Total = 12]',
+        choices: ['7/12', '5/12', '5/7', '12/5'],
+        correct: 1,
+        hint: 'Use P(Event) = Favorable Outcomes ÷ Total Outcomes. Vowels are favorable, so use 5 ÷ 12.',
+      },
+      {
+        text: 'A basket has 9 apples and 6 oranges. What is the probability of randomly choosing an ORANGE?\n[Favorable = 6, Total = 15]',
+        choices: ['9/15', '6/15', '6/9', '15/6'],
+        correct: 1,
+        hint: 'There are 6 oranges out of 15 total fruits, so the probability is 6 divided by 15.',
+      },
     ],
   },
 
@@ -94,6 +118,18 @@ export const ROOMS = [
         choices: ['8/20', '6/20', '10/20', '4/20'],
         correct: 0,
         hint: 'List all prime numbers between 1 and 20 — those are your favorable outcomes. Total = 20.',
+      },
+      {
+        text: 'A bookshelf has 9 mystery books, 7 science books, and 4 history books. If one book is chosen at random, what is the probability of choosing a SCIENCE book?',
+        choices: ['7/20', '9/20', '4/20', '7/16'],
+        correct: 0,
+        hint: 'First find the total books: 9 + 7 + 4 = 20. Science books are favorable, so use 7 ÷ 20.',
+      },
+      {
+        text: 'A club has 18 members who prefer basketball, 12 who prefer volleyball, and 10 who prefer soccer. If one member is chosen at random, what is the probability the member does NOT prefer basketball?',
+        choices: ['18/40', '22/40', '12/40', '10/40'],
+        correct: 1,
+        hint: '"Not basketball" means volleyball OR soccer. Add 12 + 10 = 22, then divide by the total members, 40.',
       },
     ],
   },
