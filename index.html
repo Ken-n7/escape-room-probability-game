@@ -620,25 +620,87 @@
     }
 
     /* ── LOADING ─────────────────────────────────────────────────────────── */
-    #s-loading { background:#000; gap:28px; }
-    #s-loading h1 {
-      font-family:monospace; font-size:clamp(2rem,5vw,3.5rem);
-      color:#cc1111; letter-spacing:6px;
-      text-shadow:0 0 30px #ff0000,0 0 60px #660000;
+    #s-loading {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.88), rgba(0,0,0,.42) 48%, rgba(0,0,0,.90)),
+        linear-gradient(180deg, rgba(37,3,5,.5), rgba(0,0,0,.3) 48%, rgba(0,0,0,.9)),
+        url('/assets/hallway_bg.jpg') center/cover no-repeat,
+        #050607;
+      justify-content:center;
+      align-items:center;
+      transition:opacity 0.55s ease;
     }
+    #loading-content {
+      position:relative; z-index:1;
+      display:flex; flex-direction:column; align-items:center;
+      gap:0; text-align:center;
+    }
+    #loading-content .case-stamp { margin-bottom:1.1rem; }
+    #loading-content h1 {
+      font-family:Impact, Haettenschweiler, 'Arial Black', sans-serif;
+      font-size:clamp(3rem,9vw,6rem);
+      line-height:.88; color:var(--bone);
+      text-shadow:0 3px 0 #1b0708, 0 0 40px rgba(181,31,35,.85);
+      animation:flicker .09s infinite;
+      margin:0 0 1.4rem;
+    }
+    #loading-flavor {
+      font-family:monospace; font-size:clamp(0.7rem,1.6vw,0.88rem);
+      color:var(--paper); letter-spacing:1px;
+      min-height:1.4em; margin-bottom:1.8rem;
+      max-width:min(480px,80vw);
+      opacity:1; transition:opacity 0.35s ease;
+    }
+    #loading-flavor.fade { opacity:0; }
     #loading-bar-wrap {
-      width:min(400px,70vw); height:3px;
-      background:rgba(255,255,255,0.08); border-radius:2px; overflow:hidden;
+      position:relative;
+      width:min(420px,72vw); height:4px;
+      background:rgba(255,255,255,0.07);
+      overflow:hidden;
     }
     #loading-bar {
       height:100%; width:0%;
-      background:#cc1111; box-shadow:0 0 10px #ff2222;
-      transition:width 0.35s ease;
+      background:var(--blood);
+      box-shadow:0 0 12px #b51f23, 0 0 28px rgba(181,31,35,.5);
+      transition:width 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
     }
-    #loading-label {
-      font-family:monospace; font-size:0.75rem;
-      color:rgba(255,255,255,0.3); letter-spacing:3px;
+    #loading-bar::after {
+      content:'';
+      position:absolute; top:0; right:0;
+      width:60px; height:100%;
+      background:linear-gradient(90deg, transparent, rgba(255,120,120,0.7));
+      animation:loadSweep 1.2s ease-in-out infinite;
     }
+    @keyframes loadSweep {
+      0%   { opacity:0; transform:translateX(0); }
+      40%  { opacity:1; }
+      100% { opacity:0; transform:translateX(20px); }
+    }
+    #loading-status {
+      display:flex; align-items:center; gap:10px;
+      margin-top:12px;
+      font-family:monospace; font-size:0.7rem;
+      color:rgba(231,223,204,.35); letter-spacing:2px;
+    }
+    #loading-status::before {
+      content:'';
+      display:inline-block; width:6px; height:6px; border-radius:50%;
+      background:var(--blood);
+      box-shadow:0 0 6px #b51f23;
+      animation:statusBlink 1.1s ease-in-out infinite;
+    }
+    @keyframes statusBlink {
+      0%,100% { opacity:1; } 50% { opacity:0.2; }
+    }
+    #s-loading.ready #loading-status::before {
+      background:var(--green); box-shadow:0 0 6px #5fae72;
+      animation:none; opacity:1;
+    }
+    #s-loading.ready #loading-bar {
+      box-shadow:0 0 16px #5fae72, 0 0 32px rgba(95,174,114,.4);
+      background:var(--green);
+    }
+    #s-loading.ready #loading-bar::after { display:none; }
 
     /* ── PAUSE ───────────────────────────────────────────────────────────── */
     #s-pause { background:rgba(0,0,4,0.78); color:#4466aa; cursor:pointer; user-select:none; }
@@ -1613,9 +1675,13 @@
 
 <!-- ══ LOADING ════════════════════════════════════════════════════════════════ -->
 <div id="s-loading" class="screen">
-  <h1>ESCAPE<br>ROOM</h1>
-  <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
-  <p id="loading-label">LOADING</p>
+  <div id="loading-content">
+    <div class="case-stamp">Room 308 / Probability Case</div>
+    <h1>ESCAPE<br>ROOM</h1>
+    <p id="loading-flavor">Scanning encrypted case files...</p>
+    <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+    <div id="loading-status">INITIALIZING</div>
+  </div>
 </div>
 
 <!-- ══ TITLE ══════════════════════════════════════════════════════════════════ -->
