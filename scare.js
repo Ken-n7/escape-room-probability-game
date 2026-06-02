@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { makeGLTFLoader } from './gltf-loader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { gState, look, keys, S } from './game-state.js';
 import { scene, camera, renderer } from './renderer.js';
@@ -30,7 +30,7 @@ let _gltf   = null;
 let _loader = null;
 
 function _getLoader() {
-  if (!_loader) _loader = new GLTFLoader();
+  if (!_loader) _loader = makeGLTFLoader();
   return _loader;
 }
 

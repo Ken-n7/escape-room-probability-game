@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { makeGLTFLoader } from './gltf-loader.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _renderer = null;
@@ -34,7 +34,7 @@ export function initLoseCanvas() {
   if (_gltf) {
     _setup(_gltf);
   } else {
-    new GLTFLoader().load(MODEL_PATH, _setup);
+    makeGLTFLoader().load(MODEL_PATH, _setup);
   }
 }
 

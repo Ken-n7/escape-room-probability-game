@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { makeGLTFLoader } from './gltf-loader.js';
 import { gState, look, S } from './game-state.js';
 import { scene, camera } from './renderer.js';
 import { AudioManager } from './audio.js';
@@ -38,7 +38,7 @@ export function setGltf(gltf) { _gltf = gltf; }
 
 // ── Model loading ─────────────────────────────────────────────────────────────
 function _getLoader() {
-  if (!_loader) _loader = new GLTFLoader();
+  if (!_loader) _loader = makeGLTFLoader();
   return _loader;
 }
 

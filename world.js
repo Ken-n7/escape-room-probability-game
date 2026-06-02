@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { makeGLTFLoader } from './gltf-loader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG } from './config.js';
 
@@ -323,7 +323,7 @@ function addFluorescentFixture(scene, z, syncTarget) {
     pendingFluorescentFixtures.push({ scene, z, syncTarget });
     if (!fluorescentLoading) {
       fluorescentLoading = true;
-      new GLTFLoader().load(FLUORESCENT_MODEL_PATH, gltf => {
+      makeGLTFLoader().load(FLUORESCENT_MODEL_PATH, gltf => {
         fluorescentTemplate = gltf.scene;
         pendingFluorescentFixtures.splice(0).forEach(item => addFluorescentFixture(item.scene, item.z, item.syncTarget));
       }, undefined, err => console.warn('Fluorescent light asset failed to load.', err));

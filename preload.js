@@ -1,4 +1,4 @@
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadGLTF } from './gltf-loader.js';
 import { setGltf as setChaseGltf  } from './chase.js';
 import { setGltf as setScareGltf  } from './scare.js';
 import { setGltf as setLoseGltf   } from './lose-canvas.js';
@@ -23,10 +23,6 @@ const FLAVOR_TEXTS = [
   'Reviewing incident reports...',
   'Do not make a sound.',
 ];
-
-function loadGLTF(path) {
-  return new Promise((resolve, reject) => new GLTFLoader().load(path, resolve, undefined, reject));
-}
 
 export async function preloadAssets() {
   const screen  = document.getElementById('s-loading');
