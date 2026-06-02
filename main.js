@@ -292,6 +292,7 @@ function persistSave() {
 // ═══════════════════════════════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
 const screens = {
+  loading:  $('s-loading'),
   title:    $('s-title'),
   menu:     $('s-menu'),
   story:    $('s-story'),
@@ -1553,6 +1554,7 @@ let _loseScene    = null;
 let _loseCamera   = null;
 let _loseMixer    = null;
 const _loseClock  = new THREE.Clock(false);
+let _loseGltf     = null;  // pre-cached during loading screen
 
 function _initLoseCanvas() {
   if (_loseRenderer) return; // already initialised
@@ -1570,7 +1572,7 @@ function _initLoseCanvas() {
   const dl1 = new THREE.DirectionalLight(0xff3311, 4); dl1.position.set(0, 1, 1); _loseScene.add(dl1);
   const dl2 = new THREE.DirectionalLight(0xffffff, 1.5); dl2.position.set(0, 1, -1); _loseScene.add(dl2);
 
-  _getMonsterLoader().load('/assets/3D/smily_horror_monster.glb', gltf => {
+  function _setupLoseModel(gltf) {
     const m = gltf.scene;
     _loseScene.add(m);
 
@@ -1590,7 +1592,13 @@ function _initLoseCanvas() {
     _loseMixer = new THREE.AnimationMixer(m);
     if (gltf.animations.length) _loseMixer.clipAction(gltf.animations[0]).play();
     _loseClock.start();
-  });
+  }
+
+  if (_loseGltf) {
+    _setupLoseModel(_loseGltf);
+  } else {
+    _getMonsterLoader().load('/assets/3D/smily_horror_monster.glb', _setupLoseModel);
+  }
 }
 
 function _updateLoseCanvas() {
@@ -1637,9 +1645,13 @@ function _loadMonster(cb) {
 }
 
 function _spawnMonster() {
-  const gltf = _monsterGltf;
-  if (!gltf) return;
+  _loadMonster(gltf => {
+    if (state !== S.CHASE) return; // chase ended while model was still loading
+    _doSpawnMonster(gltf);
+  });
+}
 
+function _doSpawnMonster(gltf) {
   // Re-use cached scene (remove first if already in scene)
   if (_chaseMonster) scene.remove(_chaseMonster);
   _chaseMonster = gltf.scene;
@@ -1769,8 +1781,43 @@ function _updateChase(dt) {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 updateMenuName();
 updateFullscreenLabel();
-showScreen('title');
 animate();
+
+(async function preload() {
+  const bar   = document.getElementById('loading-bar');
+  const label = document.getElementById('loading-label');
+
+  const MODELS = [
+    { path: CHASE_MONSTER_PATH,      store: g => { _monsterGltf       = g; } },
+    { path: RANDOM_SCARE_MODEL_PATH, store: g => { _randomScareGltf   = g; } },
+    { path: '/assets/3D/smily_horror_monster.glb', store: g => { _loseGltf = g; } },
+  ];
+
+  let done = 0;
+  function setProgress(n) {
+    bar.style.width = `${Math.round((n / MODELS.length) * 100)}%`;
+  }
+
+  function loadGLTF(path) {
+    return new Promise((resolve, reject) => {
+      new GLTFLoader().load(path, resolve, undefined, reject);
+    });
+  }
+
+  await Promise.all(MODELS.map(async ({ path, store }) => {
+    try {
+      const gltf = await loadGLTF(path);
+      store(gltf);
+    } catch (err) {
+      console.warn(`Failed to preload ${path}`, err);
+    }
+    setProgress(++done);
+  }));
+
+  label.textContent = 'READY';
+  await new Promise(r => setTimeout(r, 120));
+  showScreen('title');
+})();
 if (import.meta.env.DEV) {
   const devScareBtn = $('dev-scare-btn');
   devScareBtn?.removeAttribute('hidden');

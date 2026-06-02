@@ -619,6 +619,27 @@
       50%     { transform:translateY(-12px) rotate(1.2deg); }
     }
 
+    /* ── LOADING ─────────────────────────────────────────────────────────── */
+    #s-loading { background:#000; gap:28px; }
+    #s-loading h1 {
+      font-family:monospace; font-size:clamp(2rem,5vw,3.5rem);
+      color:#cc1111; letter-spacing:6px;
+      text-shadow:0 0 30px #ff0000,0 0 60px #660000;
+    }
+    #loading-bar-wrap {
+      width:min(400px,70vw); height:3px;
+      background:rgba(255,255,255,0.08); border-radius:2px; overflow:hidden;
+    }
+    #loading-bar {
+      height:100%; width:0%;
+      background:#cc1111; box-shadow:0 0 10px #ff2222;
+      transition:width 0.35s ease;
+    }
+    #loading-label {
+      font-family:monospace; font-size:0.75rem;
+      color:rgba(255,255,255,0.3); letter-spacing:3px;
+    }
+
     /* ── PAUSE ───────────────────────────────────────────────────────────── */
     #s-pause { background:rgba(0,0,4,0.78); color:#4466aa; cursor:pointer; user-select:none; }
     #s-pause h1 { font-family:monospace; font-size:2.5rem; letter-spacing:8px; }
@@ -1590,8 +1611,15 @@
   </div>
 </div>
 
+<!-- ══ LOADING ════════════════════════════════════════════════════════════════ -->
+<div id="s-loading" class="screen">
+  <h1>ESCAPE<br>ROOM</h1>
+  <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+  <p id="loading-label">LOADING</p>
+</div>
+
 <!-- ══ TITLE ══════════════════════════════════════════════════════════════════ -->
-<div id="s-title" class="screen">
+<div id="s-title" class="screen hidden">
   <div id="title-content">
     <div class="case-stamp">Room 308 / Probability Case</div>
     <h1>ESCAPE<br>ROOM</h1>
