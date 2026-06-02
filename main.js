@@ -900,8 +900,9 @@ if (import.meta.env.DEV) {
   devScareBtn?.addEventListener('click', () => {
     // Direct dev trigger — import scare internals via window if needed
   });
-  window.__devPlay  = () => { resetProgress(); startGame(); };
-  window.__scene    = scene;
+  window.__devPlay    = () => { resetProgress(); startGame(); };
+  window.__scene      = scene;
+  window.__devLose    = () => { resetProgress(); startGame(); triggerLose(); };
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
