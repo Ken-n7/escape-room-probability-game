@@ -652,8 +652,8 @@ function renderStory() {
 
 window.storyStep = function(dir) {
   AudioManager.play('pageTurn');
-  storyIdx = Math.max(0, Math.min(STORY_SLIDES.length - 1, storyIdx + dir));
   if (storyIdx >= STORY_SLIDES.length - 1 && dir > 0) { showScreen('ready'); return; }
+  storyIdx = Math.max(0, Math.min(STORY_SLIDES.length - 1, storyIdx + dir));
   renderStory();
 };
 
