@@ -38,12 +38,12 @@ export const CFG = {
   },
 
   // ── Atmosphere ───────────────────────────────────────────────────────────────
-  fog:      { density: 0.06 },
+  fog:      { density: 0.030 },
   ambLight: 0x0a0a0a,
 
   // ── Gameplay ─────────────────────────────────────────────────────────────────
   gameplay: {
-    maxWrongAnswers: 3,    // wrong answers before a scare penalty per question
+    maxWrongAnswers: 5,    // wrong answers allowed per room before the chase penalty
     pLearnMode:      false, // toggled from menu — shows hint before each question
   },
 };
