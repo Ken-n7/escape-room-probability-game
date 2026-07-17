@@ -240,17 +240,32 @@ function buildRoom(scene, roomIndex, interactiveObjects) {
   // Exit sign
   bx(0.7,0.25,0.05,HALF_W+rW-0.8,rH-0.2,zE-0.1,exitSignMat);
 
-  // Interactive note — individual mesh (needs userData + position checks)
-  const noteMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.35, 0.45),
-    new THREE.MeshBasicMaterial({ color: 0xffffaa })
-  );
-  noteMesh.position.set(tdx, 0.84, tdz+0.1);
-  noteMesh.rotation.x = -Math.PI/2;
-  noteMesh.userData.isInteractive = true;
-  noteMesh.userData.roomIndex = roomIndex;
-  scene.add(noteMesh);
-  interactiveObjects.push(noteMesh);
+  // Interactive notes — one per question, scattered around the room so the
+  // player hunts for the next problem after solving each (spec req 4 & 5).
+  // Order: teacher's desk → front student desk → back student desk →
+  // bookshelf side → back wall by the exit sign.
+  const noteSpots = [
+    { x: tdx,     y: 0.84, z: tdz+0.1,  rx: -Math.PI/2, ry: 0 },          // teacher's desk
+    { x: cx-2.5,  y: 0.78, z: zS+2,     rx: -Math.PI/2, ry: 0 },          // front-left student desk
+    { x: cx+2.5,  y: 0.78, z: zS+4.5,   rx: -Math.PI/2, ry: 0 },          // back-right student desk
+    { x: bsx+0.14, y: 1.3, z: bsz,      rx: 0,          ry: Math.PI/2 },  // bookshelf side
+    { x: cx+2,    y: 1.4,  z: zE-0.02,  rx: 0,          ry: Math.PI },    // back wall near exit sign
+  ];
+  const roomNoteMeshes = noteSpots.map((s, noteIndex) => {
+    const noteMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.35, 0.45),
+      new THREE.MeshBasicMaterial({ color: 0xffffaa })
+    );
+    noteMesh.position.set(s.x, s.y, s.z);
+    noteMesh.rotation.set(s.rx, s.ry, 0);
+    noteMesh.userData.isInteractive = true;
+    noteMesh.userData.roomIndex = roomIndex;
+    noteMesh.userData.noteIndex = noteIndex;
+    scene.add(noteMesh);
+    interactiveObjects.push(noteMesh);
+    return noteMesh;
+  });
+  return roomNoteMeshes;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -450,7 +465,7 @@ function buildCollision() {
 export function buildWorld(scene) {
   buildHallway();
   const interactiveObjects = [];
-  rooms.forEach((_,i) => buildRoom(scene, i, interactiveObjects));
+  const roomNotes = rooms.map((_, i) => buildRoom(scene, i, interactiveObjects));
   rooms.forEach(([zS, zE], i) => {
     const light = new THREE.PointLight(ROOM_LIGHT_COLORS[i], 1.15, 12, 2);
     light.position.set(HALF_W + roomW / 2, 2.0, (zS + zE) / 2);
@@ -459,5 +474,5 @@ export function buildWorld(scene) {
   buildExitDoor(scene, interactiveObjects);
   addLights(scene);
   _flush(scene);   // merge all batched geometry → ~15 draw calls total
-  return { wallBoxes: buildCollision(), interactiveObjects, exitZ };
+  return { wallBoxes: buildCollision(), interactiveObjects, roomNotes, exitZ };
 }
