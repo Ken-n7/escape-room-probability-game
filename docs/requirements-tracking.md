@@ -28,7 +28,7 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
 | 2.1 | Exactly 5 problems per level | ✅ | 5 questions per room ([questions.js](../src/data/questions.js)), order shuffled each run. |
-| 2.2 | If time runs out, player restarts the level with a *different* problem | ❌ | No per-question timer, and question banks contain exactly 5 items per room — no spares to swap in. PDF supplies 15 Easy / 10 Moderate / 10 Hard items; the game currently uses 5/5/5. |
+| 2.2 | If time runs out, player restarts the level with a *different* problem | 🟡 | The "different problem" half now works: full PDF banks (15/10/10) are imported and every run draws a random 5 per room. Still blocked on the per-question timer (2.3) to trigger the timeout path. |
 | 2.3 | 15-second answer time limit — starts only when the player begins answering, not while browsing/roaming | ❌ | No timer of any kind on questions. |
 | 2.4 | Player roams the room to find questions/problems | 🟡 | Free-roam first-person 3D with an interactable note per room — but there is one note per room, not one per question. |
 | 2.5 | Questions are NOT continuous — after answering problem 1, the player must find problem 2 elsewhere in the room | ❌ | Examining the note opens all 5 questions back-to-back in one modal session ([main.js](../src/main.js) `openQuestion`). |
@@ -42,9 +42,9 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 3.1 | Room 1 Easy: PDF's 15 multiple-choice items, verbatim | ❌ | Current bank has 5 items loosely based on a subset. Replace with all 15 PDF items; draw 5 per run. |
-| 3.2 | Room 2 Moderate: PDF's 10 guided problems — favorable/total given, player fills in the `P(insert)` solution steps | ❌ | Current: 5 plain MC items. Replace with all 10 PDF items in the step-by-step fill-in scaffold format; draw 5 per run. |
-| 3.3 | Room 3 Hard: PDF's 10 independent real-life word problems | ❌ | Current: 5 MC items. Replace with all 10 PDF items; unguided computation format; draw 5 per run. |
+| 3.1 | Room 1 Easy: PDF's 15 multiple-choice items, verbatim | ✅ | All 15 items imported verbatim; 5 drawn at random per run. **❓ Flag for researchers:** the PDF key for item 10 ("number of favorable outcome/s" for one coin toss) marks **1/2**, but the count of favorable outcomes is **1** — imported with the conceptually correct key pending confirmation (see note in [questions.js](../src/data/questions.js)). |
+| 3.2 | Room 2 Moderate: PDF's 10 guided problems — favorable/total given, player fills in the `P(insert)` solution steps | 🟡 | All 10 items imported verbatim **with their solution-step data** (`steps` field). Currently rendered answer-only in the 4-choice modal; the tap-to-fill scaffold UI is queue item 6. |
+| 3.3 | Room 3 Hard: PDF's 10 independent real-life word problems | 🟡 | All 10 items imported verbatim; rendered as 4-choice MC. Whether Hard should use a non-MC answer format is part of queue item 6. |
 
 ## 4. Accounts & Progress
 
@@ -97,8 +97,9 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
 
 **Work queue (gaps to close):**
 
-1. **Import PDF question banks (3.1–3.3)** — replace the 5/5/5 placeholder sets with the
-   full 15/10/10 banks; draw a random 5 per room per run. Unblocks 2.2.
+1. ~~**Import PDF question banks (3.1–3.3)**~~ ✅ Done 2026-07-18 — full 15/10/10 banks
+   imported verbatim, random 5 drawn per room per run. Moderate `steps` data included
+   for the future scaffold UI. One answer-key discrepancy flagged (3.1 ❓).
 2. **Per-question 15s timer (2.3) + timeout retry with different problems (2.2).**
 3. **One-note-per-question flow (2.5)** — scatter 5 interactables per room instead of 1.
 4. **Locked doors with jumpscare (1.4, 1.5)** — gate room 2 behind room 1, room 3 behind room 2.
@@ -114,3 +115,6 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
 - 2026-07-18 — Decisions recorded: PDF content is authoritative (questions, P-Learn, About);
   prototype visuals superseded by current design. Question sections re-scoped to verbatim
   PDF banks.
+- 2026-07-18 — Queue item 1 done: full PDF banks imported (15 Easy / 10 Moderate / 10 Hard),
+  random draw of 5 per room per run. Flagged Easy item 10 answer-key discrepancy for
+  researcher confirmation.
