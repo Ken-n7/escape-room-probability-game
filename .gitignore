@@ -43,3 +43,8 @@ watch-chat.sh
 
 # Local/reference-only docs
 public/assets/ASSET_CREDITS.md
+
+# Recording / capture tooling
+record-hallway.js
+check-frame.js
+hallway-preview.png
