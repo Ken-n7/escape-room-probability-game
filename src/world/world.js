@@ -39,8 +39,8 @@ function floorTex() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 256;
   const ctx = cv.getContext('2d');
-  ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0, 0, 256, 256);
-  ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = 2;
+  ctx.fillStyle = '#282828'; ctx.fillRect(0, 0, 256, 256);
+  ctx.strokeStyle = '#1d1d1d'; ctx.lineWidth = 2;
   for (let i = 0; i <= 256; i += 64) {
     ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
@@ -92,11 +92,11 @@ function lockerTex() {
 //  Small furniture → MeshBasicMaterial (zero lighting cost, invisible diff).
 //  Hallway lockers stay Lambert so fluorescent flicker visibly changes the hall.
 // ═══════════════════════════════════════════════════════════════════════════════
-const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#181818') });
-const floorMat     = new THREE.MeshLambertMaterial({ map: floorTex() });
-const ceilMat      = new THREE.MeshLambertMaterial({ color: 0x060606 });
+const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#3c3c3c'), emissive: 0x050608, emissiveIntensity: 0.22 });
+const floorMat     = new THREE.MeshLambertMaterial({ map: floorTex(), emissive: 0x070707, emissiveIntensity: 0.28 });
+const ceilMat      = new THREE.MeshLambertMaterial({ color: 0x202020, emissive: 0x030304, emissiveIntensity: 0.16 });
 // — furniture stays MeshBasicMaterial (saves lighting calc on tiny geometry) —
-const lockerMat    = new THREE.MeshLambertMaterial({ map: lockerTex() });
+const lockerMat    = new THREE.MeshLambertMaterial({ map: lockerTex(), emissive: 0x020602, emissiveIntensity: 0.18 });
 const deskMat      = new THREE.MeshBasicMaterial({ color: 0x2e2010 });
 const darkMat      = new THREE.MeshBasicMaterial({ color: 0x0e0e0e });
 const doorFrameMat = new THREE.MeshBasicMaterial({ color: 0x1c1208 });
@@ -350,30 +350,30 @@ function addFluorescentFixture(scene, z, syncTarget) {
 
 function addLights(scene) {
   // Very dim cool ambient — keeps absolute-black areas just barely visible
-  scene.add(new THREE.AmbientLight(0x05060a, 0.42));
+  scene.add(new THREE.AmbientLight(0x242a38, 3.25));
 
   // Hallway fluorescents — cool blue-white, occasional sudden dim (broken tubes)
   HALL_LIGHT_ZS.forEach(z => {
-    const l = new THREE.PointLight(0x9aabcc, 1.2, 13.5);
+    const l = new THREE.PointLight(0xa8b9d8, 5.4, 24);
     l.position.set(0, hallH - 0.3, z);
     scene.add(l);
     const syncTarget = {
       light: l,
-      base: 1.2,
+      base: 2.75,
       speed: 6 + Math.random()*3,
       amp: 0.7,
       type: 'hall',
       cutTimer: 0,
       emissiveMaterials: [],
       glowMaterials: [],
-      emissiveBase: 0.42,
+      emissiveBase: 0.62,
     };
     flickerLights.push(syncTarget);
 
     const glowMat = new THREE.MeshBasicMaterial({
       color: 0xcde9ff,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.32,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide,
@@ -391,10 +391,10 @@ function addLights(scene) {
   rooms.forEach(([zS, zE]) => {
     const tdx = HALF_W + roomW - 1.5;
     const tdz = (zS + zE) / 2 + 1;
-    const c = new THREE.PointLight(0xff7722, 4.5, 14);
+    const c = new THREE.PointLight(0xff7722, 5.8, 15);
     c.position.set(tdx - 0.5, 1.1, tdz - 0.2);
     scene.add(c);
-    flickerLights.push({ light: c, base: 4.5, speed: 3 + Math.random(), amp: 1.5, type: 'candle' });
+    flickerLights.push({ light: c, base: 5.8, speed: 3 + Math.random(), amp: 1.5, type: 'candle' });
   });
 }
 
@@ -405,6 +405,8 @@ function buildCollision() {
   const hl = hallL, hw = HALF_W;
   const boxes = [];
   const add = (minX,maxX,minZ,maxZ) => boxes.push({minX,maxX,minZ,maxZ});
+  const addBox = (x, z, w, d, pad = 0.08) =>
+    add(x - w / 2 - pad, x + w / 2 + pad, z - d / 2 - pad, z + d / 2 + pad);
 
   add(-hw-0.3,-hw, 0, hl);
   add(-hw, hw, -0.3, 0);
@@ -418,7 +420,26 @@ function buildCollision() {
     add(hw,hw+roomW+0.3,zE,zE+0.3);
     add(hw+roomW,hw+roomW+0.3,zS,zE);
   });
-  add(-hw-0.3,-hw+0.4,0,hl);
+  // Hall lockers protrude into the walking lane slightly.
+  add(-hw-0.3,-hw+0.5,0,hl);
+
+  rooms.forEach(([zS, zE]) => {
+    const cx = HALF_W + roomW / 2;
+    const cz = (zS + zE) / 2;
+
+    // Teacher's desk / table.
+    addBox(HALF_W + roomW - 1.5, cz + 1, 1.9, 1.0, 0.1);
+
+    // Student desks and chairs.
+    [[cx-2.5,zS+2],[cx,zS+2],[cx+2.5,zS+2],[cx-2.5,zS+4.5],[cx,zS+4.5],[cx+2.5,zS+4.5]]
+      .forEach(([dx, dz]) => {
+        addBox(dx, dz, 1.0, 0.75, 0.08);
+        addBox(dx, dz + 0.6, 0.8, 0.7, 0.08);
+      });
+
+    // Bookshelf / side table area.
+    addBox(HALF_W + 0.5, zS + 1.5, 0.5, 1.55, 0.08);
+  });
 
   return boxes;
 }
@@ -431,7 +452,7 @@ export function buildWorld(scene) {
   const interactiveObjects = [];
   rooms.forEach((_,i) => buildRoom(scene, i, interactiveObjects));
   rooms.forEach(([zS, zE], i) => {
-    const light = new THREE.PointLight(ROOM_LIGHT_COLORS[i], 0.6, 10, 2);
+    const light = new THREE.PointLight(ROOM_LIGHT_COLORS[i], 1.15, 12, 2);
     light.position.set(HALF_W + roomW / 2, 2.0, (zS + zE) / 2);
     scene.add(light);
   });
