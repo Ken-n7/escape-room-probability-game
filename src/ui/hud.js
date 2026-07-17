@@ -1,5 +1,5 @@
-import { GameDevice, unlockPointer, resetMouseDelta } from './input.js';
-import { renderer } from './renderer.js';
+import { GameDevice, unlockPointer, resetMouseDelta } from '../input/input.js';
+import { renderer } from '../core/renderer.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);

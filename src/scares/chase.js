@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { makeGLTFLoader } from './gltf-loader.js';
-import { gState, look, S } from './game-state.js';
-import { scene, camera } from './renderer.js';
-import { AudioManager } from './audio.js';
-import { flushLookInput } from './input.js';
-import { elVignette, showScreen } from './hud.js';
+import { makeGLTFLoader } from '../loaders/gltf-loader.js';
+import { gState, look, S } from '../core/game-state.js';
+import { scene, camera } from '../core/renderer.js';
+import { AudioManager } from '../audio/audio.js';
+import { flushLookInput } from '../input/input.js';
+import { elVignette, showScreen } from '../ui/hud.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TURN_DURATION  = 1.8;   // seconds for forced 180° turn

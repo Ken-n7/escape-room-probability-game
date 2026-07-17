@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { makeGLTFLoader } from './gltf-loader.js';
+import { makeGLTFLoader } from '../loaders/gltf-loader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
-import { gState, look, keys, S } from './game-state.js';
-import { scene, camera, renderer } from './renderer.js';
-import { AudioManager } from './audio.js';
+import { gState, look, keys, S } from '../core/game-state.js';
+import { scene, camera, renderer } from '../core/renderer.js';
+import { AudioManager } from '../audio/audio.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MODEL_PATH   = '/assets/3D/the_unvermeidlich_ghost_darkness_of_eclipse.glb';

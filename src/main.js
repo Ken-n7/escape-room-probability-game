@@ -1,17 +1,17 @@
 import * as THREE                  from 'three';
-import { CFG }                    from './config.js';
-import { ROOMS, EXIT_CODE }        from './questions.js';
-import { buildWorld, flickerLights } from './world.js';
-import { AudioManager }            from './audio.js';
-import { S, gState, look, keys }   from './game-state.js';
-import { renderer, scene, camera } from './renderer.js';
+import { CFG }                    from './core/config.js';
+import { ROOMS, EXIT_CODE }        from './data/questions.js';
+import { buildWorld, flickerLights } from './world/world.js';
+import { AudioManager }            from './audio/audio.js';
+import { S, gState, look, keys }   from './core/game-state.js';
+import { renderer, scene, camera } from './core/renderer.js';
 import {
   GameDevice, applyDeviceProfile, initInput,
   lockPointer, flushLookInput, queueLookDelta,
   lookSensitivity, setLookSensitivity,
   MIN_LOOK_SENSITIVITY, MAX_LOOK_SENSITIVITY,
   MOVE_KEYS, KEY_LOOK_SPEED,
-} from './input.js';
+} from './input/input.js';
 import {
   screens, elHud, elPrompt, elVignette,
   elCodeTracker, elHudPlayer,
@@ -19,11 +19,11 @@ import {
   elPersistentFsBtn,
   showScreen, showHUD, hideOptionsConfirm,
   updateFullscreenLabel, toggleFullscreen, setCanInteract,
-} from './hud.js';
-import { updateAmbientScares, resetAmbientScares, clearScareSprite } from './scare.js';
-import { initLoseCanvas, updateLoseCanvas } from './lose-canvas.js';
-import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './chase.js';
-import { preloadAssets } from './preload.js';
+} from './ui/hud.js';
+import { updateAmbientScares, resetAmbientScares, clearScareSprite } from './scares/scare.js';
+import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
+import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
+import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
 const { wallBoxes, interactiveObjects } = buildWorld(scene);

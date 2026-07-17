@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeGLTFLoader } from './gltf-loader.js';
+import { makeGLTFLoader } from '../loaders/gltf-loader.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _renderer = null;
