@@ -1,6 +1,6 @@
 import * as THREE                  from 'three';
 import { CFG }                    from './core/config.js';
-import { ROOMS, EXIT_CODE }        from './data/questions.js';
+import { ROOMS, EXIT_CODE, QUESTIONS_PER_ROOM } from './data/questions.js';
 import { buildWorld, flickerLights } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
@@ -90,17 +90,23 @@ let codeDigits        = ['_', '_', '_'];
 let roomWrong         = [0, 0, 0];
 let correctStreak     = 0;
 let gameStartTime     = 0;
-let shuffledQuestions = ROOMS.map(r => [...r.questions]);
-
-function shuffleRooms() {
-  shuffledQuestions = ROOMS.map(r => {
+// Each run draws QUESTIONS_PER_ROOM random items from each room's full bank,
+// so replays present different problems.
+function drawRoomQuestions() {
+  return ROOMS.map(r => {
     const a = [...r.questions];
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [a[i], a[j]] = [a[j], a[i]];
     }
-    return a;
+    return a.slice(0, QUESTIONS_PER_ROOM);
   });
+}
+
+let shuffledQuestions = drawRoomQuestions();
+
+function shuffleRooms() {
+  shuffledQuestions = drawRoomQuestions();
 }
 
 // ── Fear stages ───────────────────────────────────────────────────────────────
@@ -175,7 +181,7 @@ function updateHUD() {
       ? activeRoomIdx
       : roomDone.findIndex((done, i) => !done && roomProgress[i] > 0);
     qEl.textContent = ri >= 0 && !roomDone[ri]
-      ? 'Q ' + (roomProgress[ri] + 1) + '/' + ROOMS[ri].questions.length
+      ? 'Q ' + (roomProgress[ri] + 1) + '/' + shuffledQuestions[ri].length
       : '';
   }
   const sEl = $('hud-streak');
@@ -368,7 +374,7 @@ function showQuestionUI() {
   updateHUD();
 
   $('question-room-label').textContent =
-    room.name + ' · ' + room.label + '  —  ' + (activeQIdx+1) + ' / ' + room.questions.length;
+    room.name + ' · ' + room.label + '  —  ' + (activeQIdx+1) + ' / ' + shuffledQuestions[activeRoomIdx].length;
   $('question-text').textContent = q.text;
   $('question-wrong-count').textContent = '';
 
@@ -416,7 +422,7 @@ function handleAnswer(choiceIdx) {
     activeQIdx++;
     roomProgress[answeredRoomIdx] = activeQIdx;
 
-    if (activeQIdx >= ROOMS[answeredRoomIdx].questions.length) {
+    if (activeQIdx >= shuffledQuestions[answeredRoomIdx].length) {
       roomDone[answeredRoomIdx]   = true;
       codeDigits[answeredRoomIdx] = ROOMS[answeredRoomIdx].codeDigit;
 
@@ -1031,7 +1037,7 @@ function triggerDevWin() {
   clearScareSprite();
   cleanupChase();
   roomDone      = [true, true, true];
-  roomProgress  = ROOMS.map(room => room.questions.length);
+  roomProgress  = shuffledQuestions.map(qs => qs.length);
   roomWrong     = [0, 0, 0];
   codeDigits    = ROOMS.map(room => room.codeDigit);
   bestScores    = [100, 100, 100];
