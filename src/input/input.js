@@ -8,6 +8,8 @@ export const MAX_LOOK_SENSITIVITY = 1.8;
 
 export const MOVE_KEYS = new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight']);
 const LOOK_KEYS = new Set(['KeyI','KeyJ','KeyK','KeyL']);
+const JOYSTICK_MOVE_CODES = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
+const JOYSTICK_DEADZONE = 0.22;
 
 // ── Look sensitivity (set by settings, read by applyLookDelta) ────────────────
 export let lookSensitivity = 1;
@@ -112,6 +114,7 @@ let _suppressUnlockPause = false;
 
 function _queueMouseLook(e) {
   if (gState.current !== S.PLAYING && gState.current !== S.CHASE) return;
+  if (!GameDevice.usePointerLock && GameDevice.controls === 'touch') return;
   let dx, dy;
   if (document.pointerLockElement === renderer.domElement) {
     dx = e.movementX || 0;
@@ -129,6 +132,85 @@ let _touchLookId = null, _touchLookX = 0, _touchLookY = 0;
 
 // ── Event wiring (called once from initInput) ─────────────────────────────────
 let _cb = {};
+
+function setJoystickKeys(x, y) {
+  keys.KeyW = y < -JOYSTICK_DEADZONE;
+  keys.KeyS = y > JOYSTICK_DEADZONE;
+  keys.KeyA = x < -JOYSTICK_DEADZONE;
+  keys.KeyD = x > JOYSTICK_DEADZONE;
+}
+
+function clearJoystickKeys() {
+  JOYSTICK_MOVE_CODES.forEach(code => { keys[code] = false; });
+}
+
+function initMoveJoystick() {
+  const joystick = document.getElementById('mobile-joystick');
+  const knob = document.getElementById('mobile-joystick-knob');
+  if (!joystick || !knob) return;
+
+  let activePointerId = null;
+
+  const resetJoystick = () => {
+    activePointerId = null;
+    joystick.classList.remove('active');
+    knob.style.transform = 'translate(-50%, -50%)';
+    clearJoystickKeys();
+  };
+
+  const updateJoystick = e => {
+    if (gState.current !== S.PLAYING) {
+      resetJoystick();
+      return;
+    }
+
+    const rect = joystick.getBoundingClientRect();
+    const cx = rect.left + rect.width * 0.5;
+    const cy = rect.top + rect.height * 0.5;
+    const maxRadius = Math.max(18, rect.width * 0.5 - knob.offsetWidth * 0.5 - 8);
+    let dx = e.clientX - cx;
+    let dy = e.clientY - cy;
+    const len = Math.hypot(dx, dy);
+
+    if (len > maxRadius) {
+      dx = (dx / len) * maxRadius;
+      dy = (dy / len) * maxRadius;
+    }
+
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    setJoystickKeys(dx / maxRadius, dy / maxRadius);
+  };
+
+  joystick.addEventListener('pointerdown', e => {
+    if (gState.current !== S.PLAYING || activePointerId !== null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activePointerId = e.pointerId;
+    joystick.classList.add('active');
+    capturePointer(joystick, e.pointerId);
+    updateJoystick(e);
+  });
+
+  joystick.addEventListener('pointermove', e => {
+    if (e.pointerId !== activePointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    updateJoystick(e);
+  });
+
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+    joystick.addEventListener(type, e => {
+      if (e.pointerId !== activePointerId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      resetJoystick();
+    });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) resetJoystick();
+  });
+}
 
 export function initInput(callbacks = {}) {
   _cb = callbacks;
@@ -198,12 +280,7 @@ export function initInput(callbacks = {}) {
 
   document.addEventListener('keyup', e => { keys[e.code] = false; });
 
-  document.querySelectorAll('[data-move]').forEach(btn => {
-    const code = btn.dataset.move;
-    const set  = v => { keys[code] = v; };
-    btn.addEventListener('pointerdown', e => { e.preventDefault(); capturePointer(btn, e.pointerId); set(true); });
-    ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => btn.addEventListener(t, () => set(false)));
-  });
+  initMoveJoystick();
 
   document.addEventListener('selectstart', e => {
     if (!_isEditable(e.target)) e.preventDefault();

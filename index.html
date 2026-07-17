@@ -240,35 +240,54 @@
       display:none;
       pointer-events:auto;
     }
-    #mobile-move {
+    #mobile-joystick {
       position:absolute;
       left:16px;
       bottom:18px;
-      width:132px;
-      height:132px;
-      display:grid;
-      grid-template-columns:repeat(3, 44px);
-      grid-template-rows:repeat(3, 44px);
-      gap:0;
-    }
-    .mobile-control-btn {
-      width:42px;
-      height:42px;
+      width:142px;
+      height:142px;
       border-radius:50%;
-      border:1px solid rgba(255,255,255,0.24);
-      background:rgba(0,0,0,0.48);
-      color:#ffeecc;
-      font-family:monospace;
-      font-size:1rem;
+      border:1px solid rgba(255,236,190,0.22);
+      background:
+        radial-gradient(circle at center, rgba(255,236,190,0.11) 0 2px, transparent 3px),
+        radial-gradient(circle at center, rgba(255,236,190,0.12), rgba(0,0,0,0.42) 56%, rgba(0,0,0,0.66));
+      box-shadow:0 0 22px rgba(0,0,0,0.62), inset 0 0 22px rgba(255,236,190,0.05);
       touch-action:none;
     }
-    .mobile-control-btn:active {
-      background:rgba(80,0,0,0.72);
+    #mobile-joystick::before,
+    #mobile-joystick::after {
+      content:"";
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:82%;
+      height:1px;
+      background:rgba(255,236,190,0.12);
+      transform:translate(-50%, -50%);
+      pointer-events:none;
     }
-    #mobile-move [data-move="KeyW"] { grid-column:2; grid-row:1; }
-    #mobile-move [data-move="KeyA"] { grid-column:1; grid-row:2; }
-    #mobile-move [data-move="KeyD"] { grid-column:3; grid-row:2; }
-    #mobile-move [data-move="KeyS"] { grid-column:2; grid-row:3; }
+    #mobile-joystick::after {
+      width:1px;
+      height:82%;
+    }
+    #mobile-joystick-knob {
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:54px;
+      height:54px;
+      border-radius:50%;
+      border:1px solid rgba(255,236,190,0.34);
+      background:radial-gradient(circle at 35% 30%, rgba(255,245,218,0.2), rgba(80,0,0,0.66) 58%, rgba(0,0,0,0.72));
+      box-shadow:0 6px 20px rgba(0,0,0,0.58), inset 0 0 10px rgba(255,236,190,0.09);
+      transform:translate(-50%, -50%);
+      pointer-events:none;
+      transition:transform 110ms ease, border-color 110ms ease;
+    }
+    #mobile-joystick.active #mobile-joystick-knob {
+      border-color:rgba(255,236,190,0.58);
+      transition:none;
+    }
     body[data-controls="touch"] #mobile-controls { display:block; }
     body[data-controls="touch"] #interact-prompt { bottom:154px; font-size:1.1rem; padding:10px 24px; }
     body[data-controls="touch"] #hud-player { display:none; }
@@ -1775,12 +1794,10 @@
   <div id="crosshair">·</div>
   <button id="interact-prompt" type="button" aria-label="Interact">[ E ] Examine</button>
   <div id="hud-player"></div>
+  <button id="dev-scare-btn" type="button" hidden style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(20,90,42,0.78);color:#c9ffd4;border:1px solid #5fae72;padding:6px 14px;font-size:0.75rem;letter-spacing:1px;cursor:pointer;z-index:99;pointer-events:all;">TEST WIN</button>
   <div id="mobile-controls">
-    <div id="mobile-move">
-      <button class="mobile-control-btn" type="button" data-move="KeyW">▲</button>
-      <button class="mobile-control-btn" type="button" data-move="KeyA">◀</button>
-      <button class="mobile-control-btn" type="button" data-move="KeyD">▶</button>
-      <button class="mobile-control-btn" type="button" data-move="KeyS">▼</button>
+    <div id="mobile-joystick" aria-label="Move" role="application">
+      <div id="mobile-joystick-knob"></div>
     </div>
   </div>
 </div>
