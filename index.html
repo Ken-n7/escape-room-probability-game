@@ -443,6 +443,28 @@
       transform:scale(1.1);
     }
     #question-room-label { color:#aa99bb; font-size:0.8rem; letter-spacing:2px; margin-bottom:8px; }
+    #question-timer {
+      display:flex; align-items:center; gap:10px;
+      margin-bottom:10px;
+    }
+    #question-timer[hidden] { display:none; }
+    #question-timer-bar-wrap {
+      flex:1; height:6px; border-radius:3px;
+      background:rgba(255,255,255,0.10);
+      overflow:hidden;
+    }
+    #question-timer-bar {
+      height:100%; width:100%; border-radius:3px;
+      background:#7fae7f;
+      transition:width 0.15s linear, background 0.3s;
+    }
+    #question-timer-num {
+      font-family:monospace; font-size:0.95rem; min-width:2ch;
+      text-align:right; color:#cfe3cf; letter-spacing:1px;
+    }
+    #question-timer.low #question-timer-bar { background:#cc3333; }
+    #question-timer.low #question-timer-num { color:#ff6666; animation:timer-pulse 0.5s infinite alternate; }
+    @keyframes timer-pulse { from { opacity:1; } to { opacity:0.45; } }
     #question-text {
       color:#fff; font-size:clamp(1rem,2vw,1.2rem); line-height:1.7;
       margin:16px 0 24px; background:rgba(60,50,80,0.7);
@@ -2145,6 +2167,10 @@
   <div id="question-box">
     <button id="btn-question-exit" type="button" aria-label="Return to room">×</button>
     <div id="question-room-label">ROOM 1</div>
+    <div id="question-timer" hidden>
+      <div id="question-timer-bar-wrap"><div id="question-timer-bar"></div></div>
+      <span id="question-timer-num">15</span>
+    </div>
     <div id="question-text">Question goes here.</div>
     <div id="hint-box"></div>
     <div id="choices-grid">
