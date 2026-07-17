@@ -36,11 +36,15 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 
 ## 3. Question Content
 
+> **Decision (2026-07-18):** The PDF question banks are authoritative — the game must use
+> them verbatim (15 Easy / 10 Moderate / 10 Hard), replacing the current 5/5/5 placeholder
+> sets in [questions.js](../src/data/questions.js). Each run draws 5 per room.
+
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 3.1 | Room 1 Easy: multiple-choice definitions/concepts (PDF bank: 15 items) | 🟡 | 5 MC items implemented; wording matches a subset of the PDF bank. 10 PDF items unused. |
-| 3.2 | Room 2 Moderate: guided problems — favorable/total outcomes given, player fills in the `P(insert)` solution steps (PDF bank: 10 items) | 🟡 | Implemented as plain multiple choice on the final answer. The PDF's step-by-step fill-in scaffold format is not implemented. 5 of 10 PDF items used. |
-| 3.3 | Room 3 Hard: independent real-life word problems (PDF bank: 10 items) | 🟡 | Implemented as multiple choice. PDF intends unguided computation (implies typed/keypad answer entry rather than choices). 5 of 10 PDF items used. |
+| 3.1 | Room 1 Easy: PDF's 15 multiple-choice items, verbatim | ❌ | Current bank has 5 items loosely based on a subset. Replace with all 15 PDF items; draw 5 per run. |
+| 3.2 | Room 2 Moderate: PDF's 10 guided problems — favorable/total given, player fills in the `P(insert)` solution steps | ❌ | Current: 5 plain MC items. Replace with all 10 PDF items in the step-by-step fill-in scaffold format; draw 5 per run. |
+| 3.3 | Room 3 Hard: PDF's 10 independent real-life word problems | ❌ | Current: 5 MC items. Replace with all 10 PDF items; unguided computation format; draw 5 per run. |
 
 ## 4. Accounts & Progress
 
@@ -54,8 +58,8 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 5.1 | Lesson content: What is Probability, key terms, formula, worked examples | ✅ | 6 lesson slides: intro, key terms, formula, easy/moderate/hard examples ([main.js](../src/main.js) `PLEARN_SLIDES`) — content mirrors the PDF. |
-| 5.2 | "Pascroll dapat" — scrollable presentation | 🟡 | Implemented as prev/next slides with dot navigation instead of one scrolling page. |
+| 5.1 | Lesson content: PDF's P-Learn text verbatim (What is Probability, key terms, formula, Examples 1–3) | 🟡 | 6 lesson slides exist ([main.js](../src/main.js) `PLEARN_SLIDES`) covering the same topics, but wording/examples are paraphrased. Align text and examples with the PDF (die > 4, coin toss, bookshelf). |
+| 5.2 | "Pascroll dapat" — scrollable presentation | 🟡 | Implemented as prev/next slides with dot navigation instead of one scrolling page. Confirm slides are acceptable. |
 
 ## 6. Settings Feature
 
@@ -67,15 +71,16 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 
 ## 7. Prototype / Presentation (Canva reference)
 
+> **Decision (2026-07-18):** The Canva prototype's visual design is **superseded** — the
+> game's current look is approved and will not be changed to match the prototype.
+> Only functional elements from it remain tracked (login screen → see 4.1).
+> The PDF remains the source of truth for **content**: question banks (§3), P-Learn
+> lesson text (§5), and the About Us text (7.7).
+
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 7.1 | Title screen: horror hallway + "ESCAPE ROOM" title | ✅ | Atmospheric loading + scene-backed 3D menu. |
-| 7.2 | Login screen after title | ❌ | Depends on 4.1. |
-| 7.3 | PLAY / P-LEARN menu buttons | ✅ | |
-| 7.4 | "ARE YOU READY?" — YES / "NO, I'M SCARED." | ✅ | Ready screen with both options; NO returns home. |
-| 7.5 | Classroom scene: chalkboard "solve the problems to escape", cluttered props | 🟡 | Chalkboard ("ROOM n / SOLVE TO ESCAPE"), desks, chairs, bookshelf, candles present; less cluttered than prototype. |
-| 7.6 | Question UI: dark framed panel with 4 choices | ✅ | Restyled modal keeps the 3D room visible behind it. |
-| 7.7 | About Us: study goal + no-copyright statement | ✅ | About screen ("CASE NOTES") with purpose section. Verify exact no-copyright wording matches researchers' text. |
+| 7.1–7.6 | Prototype visuals (title, menu, ready screen, classroom, question UI) | ✅ | Superseded by current design — no further work. |
+| 7.7 | About Us: study goal + no-copyright statement | 🟡 | About screen exists; align wording with the PDF's About Us text (study goal + "no copyright infringement" statement). |
 
 ---
 
@@ -84,18 +89,28 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 **Fully implemented:** 5 problems per room · roam-and-interact gameplay · jumpscares/chase/lose ·
 P-Learn lessons · name editing · reset progress · ready screen · About · win/lose/best-time.
 
-**Biggest gaps (decisions needed):**
+**Settled decisions:**
 
-1. **Accounts + researcher monitoring (4.1–4.3)** — the only item requiring a backend/database.
-   Everything else is client-side work.
-2. **Per-question 15s timer + question pool rotation (2.2, 2.3)** — needs the full PDF banks
-   (15/10/10) imported so a timed-out or replayed level can draw different problems.
+- PDF is the source of truth for content: question banks (verbatim, 15/10/10), P-Learn
+  lesson text, About Us text.
+- Canva prototype visuals are superseded — the current game look is final.
+
+**Work queue (gaps to close):**
+
+1. **Import PDF question banks (3.1–3.3)** — replace the 5/5/5 placeholder sets with the
+   full 15/10/10 banks; draw a random 5 per room per run. Unblocks 2.2.
+2. **Per-question 15s timer (2.3) + timeout retry with different problems (2.2).**
 3. **One-note-per-question flow (2.5)** — scatter 5 interactables per room instead of 1.
 4. **Locked doors with jumpscare (1.4, 1.5)** — gate room 2 behind room 1, room 3 behind room 2.
 5. **Empty creepy rooms (1.3)** — at least 5 vacant rooms along the hallway.
-6. **Sound volume settings (6.3)** — sliders for music / footsteps / jumpscares.
-7. **Moderate scaffold format (3.2)** — fill-in `P(insert)` steps vs current multiple choice.
+6. **Moderate `P(insert)` scaffold + Hard unguided format (3.2, 3.3).**
+7. **P-Learn / About text alignment (5.1, 7.7).**
+8. **Sound volume settings (6.3)** — sliders for music / footsteps / jumpscares.
+9. **Accounts + researcher monitoring (4.1–4.3)** — the only backend item; scope TBD.
 
 ## Changelog
 
 - 2026-07-18 — Initial audit against researchers' PDF.
+- 2026-07-18 — Decisions recorded: PDF content is authoritative (questions, P-Learn, About);
+  prototype visuals superseded by current design. Question sections re-scoped to verbatim
+  PDF banks.
