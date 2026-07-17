@@ -28,8 +28,8 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
 | 2.1 | Exactly 5 problems per level | ✅ | 5 questions per room ([questions.js](../src/data/questions.js)), order shuffled each run. |
-| 2.2 | If time runs out, player restarts the level with a *different* problem | 🟡 | The "different problem" half now works: full PDF banks (15/10/10) are imported and every run draws a random 5 per room. Still blocked on the per-question timer (2.3) to trigger the timeout path. |
-| 2.3 | 15-second answer time limit — starts only when the player begins answering, not while browsing/roaming | ❌ | No timer of any kind on questions. |
+| 2.2 | If time runs out, player restarts the level with a *different* problem | ✅ | On timeout the room resets to Q1 and its 5 problems are re-drawn from the full bank. An in-modal "TIME'S UP" notice shows, then the player re-examines the note to start over. |
+| 2.3 | 15-second answer time limit — starts only when the player begins answering, not while browsing/roaming | ✅ | Countdown bar + seconds in the question modal; starts when the question opens (roaming untimed), resets to 15s on each new question and each wrong-answer retry. P-LEARN mode is untimed. Limit configurable via `CFG.gameplay.answerTimeSeconds`. **Known accepted behavior:** closing the modal cancels the timer (browsing is untimed per spec), so a player can dodge a near-timeout by exiting — flag to researchers if this matters. |
 | 2.4 | Player roams the room to find questions/problems | 🟡 | Free-roam first-person 3D with an interactable note per room — but there is one note per room, not one per question. |
 | 2.5 | Questions are NOT continuous — after answering problem 1, the player must find problem 2 elsewhere in the room | ❌ | Examining the note opens all 5 questions back-to-back in one modal session ([main.js](../src/main.js) `openQuestion`). |
 | 2.6 | Wrong-answer consequences | ✅ | (Not in PDF, but present) 5 wrong answers per room trigger a chase; caught = lose. Fear staging escalates fog/vignette/audio. |
@@ -100,7 +100,9 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
 1. ~~**Import PDF question banks (3.1–3.3)**~~ ✅ Done 2026-07-18 — full 15/10/10 banks
    imported verbatim, random 5 drawn per room per run. Moderate `steps` data included
    for the future scaffold UI. One answer-key discrepancy flagged (3.1 ❓).
-2. **Per-question 15s timer (2.3) + timeout retry with different problems (2.2).**
+2. ~~**Per-question 15s timer (2.3) + timeout retry with different problems (2.2).**~~
+   ✅ Done 2026-07-18 — 15s countdown in the modal, timeout resets the room with a
+   fresh draw. P-LEARN untimed. One accepted-behavior note flagged in 2.3.
 3. **One-note-per-question flow (2.5)** — scatter 5 interactables per room instead of 1.
 4. **Locked doors with jumpscare (1.4, 1.5)** — gate room 2 behind room 1, room 3 behind room 2.
 5. **Empty creepy rooms (1.3)** — at least 5 vacant rooms along the hallway.
@@ -118,3 +120,6 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
 - 2026-07-18 — Queue item 1 done: full PDF banks imported (15 Easy / 10 Moderate / 10 Hard),
   random draw of 5 per room per run. Flagged Easy item 10 answer-key discrepancy for
   researcher confirmation.
+- 2026-07-18 — Queue item 2 done: 15s per-question countdown (configurable), timeout resets
+  the room to Q1 with freshly drawn problems. P-LEARN mode untimed. Flagged the
+  close-modal-to-dodge-timer behavior as accepted per "browsing is untimed".

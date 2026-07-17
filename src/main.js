@@ -91,16 +91,18 @@ let roomWrong         = [0, 0, 0];
 let correctStreak     = 0;
 let gameStartTime     = 0;
 // Each run draws QUESTIONS_PER_ROOM random items from each room's full bank,
-// so replays present different problems.
+// so replays (and answer timeouts) present different problems.
+function drawQuestionsForRoom(roomIdx) {
+  const a = [...ROOMS[roomIdx].questions];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, QUESTIONS_PER_ROOM);
+}
+
 function drawRoomQuestions() {
-  return ROOMS.map(r => {
-    const a = [...r.questions];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a.slice(0, QUESTIONS_PER_ROOM);
-  });
+  return ROOMS.map((_, i) => drawQuestionsForRoom(i));
 }
 
 let shuffledQuestions = drawRoomQuestions();
@@ -345,6 +347,62 @@ let _questionArmTimer     = null;
 let _questionInputReadyAt = 0;
 const QUESTION_ARM_MS     = 700;
 
+// ── Per-question countdown (researchers' req: 15s once answering begins) ──────
+let _countdownTimer    = null;
+let _countdownDeadline = 0;
+
+function stopQuestionCountdown() {
+  if (_countdownTimer) clearInterval(_countdownTimer);
+  _countdownTimer = null;
+  $('question-timer').hidden = true;
+}
+
+function startQuestionCountdown() {
+  stopQuestionCountdown();
+  if (CFG.gameplay.pLearnMode) return; // learning mode is untimed
+
+  const limitMs = CFG.gameplay.answerTimeSeconds * 1000;
+  _countdownDeadline = performance.now() + limitMs;
+
+  const timerEl = $('question-timer');
+  const barEl   = $('question-timer-bar');
+  const numEl   = $('question-timer-num');
+  timerEl.hidden = false;
+  timerEl.classList.remove('low');
+  barEl.style.width = '100%';
+  numEl.textContent = String(CFG.gameplay.answerTimeSeconds);
+
+  _countdownTimer = setInterval(() => {
+    const left = _countdownDeadline - performance.now();
+    if (left <= 0) { handleQuestionTimeout(); return; }
+    barEl.style.width = (left / limitMs * 100) + '%';
+    numEl.textContent = String(Math.ceil(left / 1000));
+    timerEl.classList.toggle('low', left < 5000);
+  }, 100);
+}
+
+// Time ran out: back to the start of this level with different problems.
+function handleQuestionTimeout() {
+  if (gState.current !== S.QUESTION) { stopQuestionCountdown(); return; }
+  const roomIdx = activeRoomIdx;
+  clearQuestionTimers();
+  shuffledQuestions[roomIdx] = drawQuestionsForRoom(roomIdx);
+  roomProgress[roomIdx] = 0;
+  activeQIdx    = 0;
+  correctStreak = 0;
+  AudioManager.play('randomScareWhisper');
+  flashWrongVignette(roomWrong[roomIdx]);
+  updateHUD();
+
+  // Show the verdict inside the modal, then return the player to the room.
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+  $('question-wrong-count').textContent =
+    "⏰ TIME'S UP! The problems have changed — examine the note to start over.";
+  _questionAdvanceTimer = setTimeout(() => {
+    if (gState.current === S.QUESTION && activeRoomIdx === roomIdx) closeQuestion();
+  }, 2200);
+}
+
 function clearQuestionTimers() {
   if (_questionAdvanceTimer) clearTimeout(_questionAdvanceTimer);
   if (_wrongFeedbackTimer)   clearTimeout(_wrongFeedbackTimer);
@@ -354,6 +412,7 @@ function clearQuestionTimers() {
   _wrongFeedbackTimer   = null;
   _wrongResetTimer      = null;
   _questionArmTimer     = null;
+  stopQuestionCountdown();
 }
 
 function openQuestion(roomIdx) {
@@ -399,6 +458,7 @@ function showQuestionUI() {
   });
 
   showScreen('question');
+  startQuestionCountdown();
   _questionArmTimer = setTimeout(() => {
     if (gState.current !== S.QUESTION) return;
     document.querySelectorAll('.choice-btn').forEach(btn => { btn.disabled = false; });
@@ -477,6 +537,7 @@ function handleAnswer(choiceIdx) {
       }
       _wrongResetTimer = null;
     }, 700);
+    startQuestionCountdown(); // fresh 15s for the retry
   }
 }
 
@@ -1056,7 +1117,9 @@ if (import.meta.env.DEV) {
       position: { x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2) },
       lookSensitivity: +lookSensitivity.toFixed(2),
       canInteract: Boolean(nearObject), target: nearObject?.userData || null,
+      pLearnMode: CFG.gameplay.pLearnMode,
     }),
+    getDrawnQuestions: () => shuffledQuestions.map(qs => qs.map(q => q.text.slice(0, 40))),
     setPose(p = {}) {
       look.yaw = p.yaw ?? look.yaw; look.pitch = p.pitch ?? look.pitch;
       camera.position.set(p.x ?? camera.position.x, p.y ?? camera.position.y, p.z ?? camera.position.z);
