@@ -52,6 +52,26 @@ export const AUDIO_ASSETS = {
     loop: false,
     vol: 1,
   },
+  randomMoan: {
+    src: `${AUDIO_DIR}randoms/dragon-studio-creepy-ghosts-moan-sfx-482866.mp3`,
+    loop: false,
+    vol: 0.55,
+  },
+  randomTone: {
+    src: `${AUDIO_DIR}randoms/dragon-studio-ghostly-tone-499659.mp3`,
+    loop: false,
+    vol: 0.48,
+  },
+  randomRunning: {
+    src: `${AUDIO_DIR}randoms/ghost-running-sound.mp3`,
+    loop: false,
+    vol: 0.42,
+  },
+  randomScream: {
+    src: `${AUDIO_DIR}randoms/ghost-scream.mp3`,
+    loop: false,
+    vol: 0.5,
+  },
   win: {
     src: `${AUDIO_DIR}win_chime.wav`,
     loop: false,
