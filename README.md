@@ -25,3 +25,9 @@ Import this GitHub repository in Vercel. Use these settings if Vercel does not a
 - Output directory: `dist`
 
 Static assets are stored in `public/assets`.
+
+## Project Structure
+
+- `src/` - game source code, grouped by feature.
+- `public/assets/` - runtime images, audio, and 3D models.
+- `dist/` - generated build output from `npm run build` and not committed.

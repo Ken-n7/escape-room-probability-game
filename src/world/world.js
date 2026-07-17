@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { makeGLTFLoader } from './gltf-loader.js';
+import { makeGLTFLoader } from '../loaders/gltf-loader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CFG } from './config.js';
+import { CFG } from '../core/config.js';
 
 const { hallW, hallH, hallL, roomW, roomH, doorW, doorH, rooms, exitZ } = CFG.world;
 const HALF_W = hallW / 2;

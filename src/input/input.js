@@ -1,5 +1,5 @@
-import { gState, look, keys, S } from './game-state.js';
-import { renderer, camera } from './renderer.js';
+import { gState, look, keys, S } from '../core/game-state.js';
+import { renderer, camera } from '../core/renderer.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BASE_LOOK_SENS = 0.0022;

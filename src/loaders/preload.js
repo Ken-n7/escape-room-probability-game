@@ -1,8 +1,8 @@
 import { loadGLTF } from './gltf-loader.js';
-import { setGltf as setChaseGltf  } from './chase.js';
-import { setGltf as setScareGltf  } from './scare.js';
-import { setGltf as setLoseGltf   } from './lose-canvas.js';
-import { showScreen } from './hud.js';
+import { setGltf as setChaseGltf  } from '../scares/chase.js';
+import { setGltf as setScareGltf  } from '../scares/scare.js';
+import { setGltf as setLoseGltf   } from '../scares/lose-canvas.js';
+import { showScreen } from '../ui/hud.js';
 
 const MODELS = [
   { path: '/assets/3D/horror-woman.glb',                               store: setChaseGltf, label: 'Loading entity data...'          },
