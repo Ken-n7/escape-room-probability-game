@@ -73,8 +73,8 @@ export async function preloadAssets() {
 
   await new Promise(r => setTimeout(r, 900));
 
-  // Fade out loading screen, then switch to title
+  // Fade out loading screen, then switch straight to the scene-backed menu.
   screen.style.opacity = '0';
   await new Promise(r => setTimeout(r, 580));
-  showScreen('title');
+  showScreen('menu');
 }

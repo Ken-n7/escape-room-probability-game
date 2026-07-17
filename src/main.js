@@ -28,6 +28,35 @@ import { preloadAssets } from './loaders/preload.js';
 // ── World ─────────────────────────────────────────────────────────────────────
 const { wallBoxes, interactiveObjects } = buildWorld(scene);
 
+// ── Menu camera ────────────────────────────────────────────────────────────────
+const MENU_CAMERA_VIEW = {
+  x: -2.0, y: CFG.player.eyeH, z: 1.8,
+  yaw: Math.PI + 0.16, pitch: -0.035,
+};
+const START_CAMERA_VIEW = {
+  x: 0, y: CFG.player.eyeH, z: 2,
+  yaw: Math.PI, pitch: 0,
+};
+let _startCameraTransition = null;
+let _holdStartViewFrames = 0;
+
+function setCameraView(view) {
+  camera.position.set(view.x, view.y, view.z);
+  look.yaw = view.yaw;
+  look.pitch = view.pitch;
+  camera.rotation.set(look.pitch, look.yaw, 0);
+}
+
+function lerpAngle(from, to, t) {
+  const delta = Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  return from + delta * t;
+}
+
+function setMenuCamera() {
+  setCameraView(MENU_CAMERA_VIEW);
+  scene.fog.density = CFG.fog.density;
+}
+
 // ── Extra DOM refs (settings-specific, only used here) ────────────────────────
 const $ = id => document.getElementById(id);
 const elSensitivity      = $('settings-sensitivity');
@@ -76,13 +105,33 @@ function shuffleRooms() {
 
 // ── Fear stages ───────────────────────────────────────────────────────────────
 const FEAR_STAGES = [
-  { enemyVol: 0,    fogDensity: CFG.fog.density, vigOpacity: 0,    vigBg: '' },
-  { enemyVol: 0.30, fogDensity: 0.095,           vigOpacity: 0.16, vigBg: 'radial-gradient(ellipse at center, transparent 36%, rgba(48,0,8,0.62) 100%)' },
-  { enemyVol: 0.70, fogDensity: 0.16,            vigOpacity: 0.30, vigBg: 'radial-gradient(ellipse at center, transparent 24%, rgba(62,0,5,0.72) 100%)' },
+  { at: 0,    enemyVol: 0,    fogDensity: CFG.fog.density, vigOpacity: 0,    vigBg: '' },
+  { at: 0.01, enemyVol: 0.26, fogDensity: 0.070,           vigOpacity: 0.12, vigBg: 'radial-gradient(ellipse at center, transparent 40%, rgba(48,0,8,0.50) 100%)' },
+  { at: 0.40, enemyVol: 0.58, fogDensity: 0.115,           vigOpacity: 0.22, vigBg: 'radial-gradient(ellipse at center, transparent 28%, rgba(62,0,5,0.60) 100%)' },
 ];
 
+function maxWrongAnswers() {
+  const raw = Number(CFG.gameplay.maxWrongAnswers);
+  return Math.max(1, Math.floor(Number.isFinite(raw) ? raw : 1));
+}
+
+function wrongProgress(level) {
+  const raw = Number(level);
+  const wrong = Number.isFinite(raw) ? raw : 0;
+  return Math.min(1, Math.max(0, wrong) / maxWrongAnswers());
+}
+
+function fearStage(level) {
+  const progress = wrongProgress(level);
+  let stage = FEAR_STAGES[0];
+  for (const candidate of FEAR_STAGES) {
+    if (progress >= candidate.at) stage = candidate;
+  }
+  return stage;
+}
+
 function applyFear(level) {
-  const stage = FEAR_STAGES[Math.min(level, FEAR_STAGES.length - 1)];
+  const stage = fearStage(level);
   AudioManager.setVolume('enemyNear', stage.enemyVol, 1.2);
   scene.fog.density = stage.fogDensity;
   elVignette.style.transition = 'opacity 1.5s, background 1.5s';
@@ -100,7 +149,7 @@ function resetFear() {
 
 let _wrongFeedbackTimer = null;
 function flashWrongVignette(fearLevel) {
-  const stage = FEAR_STAGES[Math.min(fearLevel, FEAR_STAGES.length - 1)];
+  const stage = fearStage(fearLevel);
   if (_wrongFeedbackTimer) { clearTimeout(_wrongFeedbackTimer); _wrongFeedbackTimer = null; }
   elVignette.style.transition = 'none';
   elVignette.style.background = 'radial-gradient(ellipse at center, transparent 18%, rgba(84,0,0,0.72) 100%)';
@@ -276,7 +325,8 @@ function returnHomeFromOptions() {
   gState.current = S.MENU;
   elVignette.style.cssText = 'opacity:0';
   AudioManager.setVolume('enemyNear', 0, 0.25);
-  showScreen('title');
+  setMenuCamera();
+  showScreen('menu');
 }
 
 // ── Question system ───────────────────────────────────────────────────────────
@@ -285,14 +335,19 @@ let activeQIdx            = 0;
 let wrongCount            = 0;
 let _questionAdvanceTimer = null;
 let _wrongResetTimer      = null;
+let _questionArmTimer     = null;
+let _questionInputReadyAt = 0;
+const QUESTION_ARM_MS     = 700;
 
 function clearQuestionTimers() {
   if (_questionAdvanceTimer) clearTimeout(_questionAdvanceTimer);
   if (_wrongFeedbackTimer)   clearTimeout(_wrongFeedbackTimer);
   if (_wrongResetTimer)      clearTimeout(_wrongResetTimer);
+  if (_questionArmTimer)     clearTimeout(_questionArmTimer);
   _questionAdvanceTimer = null;
   _wrongFeedbackTimer   = null;
   _wrongResetTimer      = null;
+  _questionArmTimer     = null;
 }
 
 function openQuestion(roomIdx) {
@@ -325,17 +380,28 @@ function showQuestionUI() {
     hintBox.style.display = 'none';
   }
 
+  _questionInputReadyAt = performance.now() + QUESTION_ARM_MS;
   document.querySelectorAll('.choice-btn').forEach((btn, i) => {
     btn.textContent = q.choices[i];
     btn.className   = 'choice-btn';
-    btn.disabled    = false;
-    btn.onclick     = () => handleAnswer(i);
+    btn.disabled    = true;
+    btn.onclick     = e => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      handleAnswer(i);
+    };
   });
 
   showScreen('question');
+  _questionArmTimer = setTimeout(() => {
+    if (gState.current !== S.QUESTION) return;
+    document.querySelectorAll('.choice-btn').forEach(btn => { btn.disabled = false; });
+    _questionArmTimer = null;
+  }, QUESTION_ARM_MS);
 }
 
 function handleAnswer(choiceIdx) {
+  if (performance.now() < _questionInputReadyAt) return;
   const q = shuffledQuestions[activeRoomIdx][activeQIdx];
   clearQuestionTimers();
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
@@ -380,7 +446,7 @@ function handleAnswer(choiceIdx) {
     wrongCount++;
     roomWrong[activeRoomIdx]++;
     const roomWrongNow = roomWrong[activeRoomIdx];
-    const max = CFG.gameplay.maxWrongAnswers;
+    const max = maxWrongAnswers();
 
     if (roomWrongNow >= max) {
       triggerChase({ clearQuestionTimers, showHUD });
@@ -388,14 +454,16 @@ function handleAnswer(choiceIdx) {
     }
 
     applyFear(roomWrongNow);
-    const fearVol = FEAR_STAGES[roomWrongNow].enemyVol;
+    const fearVol = fearStage(roomWrongNow).enemyVol;
     AudioManager.setVolume('enemyNear', Math.min(1, fearVol + 0.42), 0.02);
     setTimeout(() => AudioManager.setVolume('enemyNear', fearVol, 0.7), 380);
     flashWrongVignette(roomWrongNow);
 
-    const msgs = ['', '⚠ The ghost stirs…', '⚠ The ghost grows stronger…'];
+    const msg = wrongProgress(roomWrongNow) < 0.4
+      ? '⚠ The ghost stirs…'
+      : '⚠ The ghost grows stronger…';
     $('question-wrong-count').textContent =
-      `${msgs[Math.min(roomWrongNow, msgs.length - 1)]}  (${roomWrongNow}/${max})`;
+      `${msg}  (${roomWrongNow}/${max})`;
 
     _wrongResetTimer = setTimeout(() => {
       if (gState.current === S.QUESTION) {
@@ -407,7 +475,7 @@ function handleAnswer(choiceIdx) {
 }
 
 function calcScore(roomIdx) {
-  return Math.max(0, Math.round((1 - roomWrong[roomIdx] / (ROOMS[roomIdx].questions.length * 2)) * 100));
+  return Math.max(0, Math.round((1 - wrongProgress(roomWrong[roomIdx])) * 100));
 }
 
 function leaveQuestion() {
@@ -491,14 +559,18 @@ function buildWinScores() {
   ).join('');
 }
 
-function triggerWin() {
+function triggerWin({ recordRun = true } = {}) {
   gState.current = S.WIN;
   buildWinScores();
-  const elapsed    = getElapsedSeconds();
-  const isNewBest  = bestTime === null || elapsed < bestTime;
-  if (isNewBest) { bestTime = elapsed; persistSave(); }
-  const bestLabel  = bestTime !== null ? '  Best: ' + formatTime(bestTime) + (isNewBest ? ' (new!)' : '') : '';
-  $('win-time').textContent = 'Time: ' + formatTime(elapsed) + bestLabel;
+  if (recordRun) {
+    const elapsed    = getElapsedSeconds();
+    const isNewBest  = bestTime === null || elapsed < bestTime;
+    if (isNewBest) { bestTime = elapsed; persistSave(); }
+    const bestLabel  = bestTime !== null ? '  Best: ' + formatTime(bestTime) + (isNewBest ? ' (new!)' : '') : '';
+    $('win-time').textContent = 'Time: ' + formatTime(elapsed) + bestLabel;
+  } else {
+    $('win-time').textContent = 'Time: Test run';
+  }
   $('s-win').classList.toggle('perfect', bestScores.every(s => s === 100));
   showScreen('win');
   AudioManager.stopAll();
@@ -515,21 +587,41 @@ function triggerLose() {
 }
 
 // ── Game start / restart ──────────────────────────────────────────────────────
-function startGame() {
+function finishStartGame() {
+  _startCameraTransition = null;
+  setCameraView(START_CAMERA_VIEW);
+  showHUD();
+  gameStartTime  = Date.now();
+  prevTime = performance.now();
+  lockPointer();
+  setCameraView(START_CAMERA_VIEW);
+  _holdStartViewFrames = 5;
+  gState.current = S.PLAYING;
+  AudioManager.init().catch(err => console.warn('Audio init failed.', err));
+}
+
+function startGame({ transition = false } = {}) {
   resetProgress();
-  camera.position.set(0, CFG.player.eyeH, 2);
-  look.yaw   = Math.PI;
-  look.pitch = 0;
-  camera.rotation.set(0, Math.PI, 0);
   scene.fog.density = CFG.fog.density;
   AudioManager.setVolume('enemyNear', 0, 0.1);
   elVignette.style.cssText = 'opacity:0';
   elHudPlayer.textContent = playerName;
-  showHUD();
-  gameStartTime  = Date.now();
-  gState.current = S.PLAYING;
-  lockPointer();
-  AudioManager.init().catch(err => console.warn('Audio init failed.', err));
+
+  if (transition) {
+    clearMovementInput();
+    gState.current = S.MENU;
+    setCameraView(MENU_CAMERA_VIEW);
+    showScreen(null);
+    _startCameraTransition = {
+      startedAt: performance.now(),
+      duration: 1250,
+      from: { ...MENU_CAMERA_VIEW },
+      to: { ...START_CAMERA_VIEW },
+    };
+    return;
+  }
+
+  finishStartGame();
 }
 
 // ── Story slides ──────────────────────────────────────────────────────────────
@@ -544,6 +636,11 @@ let storyIdx = 0;
 
 function renderStory() {
   $('story-text').textContent = STORY_SLIDES[storyIdx];
+  const backBtn = $('btn-story-back');
+  const nextBtn = $('btn-story-next');
+  if (backBtn) backBtn.disabled = storyIdx === 0;
+  if (nextBtn) nextBtn.textContent = storyIdx === STORY_SLIDES.length - 1 ? 'Ready' : 'Next';
+
   const nav = $('story-nav');
   nav.innerHTML = '';
   STORY_SLIDES.forEach((_, i) => {
@@ -560,10 +657,24 @@ window.storyStep = function(dir) {
   renderStory();
 };
 
-window.goHome = function() { showScreen('title'); storyIdx = 0; plearnIdx = 0; };
+window.storySkip = function() {
+  storyIdx = STORY_SLIDES.length - 1;
+  showScreen('ready');
+};
+
+window.goHome = function() {
+  storyIdx = 0;
+  plearnIdx = 0;
+  gState.current = S.MENU;
+  clearMovementInput();
+  resetFear();
+  setMenuCamera();
+  showScreen('menu');
+};
 
 function goToStory() {
   storyIdx = 0;
+  setMenuCamera();
   renderStory();
   showScreen('story');
   screens.story.onclick = e => { if (e.target === screens.story) window.storyStep(1); };
@@ -630,9 +741,8 @@ function renderPlearn() {
   if (slide.note) { noteEl.style.display = 'block'; noteEl.textContent = slide.note; }
   else            { noteEl.style.display = 'none'; }
 
-  $('btn-plearn-ready').style.display = (plearnIdx === PLEARN_SLIDES.length - 1) ? 'inline-block' : 'none';
   $('btn-plearn-prev').disabled = plearnIdx === 0;
-  $('btn-plearn-next').disabled = plearnIdx === PLEARN_SLIDES.length - 1;
+  $('btn-plearn-next').textContent = plearnIdx === PLEARN_SLIDES.length - 1 ? 'Ready' : 'Next';
 
   const nav = $('plearn-nav');
   nav.innerHTML = '';
@@ -648,53 +758,24 @@ function renderPlearn() {
 
 window.plearnStep = function(dir) {
   AudioManager.play('pageTurn');
+  if (dir > 0 && plearnIdx === PLEARN_SLIDES.length - 1) {
+    setMenuCamera();
+    showScreen('ready');
+    return;
+  }
   plearnIdx = Math.max(0, Math.min(PLEARN_SLIDES.length - 1, plearnIdx + dir));
   renderPlearn();
 };
-window.startGameFromLesson = function() { showScreen('ready'); };
 
 function goToPlearn() {
   CFG.gameplay.pLearnMode = true;
   plearnIdx = 0;
+  setMenuCamera();
   renderPlearn();
   showScreen('plearn');
 }
 
-// ── Threat audio ──────────────────────────────────────────────────────────────
-let tensionTimer = 0;
-function updateThreatAudio(dt) {
-  tensionTimer -= dt;
-  if (tensionTimer > 0) return;
-  tensionTimer = 0.45;
-
-  if (gState.current !== S.PLAYING) { AudioManager.setVolume('enemyNear', 0, 0.6); return; }
-
-  const maxWrong = roomWrong.reduce((m, w, i) => roomDone[i] ? m : Math.max(m, w), 0);
-  const stage    = FEAR_STAGES[Math.min(maxWrong, FEAR_STAGES.length - 1)];
-  AudioManager.setVolume('enemyNear', stage.enemyVol, 0.8);
-  scene.fog.density = stage.fogDensity;
-}
-
-// ── Game loop ─────────────────────────────────────────────────────────────────
-let prevTime = performance.now();
-let footstepTimer = 0;
-const STEP_INTERVAL = 0.42;
-
-let _tabHidden = false;
-document.addEventListener('visibilitychange', () => { _tabHidden = document.hidden; });
-
-function animate() {
-  requestAnimationFrame(animate);
-  if (_tabHidden) return;
-
-  if (gState.current === S.LOSE) { initLoseCanvas(); updateLoseCanvas(); return; }
-  if (gState.current === S.MENU || gState.current === S.WIN) return;
-
-  const now = performance.now();
-  const dt  = Math.min((now - prevTime) / 1000, 0.05);
-  prevTime  = now;
-  const t   = now * 0.001;
-
+function updateFlickerLights(t, dt) {
   flickerLights.forEach(flicker => {
     const { light, base, speed, amp, type } = flicker;
     let intensity;
@@ -714,15 +795,81 @@ function animate() {
       flicker.emissiveMaterials.forEach(mat => { mat.emissiveIntensity = flicker.emissiveBase * sync; });
     }
     if (flicker.glowMaterials?.length) {
-      flicker.glowMaterials.forEach(mat => { mat.opacity = Math.min(0.34, 0.035 + sync * 0.24); });
+      flicker.glowMaterials.forEach(mat => { mat.opacity = Math.min(0.42, 0.055 + sync * 0.28); });
     }
   });
+}
+
+function updateStartCameraTransition(now) {
+  const tr = _startCameraTransition;
+  if (!tr) return false;
+
+  const t = Math.min(1, (now - tr.startedAt) / tr.duration);
+  const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  camera.position.set(
+    tr.from.x + (tr.to.x - tr.from.x) * eased,
+    tr.from.y + (tr.to.y - tr.from.y) * eased,
+    tr.from.z + (tr.to.z - tr.from.z) * eased,
+  );
+  look.yaw = lerpAngle(tr.from.yaw, tr.to.yaw, eased);
+  look.pitch = tr.from.pitch + (tr.to.pitch - tr.from.pitch) * eased;
+  camera.rotation.set(look.pitch, look.yaw, 0);
+
+  if (t >= 1) finishStartGame();
+  return true;
+}
+
+// ── Threat audio ──────────────────────────────────────────────────────────────
+let tensionTimer = 0;
+function updateThreatAudio(dt) {
+  tensionTimer -= dt;
+  if (tensionTimer > 0) return;
+  tensionTimer = 0.45;
+
+  if (gState.current !== S.PLAYING) { AudioManager.setVolume('enemyNear', 0, 0.6); return; }
+
+  const maxWrong = roomWrong.reduce((m, w, i) => roomDone[i] ? m : Math.max(m, w), 0);
+  const stage    = fearStage(maxWrong);
+  AudioManager.setVolume('enemyNear', stage.enemyVol, 0.8);
+  scene.fog.density = stage.fogDensity;
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+let prevTime = performance.now();
+let footstepTimer = 0;
+const STEP_INTERVAL = 0.42;
+
+let _tabHidden = false;
+document.addEventListener('visibilitychange', () => { _tabHidden = document.hidden; });
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (_tabHidden) return;
+
+  const now = performance.now();
+  const dt  = Math.min((now - prevTime) / 1000, 0.05);
+  prevTime  = now;
+  const t   = now * 0.001;
+
+  updateFlickerLights(t, dt);
+
+  if (updateStartCameraTransition(now)) { renderer.render(scene, camera); return; }
+  if (gState.current === S.LOSE) { initLoseCanvas(); updateLoseCanvas(); return; }
+  if (gState.current === S.WIN) return;
+  if (gState.current === S.MENU) { renderer.render(scene, camera); return; }
 
   updateThreatAudio(dt);
   updateAmbientScares(dt);
 
   if (gState.current === S.CHASE) { updateChase(dt); renderer.render(scene, camera); return; }
   if (gState.current !== S.PLAYING) { renderer.render(scene, camera); return; }
+
+  if (_holdStartViewFrames > 0) {
+    _holdStartViewFrames--;
+    setCameraView(START_CAMERA_VIEW);
+    renderer.render(scene, camera);
+    return;
+  }
 
   // ── Key look ──────────────────────────────────────────────────────────────
   const kx = ((keys['KeyL']) ? 1 : 0) - ((keys['KeyJ']) ? 1 : 0);
@@ -799,10 +946,10 @@ document.addEventListener('click', e => {
 // ── Button wiring ─────────────────────────────────────────────────────────────
 $('btn-play').onclick       = () => { CFG.gameplay.pLearnMode = false; goToStory(); };
 $('btn-plearn').onclick     = goToPlearn;
-$('btn-yes').onclick        = startGame;
-$('btn-no').onclick         = () => showScreen('menu');
-$('btn-win-restart').onclick  = () => { CFG.gameplay.pLearnMode = false; showScreen('menu'); };
-$('btn-lose-retry').onclick   = () => showScreen('ready');
+$('btn-yes').onclick        = () => startGame({ transition: true });
+$('btn-no').onclick         = () => window.goHome();
+$('btn-win-restart').onclick  = () => { CFG.gameplay.pLearnMode = false; window.goHome(); };
+$('btn-lose-retry').onclick   = () => { gState.current = S.MENU; setMenuCamera(); showScreen('ready'); };
 $('hud-options-btn').onclick  = () => openOptions();
 $('btn-options-resume').onclick = resumeGame;
 $('btn-options-restart').onclick = () =>
@@ -878,6 +1025,23 @@ initInput({
 initChase({ onCaught: triggerLose });
 elPrompt.addEventListener('pointerdown', e => { e.preventDefault(); tryInteract(); });
 
+function triggerDevWin() {
+  clearMovementInput();
+  clearQuestionTimers();
+  clearScareSprite();
+  cleanupChase();
+  roomDone      = [true, true, true];
+  roomProgress  = ROOMS.map(room => room.questions.length);
+  roomWrong     = [0, 0, 0];
+  codeDigits    = ROOMS.map(room => room.codeDigit);
+  bestScores    = [100, 100, 100];
+  correctStreak = 0;
+  gameStartTime = Date.now();
+  updateHUD();
+  resetFear();
+  triggerWin({ recordRun: false });
+}
+
 // ── Dev helpers ───────────────────────────────────────────────────────────────
 if (import.meta.env.DEV) {
   window.__escapeRoomDebug = {
@@ -897,15 +1061,15 @@ if (import.meta.env.DEV) {
   };
   const devScareBtn = $('dev-scare-btn');
   devScareBtn?.removeAttribute('hidden');
-  devScareBtn?.addEventListener('click', () => {
-    // Direct dev trigger — import scare internals via window if needed
-  });
+  devScareBtn?.addEventListener('click', triggerDevWin);
   window.__devPlay    = () => { resetProgress(); startGame(); };
   window.__scene      = scene;
   window.__devLose    = () => { resetProgress(); startGame(); triggerLose(); };
+  window.__devWin     = triggerDevWin;
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+setMenuCamera();
 applyDeviceProfile();
 updateMenuName();
 updateFullscreenLabel();
