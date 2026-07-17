@@ -153,15 +153,6 @@
     #plearn-nav { position:fixed; bottom:28px; display:flex; gap:20px; z-index:25; }
     .plearn-dot { width:9px; height:9px; border-radius:50%; background:rgba(100,130,255,0.3); }
     .plearn-dot.active { background:#4488ff; }
-    #btn-plearn-ready {
-      display:none; margin-top:20px;
-      padding:12px 28px; border-radius:999px;
-      background:rgba(30,80,200,0.85); border:1px solid #4488ff;
-      color:#aabbff; font-family:monospace; font-size:1rem;
-      letter-spacing:2px; cursor:pointer; transition:background 0.15s;
-    }
-    #btn-plearn-ready:hover { background:rgba(50,120,255,0.9); }
-
     /* ── ARE YOU READY ───────────────────────────────────────────────────── */
     #s-ready { background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c08; }
     #s-ready::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.6); }
@@ -420,34 +411,37 @@
     }
 
     /* ── QUESTION MODAL ──────────────────────────────────────────────────── */
-    #s-question { background:rgba(0,0,0,0.88); backdrop-filter:blur(4px); }
+    #s-question { background:transparent; pointer-events:none; }
+    #s-question > * { pointer-events:auto; }
     #question-box {
-      background: url('/assets/spiderweb_bg.jpg') center/cover, #15101a;
+      background:rgba(6,7,9,.72);
       border:1px solid #330033; border-radius:12px;
       padding:36px 40px; max-width:720px; width:90%;
       text-align:center; position:relative;
     }
     #btn-question-exit {
       position:absolute;
-      top:12px;
-      right:12px;
-      width:38px;
-      height:38px;
+      top:10px;
+      right:10px;
+      width:44px;
+      height:44px;
       border-radius:50%;
-      border:1px solid rgba(255,255,255,.24);
-      background:rgba(0,0,0,.54);
-      color:#ffeecc;
+      border:2px solid rgba(200,60,60,.7);
+      background:rgba(80,0,0,.55);
+      color:#ff9999;
       font-family:monospace;
-      font-size:1.15rem;
+      font-size:1.4rem;
+      line-height:1;
       cursor:pointer;
       z-index:2;
-      transition:background .15s, transform .15s;
+      box-shadow:0 0 10px rgba(180,30,30,.5), inset 0 0 8px rgba(180,30,30,.2);
+      transition:background .15s, box-shadow .15s, transform .15s;
     }
     #btn-question-exit:hover {
-      background:rgba(80,0,0,.7);
-      transform:translateY(-1px);
+      background:rgba(140,0,0,.8);
+      box-shadow:0 0 18px rgba(220,40,40,.7), inset 0 0 10px rgba(220,40,40,.3);
+      transform:scale(1.1);
     }
-    #question-skull { font-size:2.5rem; position:absolute; top:-28px; left:50%; transform:translateX(-50%); }
     #question-room-label { color:#aa99bb; font-size:0.8rem; letter-spacing:2px; margin-bottom:8px; }
     #question-text {
       color:#fff; font-size:clamp(1rem,2vw,1.2rem); line-height:1.7;
@@ -607,20 +601,20 @@
     }
 
     /* ── WIN / LOSE ──────────────────────────────────────────────────────── */
-    #s-win { background:rgba(0,8,0,0.96); color:#33ff55; }
-    #s-win h1 { font-family:monospace; font-size:clamp(2rem,5vw,3rem); letter-spacing:6px; text-shadow:0 0 20px #00ff44; }
-    #s-win p  { color:#558855; margin-top:10px; font-size:0.9rem; }
-    #win-scores {
-      margin:16px 0; padding:16px 24px;
-      background:rgba(0,20,0,0.7); border:1px solid #224422;
-      border-radius:8px; font-family:monospace; font-size:0.85rem;
+    #s-win {
+      background:url('/assets/win-ending-bg.png') center/cover no-repeat, #020805;
+      color:#fff;
     }
-    #win-scores div { color:#44cc44; margin:4px 0; letter-spacing:1px; }
-    #win-time { font-family:monospace; font-size:0.8rem; color:#558855; letter-spacing:1px; margin-top:8px; }
-    #win-perfect { font-family:monospace; font-size:1.1rem; color:#ffdd00; letter-spacing:4px; text-shadow:0 0 12px #ffdd00; margin:10px 0; display:none; }
-    #s-win.perfect #win-perfect { display:block; }
+    #s-win h1 { font-family:monospace; font-size:clamp(2rem,5vw,3rem); letter-spacing:6px; text-shadow:0 0 20px #fff; }
+    #s-win p  { color:#fff; margin-top:10px; font-size:0.9rem; }
+    #win-scores {
+      margin:16px 0; padding:0;
+      background:transparent; border:0;
+      border-radius:0; font-family:monospace; font-size:0.85rem;
+    }
+    #win-scores div { color:#fff; margin:4px 0; letter-spacing:1px; }
+    #win-time { font-family:monospace; font-size:0.8rem; color:#fff; letter-spacing:1px; margin-top:8px; }
     .screen-hint { font-size:0.7rem; color:rgba(255,255,255,0.25); letter-spacing:2px; margin-top:14px; }
-
     #s-lose { background:rgba(4,0,0,0.98); color:#ff1111; }
     #s-lose h1 { font-family:monospace; font-size:clamp(1.6rem,5vw,3rem); letter-spacing:6px; text-shadow:0 0 30px #ff0000, 0 0 80px #880000; animation:flicker .08s infinite; margin:0 0 0.2rem; }
     #s-lose p  { color:#bb2222; font-family:monospace; letter-spacing:2px; margin:0.2rem 0 0.5rem; font-size:0.85rem; }
@@ -793,13 +787,16 @@
         #050607;
     }
     #s-plearn,
-    #s-question,
     #s-code {
       background:
         linear-gradient(90deg, rgba(0,0,0,.82), rgba(0,0,0,.28) 52%, rgba(0,0,0,.78)),
         linear-gradient(180deg, rgba(0,28,22,.35), rgba(0,0,0,.68)),
         url('/assets/classroom_bg.jpg') center/cover no-repeat,
         #050807;
+    }
+    #s-question {
+      background:transparent;
+      pointer-events:none;
     }
     #s-ready {
       background:
@@ -816,12 +813,97 @@
         url('/assets/about_bg.jpg') center/cover no-repeat,
         #080706;
     }
-    #s-win {
+    #s-win { background:url('/assets/win-ending-bg.png') center/cover no-repeat, #020805; }
+    #s-win::before {
+      content:'';
+      position:absolute;
+      inset:0;
+      z-index:1;
+      pointer-events:none;
       background:
-        linear-gradient(90deg, rgba(0,0,0,.74), rgba(0,0,0,.28) 48%, rgba(0,0,0,.74)),
-        linear-gradient(180deg, rgba(8,58,35,.35), rgba(0,0,0,.68)),
-        url('/assets/ending_bg.jpg') center/cover no-repeat,
-        #020805;
+        linear-gradient(90deg, rgba(0,0,0,.38), rgba(0,0,0,.05) 44%, rgba(0,0,0,.50)),
+        linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.40)),
+        radial-gradient(circle at 58% 38%, transparent 0 20%, rgba(0,0,0,.16) 52%, rgba(0,0,0,.56) 100%);
+    }
+    #s-win::after {
+      content:'';
+      position:absolute;
+      inset:0;
+      z-index:4;
+      pointer-events:none;
+      background:#000;
+      animation:win-fade-reveal 1.55s ease-out forwards;
+    }
+    #s-win > * { z-index:2; }
+    #s-win h1,
+    #win-scores,
+    #win-time,
+    #btn-win-restart,
+    #s-win .screen-hint {
+      animation:win-ui-rise .9s ease-out .45s both;
+    }
+    #s-win h1 {
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:min(720px, 88vw);
+      transform:translate(-50%, -50%);
+      color:#fff;
+      text-align:center;
+      pointer-events:none;
+      animation:win-title-reveal .9s ease-out .45s both;
+    }
+    #win-scores {
+      position:absolute;
+      left:clamp(22px, 5vw, 72px);
+      bottom:clamp(58px, 9vh, 98px);
+      margin:0;
+      padding:0;
+      text-align:left;
+      color:#fff;
+      text-shadow:0 2px 10px rgba(0,0,0,.85);
+    }
+    #win-scores strong {
+      color:#fff;
+      font-weight:700;
+    }
+    #win-time {
+      position:absolute;
+      left:clamp(22px, 5vw, 72px);
+      bottom:clamp(28px, 5vh, 58px);
+      margin:0;
+      color:#fff;
+      text-align:left;
+      text-shadow:0 2px 10px rgba(0,0,0,.85);
+    }
+    #btn-win-restart.menu-btn {
+      position:absolute;
+      right:clamp(22px, 5vw, 72px);
+      bottom:clamp(42px, 7vh, 78px);
+      width:min(280px, 32vw);
+      min-width:180px;
+      z-index:2;
+    }
+    #s-win .screen-hint {
+      position:absolute;
+      right:clamp(22px, 5vw, 72px);
+      bottom:clamp(18px, 3vh, 36px);
+      margin:0;
+      color:rgba(255,255,255,.45);
+      text-shadow:0 2px 10px rgba(0,0,0,.85);
+    }
+    @keyframes win-fade-reveal {
+      0% { opacity:1; }
+      42% { opacity:1; }
+      100% { opacity:0; }
+    }
+    @keyframes win-ui-rise {
+      from { opacity:0; transform:translateY(10px); }
+      to { opacity:1; transform:translateY(0); }
+    }
+    @keyframes win-title-reveal {
+      from { opacity:0; transform:translate(-50%, calc(-50% + 12px)); }
+      to { opacity:1; transform:translate(-50%, -50%); }
     }
     #s-lose {
       background:
@@ -945,7 +1027,6 @@
     .menu-btn,
     .ready-btn,
     .action-btn,
-    #btn-plearn-ready,
     #btn-code-submit,
     #btn-reset-progress,
     #btn-save-name,
@@ -1072,15 +1153,6 @@
       padding:30px 34px;
       text-align:left;
     }
-    #plearn-controls {
-      margin-top:20px;
-      display:grid;
-      grid-template-columns:minmax(92px, auto) 1fr minmax(92px, auto);
-      align-items:center;
-      gap:12px;
-      border-top:1px solid rgba(231,223,204,.12);
-      padding-top:16px;
-    }
     .lesson-nav-btn {
       height:42px;
       border-radius:8px;
@@ -1135,20 +1207,16 @@
       font-size:1rem;
       line-height:1.72;
     }
+    #about-box a {
+      color:var(--amber);
+      text-decoration:none;
+    }
     #plearn-note {
       border-radius:8px;
       background:rgba(9,32,28,.78);
       border:1px solid rgba(143,211,189,.35);
       color:var(--chalk);
     }
-    #btn-plearn-ready {
-      width:100%;
-      margin-top:14px;
-      background:rgba(9,32,28,.86);
-      border-color:rgba(143,211,189,.42);
-      color:var(--chalk);
-    }
-
     #ready-content {
       width:min(520px, 92vw);
       padding:28px;
@@ -1172,22 +1240,9 @@
     #btn-no { color:var(--muted); }
 
     #question-box {
-      background:
-        linear-gradient(180deg, rgba(6,7,9,.9), rgba(6,7,9,.8)),
-        url('/assets/spiderweb_bg.jpg') center/cover;
+      background:rgba(6,7,9,.72);
       max-width:760px;
-    }
-    #question-skull {
-      top:-22px;
-      width:52px;
-      height:52px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      border-radius:50%;
-      background:rgba(0,0,0,.78);
-      border:1px solid var(--line-red);
-      font-size:1.7rem;
+      backdrop-filter:blur(2px);
     }
     #question-text {
       background:rgba(0,0,0,.38);
@@ -1281,17 +1336,18 @@
       line-height:1;
       color:var(--bone);
     }
-    #s-win h1 { text-shadow:0 0 26px rgba(95,174,114,.72); }
+    #s-win h1 { text-shadow:0 0 30px rgba(255,255,255,.84), 0 0 90px rgba(255,255,255,.32); }
     #s-lose h1 { text-shadow:0 0 30px rgba(181,31,35,.86); }
     #s-win p,
     #s-lose p,
     #s-pause p { color:var(--paper); }
     #win-scores {
-      border-radius:8px;
-      background:rgba(0,0,0,.48);
-      border-color:rgba(95,174,114,.35);
+      border-radius:0;
+      background:transparent;
+      border:0;
+      box-shadow:none;
     }
-    #win-scores div { color:#a8ddb5; }
+    #win-scores div { color:#fff; }
     #scary-face {
       border-radius:8px;
       background:rgba(0,0,0,.48);
@@ -1299,9 +1355,7 @@
       color:#d98977;
     }
     #s-options {
-      background:
-        linear-gradient(90deg, rgba(0,0,0,.82), rgba(0,0,0,.5)),
-        url('/assets/hallway_bg.jpg') center/cover no-repeat;
+      background:transparent;
       color:var(--bone);
     }
     #options-box {
@@ -1377,10 +1431,156 @@
       gap:10px;
     }
     #s-pause {
-      background:
-        linear-gradient(90deg, rgba(0,0,0,.78), rgba(0,0,0,.54)),
-        url('/assets/hallway_bg.jpg') center/cover no-repeat;
+      background:transparent;
       color:var(--bone);
+    }
+
+    /* ── SCENE-BACKED PRE-GAME FLOW ─────────────────────────────────────── */
+    #s-menu,
+    #s-story,
+    #s-plearn,
+    #s-ready,
+    #s-options,
+    #s-pause,
+    #s-settings,
+    #s-about {
+      background:transparent;
+    }
+    #s-menu::before,
+    #s-story::before,
+    #s-plearn::before,
+    #s-ready::before,
+    #s-options::before,
+    #s-pause::before,
+    #s-settings::before,
+    #s-about::before {
+      content:'';
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      z-index:0;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.74), rgba(0,0,0,.22) 46%, rgba(0,0,0,.62)),
+        radial-gradient(circle at 18% 58%, transparent 0 30%, rgba(0,0,0,.72) 100%);
+    }
+
+    #s-menu {
+      align-items:flex-end;
+      justify-content:flex-end;
+      padding:clamp(22px, 4vw, 42px);
+    }
+    #menu-content {
+      position:fixed;
+      right:clamp(22px, 4vw, 42px);
+      bottom:clamp(22px, 4vw, 42px);
+      width:min(310px, calc(100vw - 44px));
+      align-items:stretch;
+      gap:10px;
+    }
+    #menu-content::before {
+      content:'ROOM 308';
+      color:var(--amber);
+      font-family:monospace;
+      font-size:.74rem;
+      border-bottom:1px solid var(--line);
+      padding-bottom:10px;
+      margin-bottom:6px;
+      text-align:right;
+    }
+    .menu-btn {
+      min-height:50px;
+      justify-content:space-between;
+      padding:0 18px;
+      background:rgba(5,7,8,.76);
+      backdrop-filter:blur(2px);
+    }
+    #menu-player-name {
+      top:auto;
+      bottom:18px;
+      left:18px;
+    }
+
+    #s-story {
+      align-items:flex-start;
+      justify-content:center;
+      padding-left:clamp(24px, 7vw, 92px);
+      padding-right:clamp(140px, 18vw, 280px);
+    }
+    #story-text {
+      width:min(700px, 62vw);
+      background:rgba(5,7,8,.58);
+      backdrop-filter:blur(2px);
+    }
+    #story-nav {
+      left:clamp(24px, 7vw, 92px);
+      right:auto;
+      bottom:30px;
+    }
+    #story-actions,
+    #plearn-actions {
+      position:fixed;
+      right:28px;
+      bottom:26px;
+      z-index:25;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .story-action-btn {
+      min-width:84px;
+      min-height:42px;
+      border-radius:8px;
+      border:1px solid rgba(231,223,204,.22);
+      background:rgba(0,0,0,.5);
+      color:var(--bone);
+      font-family:monospace;
+      font-size:.86rem;
+      cursor:pointer;
+      transition:background .15s, transform .15s, opacity .15s;
+    }
+    .story-action-btn.primary {
+      border-color:rgba(143,211,189,.42);
+      color:var(--chalk);
+    }
+    .story-action-btn:hover:not(:disabled) {
+      background:rgba(181,31,35,.25);
+      transform:translateY(-1px);
+    }
+    .story-action-btn:disabled {
+      cursor:default;
+      opacity:.36;
+    }
+
+    #s-plearn {
+      align-items:center;
+      justify-content:center;
+      padding:clamp(24px, 6vw, 84px);
+    }
+    #plearn-box {
+      background:rgba(8,10,12,.82);
+      margin:0 auto;
+    }
+    #s-plearn #plearn-nav {
+      position:fixed;
+      left:clamp(24px, 7vw, 92px);
+      bottom:30px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:8px 10px;
+      border:1px solid rgba(231,223,204,.14);
+      background:rgba(0,0,0,.42);
+      gap:10px;
+    }
+
+    #s-ready {
+      align-items:center;
+      justify-content:center;
+    }
+    #ready-content {
+      margin:0;
+      background:rgba(5,7,8,.58);
+      backdrop-filter:blur(2px);
     }
 
     @media (max-width: 720px) {
@@ -1408,9 +1608,6 @@
       #s-win h1,
       #s-lose h1,
       #s-pause h1 { font-size:2.25rem; }
-      #plearn-controls {
-        grid-template-columns:1fr 1fr;
-      }
       #hud-options-btn {
         width:54px;
         height:54px;
@@ -1423,14 +1620,53 @@
       #interact-prompt { bottom:154px; font-size:1.1rem; padding:10px 24px; }
       #hud-player { display:none; }
       #options-box { padding:22px; }
-      #s-plearn #plearn-nav {
-        grid-column:1 / -1;
-        grid-row:1;
-        padding-bottom:4px;
+      #s-menu {
+        align-items:stretch;
+        justify-content:flex-end;
       }
-      #btn-plearn-prev,
-      #btn-plearn-next {
-        grid-row:2;
+      #menu-content {
+        left:18px;
+        right:18px;
+        bottom:22px;
+        width:auto;
+      }
+      #menu-content::before {
+        text-align:left;
+      }
+      #menu-player-name {
+        bottom:auto;
+        top:18px;
+      }
+      #s-story,
+      #s-plearn,
+      #s-ready {
+        align-items:center;
+        justify-content:center;
+        padding:18px;
+      }
+      #story-text {
+        width:94vw;
+        max-width:none;
+        margin-bottom:86px;
+      }
+      #story-nav {
+        left:18px;
+        bottom:22px;
+      }
+      #story-actions,
+      #plearn-actions {
+        right:18px;
+        bottom:18px;
+      }
+      .story-action-btn {
+        min-width:68px;
+      }
+      #ready-content {
+        margin:0;
+      }
+      #s-plearn #plearn-nav {
+        left:18px;
+        bottom:22px;
       }
     }
 
@@ -1508,19 +1744,10 @@
         padding:8px 10px;
         font-size:.82rem;
       }
-      #plearn-controls {
-        margin-top:10px;
-        padding-top:10px;
-        gap:8px;
-      }
       .lesson-nav-btn,
-      #btn-plearn-ready,
       .modal-back-btn {
         min-height:38px;
         height:38px;
-      }
-      #btn-plearn-ready {
-        margin-top:10px;
       }
       .settings-row {
         margin-bottom:10px;
@@ -1703,25 +1930,7 @@
   </div>
 </div>
 
-<!-- ══ TITLE ══════════════════════════════════════════════════════════════════ -->
-<div id="s-title" class="screen hidden">
-  <div id="title-content">
-    <div class="case-stamp">Room 308 / Probability Case</div>
-    <h1>ESCAPE<br>ROOM</h1>
-    <p class="title-copy">Three classrooms are locked behind questions, whispers, and a code the building does not want you to find.</p>
-    <div class="title-status">
-      <span>SUBJECT: SIMPLE PROBABILITY</span>
-      <span>STATUS: UNRESOLVED</span>
-      <span>TIME: LIMITED</span>
-    </div>
-    <button id="title-arrow" type="button"
-      onclick="document.getElementById('s-title').classList.add('hidden');
-               document.getElementById('s-menu').classList.remove('hidden');">
-      <span>Open Case File</span>
-      <span class="title-arrow-icon">→</span>
-    </button>
-  </div>
-</div>
+<div id="s-title" class="screen hidden" aria-hidden="true"></div>
 
 <!-- ══ MAIN MENU ══════════════════════════════════════════════════════════════ -->
 <div id="s-menu" class="screen hidden">
@@ -1738,9 +1947,6 @@
       <span>P-LEARN</span><span class="icon">◆</span>
     </button>
   </div>
-  <div class="nav-back"
-    onclick="document.getElementById('s-menu').classList.add('hidden');
-             document.getElementById('s-title').classList.remove('hidden');">←</div>
 </div>
 
 <!-- ══ STORY SLIDES ════════════════════════════════════════════════════════════ -->
@@ -1748,8 +1954,11 @@
   <span class="nav-home" onclick="goHome()">⌂</span>
   <p id="story-text"></p>
   <div id="story-nav"></div>
-  <div class="nav-back"  onclick="storyStep(-1)">←</div>
-  <div class="nav-fwd"   onclick="storyStep(1)">→</div>
+  <div id="story-actions">
+    <button class="story-action-btn" id="btn-story-skip" type="button" onclick="storySkip()">Skip</button>
+    <button class="story-action-btn" id="btn-story-back" type="button" onclick="storyStep(-1)">Back</button>
+    <button class="story-action-btn primary" id="btn-story-next" type="button" onclick="storyStep(1)">Next</button>
+  </div>
 </div>
 
 <!-- ══ P-LEARN LESSON SLIDES ══════════════════════════════════════════════════ -->
@@ -1760,12 +1969,11 @@
     <h2  id="plearn-title">What is Probability?</h2>
     <div id="plearn-body"></div>
     <div id="plearn-note"></div>
-    <div id="plearn-controls">
-      <button class="lesson-nav-btn" id="btn-plearn-prev" type="button" onclick="plearnStep(-1)">Back</button>
-      <div id="plearn-nav"></div>
-      <button class="lesson-nav-btn" id="btn-plearn-next" type="button" onclick="plearnStep(1)">Next</button>
-    </div>
-    <button id="btn-plearn-ready" onclick="startGameFromLesson()">I'M READY TO ESCAPE →</button>
+  </div>
+  <div id="plearn-nav"></div>
+  <div id="plearn-actions">
+    <button class="story-action-btn" id="btn-plearn-prev" type="button" onclick="plearnStep(-1)">Back</button>
+    <button class="story-action-btn primary" id="btn-plearn-next" type="button" onclick="plearnStep(1)">Next</button>
   </div>
 </div>
 
@@ -1782,7 +1990,6 @@
 <!-- ══ HUD ═════════════════════════════════════════════════════════════════════ -->
 <div id="hud">
   <button id="hud-options-btn" type="button" aria-label="Open options">☰</button>
-  <button id="dev-scare-btn" type="button" hidden style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.7);color:#fff;border:1px solid #f00;padding:6px 14px;font-size:0.75rem;letter-spacing:1px;cursor:pointer;z-index:99;pointer-events:all;">TEST SCARE</button>
   <div id="room-progress">
     <div class="room-pip" id="pip-0"></div>
     <div class="room-pip" id="pip-1"></div>
@@ -1937,7 +2144,6 @@
 <div id="s-question" class="screen hidden">
   <div id="question-box">
     <button id="btn-question-exit" type="button" aria-label="Return to room">×</button>
-    <div id="question-skull">💀</div>
     <div id="question-room-label">ROOM 1</div>
     <div id="question-text">Question goes here.</div>
     <div id="hint-box"></div>
@@ -2037,6 +2243,11 @@
       <p>Builds conceptual understanding through game-based learning, promotes self-paced review, and develops problem-solving skills in a motivating, low-anxiety environment.</p>
     </div>
 
+    <div class="about-section">
+      <div class="about-section-title">ASSET CREDITS</div>
+      <p>Ending street scene: <a href="https://sketchfab.com/3d-models/horror-street-lamp-a1d343f3935e429484c8ec8c31786a57" target="_blank" rel="noopener">Horror Street Lamp</a> by Ujjval Singhal, licensed under Creative Commons Attribution 4.0.</p>
+    </div>
+
     <button class="modal-back-btn" id="btn-about-back">← BACK TO MENU</button>
   </div>
 </div>
@@ -2044,11 +2255,11 @@
 <!-- ══ WIN ═════════════════════════════════════════════════════════════════════ -->
 <div id="s-win" class="screen hidden">
   <h1>YOU ESCAPED!</h1>
-  <p>All rooms cleared. The ghost is free.</p>
-  <div id="win-perfect">PERFECT RUN</div>
   <div id="win-scores"></div>
   <div id="win-time"></div>
-  <button class="action-btn" id="btn-win-restart">PLAY AGAIN</button>
+  <button class="menu-btn" id="btn-win-restart" type="button">
+    <span>PLAY AGAIN</span><span class="icon">↻</span>
+  </button>
   <div class="screen-hint">[ R ] PLAY AGAIN</div>
 </div>
 
