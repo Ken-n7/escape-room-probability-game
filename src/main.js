@@ -26,7 +26,7 @@ import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase
 import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
-const { wallBoxes, interactiveObjects } = buildWorld(scene);
+const { wallBoxes, interactiveObjects, roomNotes } = buildWorld(scene);
 
 // ── Menu camera ────────────────────────────────────────────────────────────────
 const MENU_CAMERA_VIEW = {
@@ -228,7 +228,18 @@ function resetProgress() {
   shuffleRooms();
   resetAmbientScares();
   cleanupChase();
+  updateNoteVisibility();
   updateHUD();
+}
+
+// One note per question: only the note matching the room's current progress
+// is visible, so the player hunts for the next problem after solving each.
+function updateNoteVisibility() {
+  roomNotes.forEach((notes, ri) => {
+    notes.forEach((note, ni) => {
+      note.visible = !roomDone[ri] && ni === roomProgress[ri];
+    });
+  });
 }
 
 function clearMovementInput() {
@@ -246,6 +257,7 @@ function findNearObject() {
   let best = null, bestScore = -Infinity;
   camera.getWorldDirection(INTERACT_DIR);
   interactiveObjects.forEach(obj => {
+    if (!obj.visible) return;
     INTERACT_TO.subVectors(obj.position, camera.position);
     const d = INTERACT_TO.length();
     if (d > CFG.player.interactR) return;
@@ -392,6 +404,7 @@ function handleQuestionTimeout() {
   correctStreak = 0;
   AudioManager.play('randomScareWhisper');
   flashWrongVignette(roomWrong[roomIdx]);
+  updateNoteVisibility();
   updateHUD();
 
   // Show the verdict inside the modal, then return the player to the room.
@@ -436,6 +449,7 @@ function showQuestionUI() {
     room.name + ' · ' + room.label + '  —  ' + (activeQIdx+1) + ' / ' + shuffledQuestions[activeRoomIdx].length;
   $('question-text').textContent = q.text;
   $('question-wrong-count').textContent = '';
+  $('question-wrong-count').style.color = '';
 
   const hintBox = $('hint-box');
   if (CFG.gameplay.pLearnMode && q.hint) {
@@ -493,6 +507,7 @@ function handleAnswer(choiceIdx) {
       }
 
       resetFear();
+      updateNoteVisibility();
       updateHUD();
       const flashEl = $('room-clear-flash');
       if (flashEl) { flashEl.classList.remove('active'); void flashEl.offsetWidth; flashEl.classList.add('active'); }
@@ -500,9 +515,14 @@ function handleAnswer(choiceIdx) {
         if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
       }, 900);
     } else {
+      // Next question lives on another note — send the player hunting (req 5).
+      updateNoteVisibility();
+      const fb = $('question-wrong-count');
+      fb.style.color = '#7fae7f';
+      fb.textContent = '✓ Correct! The next problem is on another note — find it.';
       _questionAdvanceTimer = setTimeout(() => {
-        if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) showQuestionUI();
-      }, 900);
+        if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
+      }, 1300);
     }
 
   } else {
@@ -1104,6 +1124,7 @@ function triggerDevWin() {
   bestScores    = [100, 100, 100];
   correctStreak = 0;
   gameStartTime = Date.now();
+  updateNoteVisibility();
   updateHUD();
   resetFear();
   triggerWin({ recordRun: false });
@@ -1142,5 +1163,6 @@ setMenuCamera();
 applyDeviceProfile();
 updateMenuName();
 updateFullscreenLabel();
+updateNoteVisibility();
 animate();
 preloadAssets();
