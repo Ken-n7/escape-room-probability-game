@@ -10,8 +10,12 @@ import { AudioManager } from '../audio/audio.js';
 const MODEL_PATH   = '/assets/3D/the_unvermeidlich_ghost_darkness_of_eclipse.glb';
 const SCALE        = 0.88;
 const Y_OFFSET     = -0.08;
-const SCARE_SOUNDS = ['randomScareWhisper', 'randomScream'];
-const NOISE_SOUNDS = ['randomMoan', 'randomTone', 'randomRunning', 'randomScream'];
+const SCARE_SOUNDS = ['randomScareWhisper', 'randomScream', 'randomWhisper2', 'randomLaughEvil'];
+const NOISE_SOUNDS = [
+  'randomMoan', 'randomTone', 'randomRunning', 'randomScream',
+  'randomMoan2', 'randomWhisper2', 'randomKnock', 'randomCrying2',
+  'randomLaughEvil', 'ambientSwell',
+];
 const WALK_DELAY   = 3.2;   // commit to movement before tension can pay off
 const TURN_TRIGGER = 0.55;
 const VISUAL_CHANCE = 0.32;
