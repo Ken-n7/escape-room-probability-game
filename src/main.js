@@ -1134,8 +1134,11 @@ function updateStartCameraTransition(now) {
   return true;
 }
 
-// ── Vacant-room entry sounds (spec 1.3: crying/whispers tied to the rooms) ────
-const VACANT_ENTRY_SOUNDS = ['randomMoan', 'randomScareWhisper', 'randomTone', 'randomScream'];
+// ── Vacant-room entry sounds (spec 1.3: crying/laughing tied to the rooms) ────
+const VACANT_ENTRY_SOUNDS = [
+  'randomCrying1', 'randomCrying2', 'randomLaughKids', 'randomLaughEvil',
+  'randomMoan', 'randomScareWhisper',
+];
 const _vacantSoundCooldown = VACANT_ROOMS.map(() => 0);
 let _insideVacantIdx = -1;
 

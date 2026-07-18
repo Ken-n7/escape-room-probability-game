@@ -19,7 +19,7 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 |---|-------------|--------|-------|
 | 1.1 | 5 main doors: Entrance, Room 1 (Easy), Room 2 (Moderate), Room 3 (Hard), Exit | 🟡 | 3 level rooms + exit door with keypad exist along one hallway ([world.js](../src/world/world.js), rooms at z 7–19 / 23–35 / 39–51, exit at z 53.5). No distinct entrance door — player spawns inside. |
 | 1.2 | Level rooms not close/beside each other | 🟡 | Rooms are separated by ~4 units of hallway wall, but there is nothing between them. |
-| 1.3 | At least 5 empty/vacant rooms between levels for creepy aesthetics (crying/laughing sounds, school works, abandoned rooms) — Slendrina-style | ✅ | 5 vacant abandoned classrooms along the left side of the hallway ([world.js](../src/world/world.js) `VACANT_ROOMS`): dark open doorways between the lockers, overturned/askew desks, scattered school work, chalk scrawls ("HELP US", "P(ESCAPE) = 0"…). Entering one triggers a creepy sound (moan/whisper/tone/scream, 30s per-room cooldown) — no crying/laughing audio assets exist, so the existing scare sounds are used. |
+| 1.3 | At least 5 empty/vacant rooms between levels for creepy aesthetics (crying/laughing sounds, school works, abandoned rooms) — Slendrina-style | ✅ | 5 vacant abandoned classrooms along the left side of the hallway ([world.js](../src/world/world.js) `VACANT_ROOMS`): dark open doorways between the lockers, overturned/askew desks, scattered school work, chalk scrawls ("HELP US", "P(ESCAPE) = 0"…). Entering one triggers a creepy sound with a 30s per-room cooldown — now drawing from real **crying and laughing** clips (freesound.org CC0) plus moans/whispers, as the spec asks. |
 | 1.4 | Doors 2 and 3 locked until previous room completed | ✅ | Wooden door panels in every doorway ([world.js](../src/world/world.js) `buildDoor`). Rooms 2/3 start locked (blocking movement) and swing open with an audio cue when the previous room is cleared. Room 1's door starts open. Notes can no longer be examined through walls from the hallway. |
 | 1.5 | Jumpscare when trying to open a locked door | ✅ | Interacting with a locked door flashes the jumpscare face + sting + screenshake (non-lethal) and shows "🔒 LOCKED — clear Room N first" ([main.js](../src/main.js) `triggerLockedDoorScare`, 4s cooldown so it can't be spammed). |
 
@@ -147,3 +147,7 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
   PDF. Flagged the PDF's Example 3 copy-paste/answer errors (imported as 10/40 = 1/4).
 - 2026-07-18 — Queue item 8 done: volume sliders for background music, footsteps, and
   jumpscares in Settings (persisted, live category volumes in the audio manager).
+- 2026-07-18 — Audio variety: 8 new CC0 sounds from freesound.org (2 cries, 2 creepy
+  laughs, whisper, knocking, moan, drone swell). Vacant rooms now use real
+  crying/laughing; ambient noise pool grew from 4 to 10 sounds. Credit line added
+  to About.

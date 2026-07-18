@@ -27,6 +27,14 @@ const SOUND_CATEGORY = {
   randomRunning:      'jumpscares',
   randomScream:       'jumpscares',
   enemyNear:          'jumpscares',
+  randomCrying1:      'jumpscares',
+  randomCrying2:      'jumpscares',
+  randomLaughKids:    'jumpscares',
+  randomLaughEvil:    'jumpscares',
+  randomWhisper2:     'jumpscares',
+  randomKnock:        'jumpscares',
+  randomMoan2:        'jumpscares',
+  ambientSwell:       'music',
   // uiClick / pageTurn / pickup / win stay unscaled
 };
 const _catVols = { music: 1, footsteps: 1, jumpscares: 1 };
