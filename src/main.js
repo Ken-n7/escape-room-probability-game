@@ -1,7 +1,7 @@
 import * as THREE                  from 'three';
 import { CFG }                    from './core/config.js';
 import { ROOMS, EXIT_CODE, QUESTIONS_PER_ROOM } from './data/questions.js';
-import { buildWorld, flickerLights, DOOR_OPEN_ANGLE } from './world/world.js';
+import { buildWorld, flickerLights, DOOR_OPEN_ANGLE, VACANT_ROOMS } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
@@ -983,6 +983,26 @@ function updateStartCameraTransition(now) {
   return true;
 }
 
+// ── Vacant-room entry sounds (spec 1.3: crying/whispers tied to the rooms) ────
+const VACANT_ENTRY_SOUNDS = ['randomMoan', 'randomScareWhisper', 'randomTone', 'randomScream'];
+const _vacantSoundCooldown = VACANT_ROOMS.map(() => 0);
+let _insideVacantIdx = -1;
+
+function updateVacantRoomSounds() {
+  const x = camera.position.x, z = camera.position.z;
+  const idx = x < -CFG.world.hallW / 2
+    ? VACANT_ROOMS.findIndex(v => z > v.zS && z < v.zE)
+    : -1;
+  if (idx !== -1 && idx !== _insideVacantIdx) {
+    const now = performance.now();
+    if (now > _vacantSoundCooldown[idx]) {
+      _vacantSoundCooldown[idx] = now + 30000;
+      AudioManager.play(VACANT_ENTRY_SOUNDS[Math.floor(Math.random() * VACANT_ENTRY_SOUNDS.length)]);
+    }
+  }
+  _insideVacantIdx = idx;
+}
+
 // ── Threat audio ──────────────────────────────────────────────────────────────
 let tensionTimer = 0;
 function updateThreatAudio(dt) {
@@ -1025,6 +1045,7 @@ function animate() {
 
   updateThreatAudio(dt);
   updateAmbientScares(dt);
+  if (gState.current === S.PLAYING) updateVacantRoomSounds();
 
   if (gState.current === S.CHASE) { updateChase(dt); renderer.render(scene, camera); return; }
   if (gState.current !== S.PLAYING) { renderer.render(scene, camera); return; }
