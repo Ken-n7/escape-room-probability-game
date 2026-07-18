@@ -77,4 +77,46 @@ export const AUDIO_ASSETS = {
     loop: false,
     vol: 0.95,
   },
+
+  // ── freesound.org CC0 additions (variety for ambience + vacant rooms) ──────
+  randomCrying1: {
+    src: `${AUDIO_DIR}randoms/fs453000-baby-crying-corridor.mp3`,
+    loop: false,
+    vol: 0.5,
+  },
+  randomCrying2: {
+    src: `${AUDIO_DIR}randoms/fs175206-sad-ghost-crying.mp3`,
+    loop: false,
+    vol: 0.5,
+  },
+  randomLaughKids: {
+    src: `${AUDIO_DIR}randoms/fs419800-kids-laughing-reversed.mp3`,
+    loop: false,
+    vol: 0.42,
+  },
+  randomLaughEvil: {
+    src: `${AUDIO_DIR}randoms/fs275146-evil-laugh.mp3`,
+    loop: false,
+    vol: 0.45,
+  },
+  randomWhisper2: {
+    src: `${AUDIO_DIR}randoms/fs143902-four-voices-whispering.mp3`,
+    loop: false,
+    vol: 0.5,
+  },
+  randomKnock: {
+    src: `${AUDIO_DIR}randoms/fs433732-deep-knocking.mp3`,
+    loop: false,
+    vol: 0.55,
+  },
+  randomMoan2: {
+    src: `${AUDIO_DIR}randoms/fs643741-ghost-moan.mp3`,
+    loop: false,
+    vol: 0.5,
+  },
+  ambientSwell: {
+    src: `${AUDIO_DIR}randoms/fs534876-horror-drone-swell.mp3`,
+    loop: false,
+    vol: 0.3,
+  },
 };
