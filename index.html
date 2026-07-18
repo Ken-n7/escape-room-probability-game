@@ -476,6 +476,34 @@
       border-radius:6px; display:none;
     }
     #choices-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+    /* ── MODERATE solution scaffold (tap-to-fill) ────────────────────────── */
+    #scaffold[hidden] { display:none; }
+    #scaffold-help {
+      color:var(--muted); font-size:0.78rem; margin-bottom:10px;
+      font-family:monospace;
+    }
+    #scaffold-line {
+      display:flex; align-items:center; justify-content:center;
+      gap:10px; flex-wrap:wrap;
+      font-family:monospace; font-size:1.25rem; color:var(--chalk);
+      background:rgba(9,32,28,.72); border:1px solid rgba(143,211,189,.3);
+      border-radius:8px; padding:14px; margin-bottom:16px;
+    }
+    .scaffold-slot {
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:64px; height:40px; padding:0 10px;
+      border:1px dashed rgba(143,211,189,.5); border-radius:6px;
+      color:rgba(143,211,189,.55);
+    }
+    .scaffold-slot.filled { border-style:solid; color:#aaffcc; border-color:rgba(143,211,189,.8); }
+    .scaffold-slot.current {
+      border-color:var(--amber); color:var(--amber);
+      box-shadow:0 0 10px rgba(212,155,69,.35);
+      animation:slotPulse 0.9s infinite alternate;
+    }
+    @keyframes slotPulse { from { opacity:1; } to { opacity:.55; } }
+    #scaffold-options { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .choice-btn {
       padding:14px 16px; border-radius:8px; border:1px solid #553355;
       background:rgba(60,40,80,0.75); color:#ddd;
@@ -1626,6 +1654,7 @@
         padding:22px;
       }
       #choices-grid { grid-template-columns:1fr; }
+      #scaffold-options { grid-template-columns:1fr; }
       #ready-content h2,
       #s-win h1,
       #s-lose h1,
@@ -2173,6 +2202,11 @@
     </div>
     <div id="question-text">Question goes here.</div>
     <div id="hint-box"></div>
+    <div id="scaffold" hidden>
+      <div id="scaffold-help">Complete the solution — tap the value that fills the glowing blank.</div>
+      <div id="scaffold-line"></div>
+      <div id="scaffold-options"></div>
+    </div>
     <div id="choices-grid">
       <button class="choice-btn" data-idx="0"></button>
       <button class="choice-btn" data-idx="1"></button>

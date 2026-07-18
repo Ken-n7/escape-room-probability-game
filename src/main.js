@@ -536,16 +536,28 @@ function showQuestionUI() {
   }
 
   _questionInputReadyAt = performance.now() + QUESTION_ARM_MS;
-  document.querySelectorAll('.choice-btn').forEach((btn, i) => {
-    btn.textContent = q.choices[i];
-    btn.className   = 'choice-btn';
-    btn.disabled    = true;
-    btn.onclick     = e => {
-      e?.preventDefault();
-      e?.stopPropagation();
-      handleAnswer(i);
-    };
-  });
+
+  if (q.steps) {
+    // MODERATE: tap-to-fill solution scaffold instead of plain choices (req 3.2)
+    $('choices-grid').style.display = 'none';
+    $('scaffold').hidden = false;
+    scaffoldStep = 0;
+    renderScaffoldLine(q);
+    renderScaffoldOptions(q);
+  } else {
+    $('choices-grid').style.display = '';
+    $('scaffold').hidden = true;
+    document.querySelectorAll('#choices-grid .choice-btn').forEach((btn, i) => {
+      btn.textContent = q.choices[i];
+      btn.className   = 'choice-btn';
+      btn.disabled    = true;
+      btn.onclick     = e => {
+        e?.preventDefault();
+        e?.stopPropagation();
+        handleAnswer(i);
+      };
+    });
+  }
 
   showScreen('question');
   startQuestionCountdown();
@@ -556,6 +568,105 @@ function showQuestionUI() {
   }, QUESTION_ARM_MS);
 }
 
+// ── Moderate solution scaffold (tap-to-fill, req 3.2) ─────────────────────────
+let scaffoldStep = 0;
+
+function shuffleArr(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function scaffoldEventName(q) {
+  const m = /P\(([^)]*)\)/.exec(q.hint || '');
+  return m ? m[1] : 'event';
+}
+
+// Options for the current blank. The final blank uses the PDF's own answer
+// choices; substitution blanks mix the correct fraction with distractors that
+// are NOT numerically equal to it (so an early "1/2" isn't unfairly wrong).
+function scaffoldOptionsFor(q, stepIdx) {
+  if (stepIdx === q.steps.length - 1) return shuffleArr([...q.choices]);
+  const correct = q.steps[stepIdx];
+  const val = s => { const [n, d] = String(s).split('/').map(Number); return d !== undefined ? n / d : n; };
+  const cv = val(correct);
+  const [a, b] = correct.split('/');
+  const opts = [correct];
+  const candidates = [`${b}/${a}`, ...q.choices, `${a}/${Number(a) + Number(b)}`];
+  for (const c of candidates) {
+    if (opts.length >= 4) break;
+    if (opts.includes(c) || !Number.isFinite(val(c)) || Math.abs(val(c) - cv) < 1e-9) continue;
+    opts.push(c);
+  }
+  return shuffleArr(opts);
+}
+
+function renderScaffoldLine(q) {
+  const line = $('scaffold-line');
+  line.innerHTML = '';
+  const label = document.createElement('span');
+  label.textContent = `P(${scaffoldEventName(q)})`;
+  line.appendChild(label);
+  q.steps.forEach((s, i) => {
+    const eq = document.createElement('span');
+    eq.textContent = '=';
+    line.appendChild(eq);
+    const slot = document.createElement('span');
+    slot.className = 'scaffold-slot' + (i < scaffoldStep ? ' filled' : i === scaffoldStep ? ' current' : '');
+    slot.textContent = i < scaffoldStep ? s : '?';
+    line.appendChild(slot);
+  });
+}
+
+function renderScaffoldOptions(q) {
+  const wrap = $('scaffold-options');
+  wrap.innerHTML = '';
+  scaffoldOptionsFor(q, scaffoldStep).forEach(valStr => {
+    const btn = document.createElement('button');
+    btn.className   = 'choice-btn';
+    btn.type        = 'button';
+    btn.textContent = valStr;
+    btn.disabled    = true;
+    btn.onclick     = e => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      handleScaffoldTap(valStr, btn);
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+function handleScaffoldTap(valStr, btn) {
+  if (performance.now() < _questionInputReadyAt) return;
+  if (gState.current !== S.QUESTION) return;
+  const q = shuffledQuestions[activeRoomIdx][activeQIdx];
+  clearQuestionTimers();
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+
+  if (valStr === q.steps[scaffoldStep]) {
+    btn.classList.add('correct');
+    scaffoldStep++;
+    renderScaffoldLine(q);
+    if (scaffoldStep >= q.steps.length) {
+      advanceAfterCorrect();
+    } else {
+      AudioManager.play('pickup');
+      _questionAdvanceTimer = setTimeout(() => {
+        if (gState.current !== S.QUESTION) return;
+        renderScaffoldOptions(q);
+        document.querySelectorAll('#scaffold-options .choice-btn').forEach(b => { b.disabled = false; });
+        startQuestionCountdown(); // fresh 15s for the next blank
+        _questionAdvanceTimer = null;
+      }, 500);
+    }
+  } else {
+    btn.classList.add('wrong');
+    penalizeWrong();
+  }
+}
+
 function handleAnswer(choiceIdx) {
   if (performance.now() < _questionInputReadyAt) return;
   const q = shuffledQuestions[activeRoomIdx][activeQIdx];
@@ -563,79 +674,86 @@ function handleAnswer(choiceIdx) {
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
 
   if (choiceIdx === q.correct) {
-    document.querySelectorAll('.choice-btn')[choiceIdx].classList.add('correct');
-    AudioManager.play('pickup');
-    correctStreak++;
-    if (correctStreak === 3) AudioManager.play('pickup');
-
-    const answeredRoomIdx = activeRoomIdx;
-    activeQIdx++;
-    roomProgress[answeredRoomIdx] = activeQIdx;
-
-    if (activeQIdx >= shuffledQuestions[answeredRoomIdx].length) {
-      roomDone[answeredRoomIdx]   = true;
-      codeDigits[answeredRoomIdx] = ROOMS[answeredRoomIdx].codeDigit;
-
-      const score = calcScore(answeredRoomIdx);
-      if (bestScores[answeredRoomIdx] === null || score > bestScores[answeredRoomIdx]) {
-        bestScores[answeredRoomIdx] = score;
-        persistSave();
-      }
-
-      resetFear();
-      updateNoteVisibility();
-      updateDoorLocks();   // swings the next room's door open
-      updateHUD();
-      const flashEl = $('room-clear-flash');
-      if (flashEl) { flashEl.classList.remove('active'); void flashEl.offsetWidth; flashEl.classList.add('active'); }
-      _questionAdvanceTimer = setTimeout(() => {
-        if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
-      }, 900);
-    } else {
-      // Next question lives on another note — send the player hunting (req 5).
-      updateNoteVisibility();
-      const fb = $('question-wrong-count');
-      fb.style.color = '#7fae7f';
-      fb.textContent = '✓ Correct! The next problem is on another note — find it.';
-      _questionAdvanceTimer = setTimeout(() => {
-        if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
-      }, 1300);
-    }
-
+    document.querySelectorAll('#choices-grid .choice-btn')[choiceIdx].classList.add('correct');
+    advanceAfterCorrect();
   } else {
-    document.querySelectorAll('.choice-btn')[choiceIdx].classList.add('wrong');
-    correctStreak = 0;
-    updateHUD();
-    wrongCount++;
-    roomWrong[activeRoomIdx]++;
-    const roomWrongNow = roomWrong[activeRoomIdx];
-    const max = maxWrongAnswers();
+    document.querySelectorAll('#choices-grid .choice-btn')[choiceIdx].classList.add('wrong');
+    penalizeWrong();
+  }
+}
 
-    if (roomWrongNow >= max) {
-      triggerChase({ clearQuestionTimers, showHUD });
-      return;
+function advanceAfterCorrect() {
+  AudioManager.play('pickup');
+  correctStreak++;
+  if (correctStreak === 3) AudioManager.play('pickup');
+
+  const answeredRoomIdx = activeRoomIdx;
+  activeQIdx++;
+  roomProgress[answeredRoomIdx] = activeQIdx;
+
+  if (activeQIdx >= shuffledQuestions[answeredRoomIdx].length) {
+    roomDone[answeredRoomIdx]   = true;
+    codeDigits[answeredRoomIdx] = ROOMS[answeredRoomIdx].codeDigit;
+
+    const score = calcScore(answeredRoomIdx);
+    if (bestScores[answeredRoomIdx] === null || score > bestScores[answeredRoomIdx]) {
+      bestScores[answeredRoomIdx] = score;
+      persistSave();
     }
 
-    applyFear(roomWrongNow);
-    const fearVol = fearStage(roomWrongNow).enemyVol;
-    AudioManager.setVolume('enemyNear', Math.min(1, fearVol + 0.42), 0.02);
-    setTimeout(() => AudioManager.setVolume('enemyNear', fearVol, 0.7), 380);
-    flashWrongVignette(roomWrongNow);
-
-    const msg = wrongProgress(roomWrongNow) < 0.4
-      ? '⚠ The ghost stirs…'
-      : '⚠ The ghost grows stronger…';
-    $('question-wrong-count').textContent =
-      `${msg}  (${roomWrongNow}/${max})`;
-
-    _wrongResetTimer = setTimeout(() => {
-      if (gState.current === S.QUESTION) {
-        document.querySelectorAll('.choice-btn').forEach(b => { b.disabled = false; b.classList.remove('wrong'); });
-      }
-      _wrongResetTimer = null;
-    }, 700);
-    startQuestionCountdown(); // fresh 15s for the retry
+    resetFear();
+    updateNoteVisibility();
+    updateDoorLocks();   // swings the next room's door open
+    updateHUD();
+    const flashEl = $('room-clear-flash');
+    if (flashEl) { flashEl.classList.remove('active'); void flashEl.offsetWidth; flashEl.classList.add('active'); }
+    _questionAdvanceTimer = setTimeout(() => {
+      if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
+    }, 900);
+  } else {
+    // Next question lives on another note — send the player hunting (req 5).
+    updateNoteVisibility();
+    const fb = $('question-wrong-count');
+    fb.style.color = '#7fae7f';
+    fb.textContent = '✓ Correct! The next problem is on another note — find it.';
+    _questionAdvanceTimer = setTimeout(() => {
+      if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
+    }, 1300);
   }
+}
+
+function penalizeWrong() {
+  correctStreak = 0;
+  updateHUD();
+  wrongCount++;
+  roomWrong[activeRoomIdx]++;
+  const roomWrongNow = roomWrong[activeRoomIdx];
+  const max = maxWrongAnswers();
+
+  if (roomWrongNow >= max) {
+    triggerChase({ clearQuestionTimers, showHUD });
+    return;
+  }
+
+  applyFear(roomWrongNow);
+  const fearVol = fearStage(roomWrongNow).enemyVol;
+  AudioManager.setVolume('enemyNear', Math.min(1, fearVol + 0.42), 0.02);
+  setTimeout(() => AudioManager.setVolume('enemyNear', fearVol, 0.7), 380);
+  flashWrongVignette(roomWrongNow);
+
+  const msg = wrongProgress(roomWrongNow) < 0.4
+    ? '⚠ The ghost stirs…'
+    : '⚠ The ghost grows stronger…';
+  $('question-wrong-count').textContent =
+    `${msg}  (${roomWrongNow}/${max})`;
+
+  _wrongResetTimer = setTimeout(() => {
+    if (gState.current === S.QUESTION) {
+      document.querySelectorAll('.choice-btn').forEach(b => { b.disabled = false; b.classList.remove('wrong'); });
+    }
+    _wrongResetTimer = null;
+  }, 700);
+  startQuestionCountdown(); // fresh 15s for the retry
 }
 
 function calcScore(roomIdx) {
