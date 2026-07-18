@@ -172,3 +172,6 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
   question per run — Granny/Slendrina-style placement randomization); wrong searches
   give flavor text + escalating scare chance; rescue glint after 2 wrong searches.
   Decoy classrooms have the same containers, always empty.
+- 2026-07-19 — Chalkboards are now blank in every classroom (owner request): no
+  "ROOM N / SOLVE TO ESCAPE" labels, and the decoys' lying labels are gone with
+  them — no room announces whether it's real.

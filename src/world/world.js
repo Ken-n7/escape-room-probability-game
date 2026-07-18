@@ -321,14 +321,13 @@ function buildClassroom(scene, def, interactiveObjects) {
   const r2 = rect(0, D + 0.3, W, W + 0.3); _addBox(r2.minX, r2.maxX, r2.minZ, r2.maxZ);
   const r3 = rect(D, D + 0.3, 0, W);       _addBox(r3.minX, r3.maxX, r3.minZ, r3.maxZ);
 
-  // Chalkboard — real rooms tell the truth; decoys lie (spec: decoys look real)
+  // Chalkboard — blank in every classroom (owner request 2026-07-19): no room
+  // labels means real rooms and decoys are indistinguishable at a glance.
   const cbW = 4.5, cbH = 2.0;
-  const label = isDecoy ? def.lieLabel : 'ROOM ' + (def.idx + 1);
-  // Board plane sits proud of its backing frame so the writing isn't occluded
   const cbPos = P(D - 0.12, W/2);
   const cbMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(cbW, cbH),
-    new THREE.MeshBasicMaterial({ map: chalkboardTex([label, 'SOLVE TO ESCAPE']) })
+    new THREE.MeshBasicMaterial({ map: chalkboardTex([]) })
   );
   cbMesh.position.set(cbPos.x, cbH/2 + 0.9, cbPos.z);
   cbMesh.rotation.order = 'YXZ';

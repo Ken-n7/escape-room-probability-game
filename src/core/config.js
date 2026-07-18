@@ -43,12 +43,12 @@ export const CFG = {
 
     // Classrooms in walking order: 3 real levels + 2 decoys that look real.
     // idx = level index (0 Easy / 1 Moderate / 2 Hard), null = decoy.
-    // Decoys carry a lying chalkboard label to sell the fake.
+    // Chalkboards are blank everywhere, so nothing labels a room as real.
     classrooms: [
       { key: 'room1',  idx: 0,    orient: 'E', v0:  4, v1: 16, door: [ 6.6,  9.4] },
-      { key: 'decoy1', idx: null, orient: 'E', v0: 18, v1: 30, door: [20.6, 23.4], lieLabel: 'ROOM 2' },
+      { key: 'decoy1', idx: null, orient: 'E', v0: 18, v1: 30, door: [20.6, 23.4] },
       { key: 'room2',  idx: 1,    orient: 'E', v0: 32, v1: 44, door: [34.6, 37.4] },
-      { key: 'decoy2', idx: null, orient: 'S', v0: 17, v1: 29, door: [19.6, 22.4], lieLabel: 'ROOM 3' },
+      { key: 'decoy2', idx: null, orient: 'S', v0: 17, v1: 29, door: [19.6, 22.4] },
       { key: 'room3',  idx: 2,    orient: 'N', v0: 19, v1: 31, door: [21.6, 24.4] },
     ],
 
