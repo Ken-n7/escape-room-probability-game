@@ -1,7 +1,7 @@
 import * as THREE                  from 'three';
 import { CFG }                    from './core/config.js';
-import { ROOMS, EXIT_CODE }        from './data/questions.js';
-import { buildWorld, flickerLights } from './world/world.js';
+import { ROOMS, EXIT_CODE, QUESTIONS_PER_ROOM } from './data/questions.js';
+import { buildWorld, flickerLights, DOOR_OPEN_ANGLE, VACANT_ROOMS } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
@@ -20,13 +20,13 @@ import {
   showScreen, showHUD, hideOptionsConfirm,
   updateFullscreenLabel, toggleFullscreen, setCanInteract,
 } from './ui/hud.js';
-import { updateAmbientScares, resetAmbientScares, clearScareSprite } from './scares/scare.js';
+import { updateAmbientScares, resetAmbientScares, clearScareSprite, triggerBlackout } from './scares/scare.js';
 import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
-const { wallBoxes, interactiveObjects } = buildWorld(scene);
+const { wallBoxes, interactiveObjects, roomNotes, roomDoors } = buildWorld(scene);
 
 // ── Menu camera ────────────────────────────────────────────────────────────────
 const MENU_CAMERA_VIEW = {
@@ -79,8 +79,17 @@ let bestScores = _save.bestScores || [null, null, null];
 let bestTime   = _save.bestTime   || null;
 setLookSensitivity(normalizeSensitivity(_save.lookSensitivity));
 
+// Sound category volumes (spec 6.3) — 0..1, applied via AudioManager
+const soundVols = { music: 1, footsteps: 1, jumpscares: 1, ..._save.soundVols };
+Object.entries(soundVols).forEach(([cat, v]) => {
+  const n = Number(v);
+  const clamped = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1;
+  soundVols[cat] = clamped;
+  AudioManager.setCategoryVolume(cat, clamped);
+});
+
 function persistSave() {
-  writeSave({ playerName, bestScores, bestTime, lookSensitivity });
+  writeSave({ playerName, bestScores, bestTime, lookSensitivity, soundVols });
 }
 
 // ── Game state ────────────────────────────────────────────────────────────────
@@ -90,17 +99,25 @@ let codeDigits        = ['_', '_', '_'];
 let roomWrong         = [0, 0, 0];
 let correctStreak     = 0;
 let gameStartTime     = 0;
-let shuffledQuestions = ROOMS.map(r => [...r.questions]);
+// Each run draws QUESTIONS_PER_ROOM random items from each room's full bank,
+// so replays (and answer timeouts) present different problems.
+function drawQuestionsForRoom(roomIdx) {
+  const a = [...ROOMS[roomIdx].questions];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, QUESTIONS_PER_ROOM);
+}
+
+function drawRoomQuestions() {
+  return ROOMS.map((_, i) => drawQuestionsForRoom(i));
+}
+
+let shuffledQuestions = drawRoomQuestions();
 
 function shuffleRooms() {
-  shuffledQuestions = ROOMS.map(r => {
-    const a = [...r.questions];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  });
+  shuffledQuestions = drawRoomQuestions();
 }
 
 // ── Fear stages ───────────────────────────────────────────────────────────────
@@ -175,7 +192,7 @@ function updateHUD() {
       ? activeRoomIdx
       : roomDone.findIndex((done, i) => !done && roomProgress[i] > 0);
     qEl.textContent = ri >= 0 && !roomDone[ri]
-      ? 'Q ' + (roomProgress[ri] + 1) + '/' + ROOMS[ri].questions.length
+      ? 'Q ' + (roomProgress[ri] + 1) + '/' + shuffledQuestions[ri].length
       : '';
   }
   const sEl = $('hud-streak');
@@ -192,6 +209,16 @@ function updateSensitivityUI() {
   const percent = Math.round(lookSensitivity * 100);
   elSensitivity.value = String(percent);
   elSensitivityValue.textContent = percent + '%';
+}
+
+function updateVolumeUI() {
+  document.querySelectorAll('.settings-vol').forEach(slider => {
+    const cat = slider.dataset.cat;
+    const percent = Math.round((soundVols[cat] ?? 1) * 100);
+    slider.value = String(percent);
+    const label = $(slider.id + '-value');
+    if (label) label.textContent = percent + '%';
+  });
 }
 
 function updateSettingsScores() {
@@ -220,7 +247,80 @@ function resetProgress() {
   shuffleRooms();
   resetAmbientScares();
   cleanupChase();
+  updateNoteVisibility();
+  updateDoorLocks({ instant: true });
   updateHUD();
+}
+
+// ── Locked doors (spec 1.4/1.5) ───────────────────────────────────────────────
+// Room 2's door stays shut until Room 1 is cleared, Room 3's until Room 2 is.
+// Trying a locked door triggers a (non-lethal) jumpscare.
+const doorIsOpen = [true, false, false];
+
+function updateDoorLocks({ instant = false } = {}) {
+  roomDoors.forEach((door, i) => {
+    const locked  = i > 0 && !roomDone[i - 1];
+    const wasOpen = doorIsOpen[i];
+    doorIsOpen[i] = !locked;
+    door.panel.userData.locked = locked;
+    if (instant) door.group.rotation.y = locked ? 0 : DOOR_OPEN_ANGLE;
+    else if (!wasOpen && !locked) AudioManager.play('randomTone');
+  });
+}
+
+const DOOR_SWING_SPEED = 1.6; // rad/sec
+function updateDoors(dt) {
+  roomDoors.forEach((door, i) => {
+    const target = doorIsOpen[i] ? DOOR_OPEN_ANGLE : 0;
+    const cur = door.group.rotation.y;
+    if (Math.abs(cur - target) < 0.001) return;
+    const step = DOOR_SWING_SPEED * dt;
+    door.group.rotation.y = cur < target
+      ? Math.min(target, cur + step)
+      : Math.max(target, cur - step);
+  });
+}
+
+let _doorScareUntil = 0;
+function triggerLockedDoorScare(doorIdx) {
+  setPromptOverride(`🔒 LOCKED — clear Room ${doorIdx} first`, 2200);
+  const now = performance.now();
+  if (now < _doorScareUntil) return;
+  _doorScareUntil = now + 4000;
+
+  const overlay = $('jumpscare-overlay');
+  overlay.classList.add('active');
+  overlay.style.opacity = '1';
+  document.body.classList.add('screenshake');
+  AudioManager.play('jumpscare');
+  flashWrongVignette(0);
+  setTimeout(() => {
+    document.body.classList.remove('screenshake');
+    overlay.style.transition = 'opacity 0.6s';
+    overlay.style.opacity = '0';
+  }, 420);
+  setTimeout(() => {
+    overlay.classList.remove('active');
+    overlay.style.transition = '';
+    overlay.style.opacity = '';
+  }, 1150);
+}
+
+// One note per question: only the note matching the room's current progress
+// is visible, so the player hunts for the next problem after solving each.
+function updateNoteVisibility() {
+  roomNotes.forEach((notes, ri) => {
+    notes.forEach((note, ni) => {
+      note.visible = !roomDone[ri] && ni === roomProgress[ri];
+    });
+  });
+}
+
+// Transient message shown in the interact prompt (e.g. "LOCKED") that survives
+// the per-frame prompt refresh until it expires.
+let _promptOverride = null;
+function setPromptOverride(text, ms) {
+  _promptOverride = { text, until: performance.now() + ms };
 }
 
 function clearMovementInput() {
@@ -232,13 +332,26 @@ function clearMovementInput() {
 const INTERACT_DOT = 0.72;
 const INTERACT_DIR  = new THREE.Vector3();
 const INTERACT_TO   = new THREE.Vector3();
+const INTERACT_POS  = new THREE.Vector3();
 let nearObject = null;
+
+// Notes can only be examined from inside their room — stops reaching through
+// walls (and through locked doors) from the hallway.
+function isInsideRoom(roomIdx) {
+  const [zS, zE] = CFG.world.rooms[roomIdx];
+  return camera.position.x > CFG.world.hallW / 2 &&
+         camera.position.z > zS && camera.position.z < zE;
+}
 
 function findNearObject() {
   let best = null, bestScore = -Infinity;
   camera.getWorldDirection(INTERACT_DIR);
   interactiveObjects.forEach(obj => {
-    INTERACT_TO.subVectors(obj.position, camera.position);
+    if (!obj.visible) return;
+    if (obj.userData.isDoor && !obj.userData.locked) return;
+    if (obj.userData.noteIndex !== undefined && !isInsideRoom(obj.userData.roomIndex)) return;
+    obj.getWorldPosition(INTERACT_POS);
+    INTERACT_TO.subVectors(INTERACT_POS, camera.position);
     const d = INTERACT_TO.length();
     if (d > CFG.player.interactR) return;
     const facing = INTERACT_TO.normalize().dot(INTERACT_DIR);
@@ -252,6 +365,7 @@ function findNearObject() {
 function tryInteract() {
   if (gState.current !== S.PLAYING || !nearObject) return;
   if (nearObject.userData.isKeypad)                      openKeypad();
+  else if (nearObject.userData.isDoor)                   triggerLockedDoorScare(nearObject.userData.doorIndex);
   else if (nearObject.userData.roomIndex !== undefined)  openQuestion(nearObject.userData.roomIndex);
 }
 
@@ -259,6 +373,7 @@ function tryInteract() {
 function resolveCollision(pos) {
   const R = CFG.player.radius;
   for (const b of wallBoxes) {
+    if (b.doorIndex !== undefined && doorIsOpen[b.doorIndex]) continue;
     const x0=b.minX-R, x1=b.maxX+R, z0=b.minZ-R, z1=b.maxZ+R;
     if (pos.x>x0 && pos.x<x1 && pos.z>z0 && pos.z<z1) {
       const d0=x1-pos.x, d1=pos.x-x0, d2=z1-pos.z, d3=pos.z-z0;
@@ -279,6 +394,7 @@ function openSettings(from = 'menu') {
   $('settings-name').value = playerName;
   $('settings-saved').textContent = '';
   updateSensitivityUI();
+  updateVolumeUI();
   updateFullscreenLabel();
   updateSettingsScores();
   $('btn-settings-back').textContent = from === 'options' ? '← BACK TO GAME' : '← BACK TO MENU';
@@ -339,6 +455,63 @@ let _questionArmTimer     = null;
 let _questionInputReadyAt = 0;
 const QUESTION_ARM_MS     = 700;
 
+// ── Per-question countdown (researchers' req: 15s once answering begins) ──────
+let _countdownTimer    = null;
+let _countdownDeadline = 0;
+
+function stopQuestionCountdown() {
+  if (_countdownTimer) clearInterval(_countdownTimer);
+  _countdownTimer = null;
+  $('question-timer').hidden = true;
+}
+
+function startQuestionCountdown() {
+  stopQuestionCountdown();
+  if (CFG.gameplay.pLearnMode) return; // learning mode is untimed
+
+  const limitMs = CFG.gameplay.answerTimeSeconds * 1000;
+  _countdownDeadline = performance.now() + limitMs;
+
+  const timerEl = $('question-timer');
+  const barEl   = $('question-timer-bar');
+  const numEl   = $('question-timer-num');
+  timerEl.hidden = false;
+  timerEl.classList.remove('low');
+  barEl.style.width = '100%';
+  numEl.textContent = String(CFG.gameplay.answerTimeSeconds);
+
+  _countdownTimer = setInterval(() => {
+    const left = _countdownDeadline - performance.now();
+    if (left <= 0) { handleQuestionTimeout(); return; }
+    barEl.style.width = (left / limitMs * 100) + '%';
+    numEl.textContent = String(Math.ceil(left / 1000));
+    timerEl.classList.toggle('low', left < 5000);
+  }, 100);
+}
+
+// Time ran out: back to the start of this level with different problems.
+function handleQuestionTimeout() {
+  if (gState.current !== S.QUESTION) { stopQuestionCountdown(); return; }
+  const roomIdx = activeRoomIdx;
+  clearQuestionTimers();
+  shuffledQuestions[roomIdx] = drawQuestionsForRoom(roomIdx);
+  roomProgress[roomIdx] = 0;
+  activeQIdx    = 0;
+  correctStreak = 0;
+  AudioManager.play('randomScareWhisper');
+  flashWrongVignette(roomWrong[roomIdx]);
+  updateNoteVisibility();
+  updateHUD();
+
+  // Show the verdict inside the modal, then return the player to the room.
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+  $('question-wrong-count').textContent =
+    "⏰ TIME'S UP! The problems have changed — examine the note to start over.";
+  _questionAdvanceTimer = setTimeout(() => {
+    if (gState.current === S.QUESTION && activeRoomIdx === roomIdx) closeQuestion();
+  }, 2200);
+}
+
 function clearQuestionTimers() {
   if (_questionAdvanceTimer) clearTimeout(_questionAdvanceTimer);
   if (_wrongFeedbackTimer)   clearTimeout(_wrongFeedbackTimer);
@@ -348,6 +521,7 @@ function clearQuestionTimers() {
   _wrongFeedbackTimer   = null;
   _wrongResetTimer      = null;
   _questionArmTimer     = null;
+  stopQuestionCountdown();
 }
 
 function openQuestion(roomIdx) {
@@ -368,9 +542,10 @@ function showQuestionUI() {
   updateHUD();
 
   $('question-room-label').textContent =
-    room.name + ' · ' + room.label + '  —  ' + (activeQIdx+1) + ' / ' + room.questions.length;
+    room.name + ' · ' + room.label + '  —  ' + (activeQIdx+1) + ' / ' + shuffledQuestions[activeRoomIdx].length;
   $('question-text').textContent = q.text;
   $('question-wrong-count').textContent = '';
+  $('question-wrong-count').style.color = '';
 
   const hintBox = $('hint-box');
   if (CFG.gameplay.pLearnMode && q.hint) {
@@ -381,23 +556,135 @@ function showQuestionUI() {
   }
 
   _questionInputReadyAt = performance.now() + QUESTION_ARM_MS;
-  document.querySelectorAll('.choice-btn').forEach((btn, i) => {
-    btn.textContent = q.choices[i];
-    btn.className   = 'choice-btn';
-    btn.disabled    = true;
-    btn.onclick     = e => {
-      e?.preventDefault();
-      e?.stopPropagation();
-      handleAnswer(i);
-    };
-  });
+
+  if (q.steps) {
+    // MODERATE: tap-to-fill solution scaffold instead of plain choices (req 3.2)
+    $('choices-grid').style.display = 'none';
+    $('scaffold').hidden = false;
+    scaffoldStep = 0;
+    renderScaffoldLine(q);
+    renderScaffoldOptions(q);
+  } else {
+    $('choices-grid').style.display = '';
+    $('scaffold').hidden = true;
+    document.querySelectorAll('#choices-grid .choice-btn').forEach((btn, i) => {
+      btn.textContent = q.choices[i];
+      btn.className   = 'choice-btn';
+      btn.disabled    = true;
+      btn.onclick     = e => {
+        e?.preventDefault();
+        e?.stopPropagation();
+        handleAnswer(i);
+      };
+    });
+  }
 
   showScreen('question');
+  startQuestionCountdown();
   _questionArmTimer = setTimeout(() => {
     if (gState.current !== S.QUESTION) return;
     document.querySelectorAll('.choice-btn').forEach(btn => { btn.disabled = false; });
     _questionArmTimer = null;
   }, QUESTION_ARM_MS);
+}
+
+// ── Moderate solution scaffold (tap-to-fill, req 3.2) ─────────────────────────
+let scaffoldStep = 0;
+
+function shuffleArr(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function scaffoldEventName(q) {
+  const m = /P\(([^)]*)\)/.exec(q.hint || '');
+  return m ? m[1] : 'event';
+}
+
+// Options for the current blank. The final blank uses the PDF's own answer
+// choices; substitution blanks mix the correct fraction with distractors that
+// are NOT numerically equal to it (so an early "1/2" isn't unfairly wrong).
+function scaffoldOptionsFor(q, stepIdx) {
+  if (stepIdx === q.steps.length - 1) return shuffleArr([...q.choices]);
+  const correct = q.steps[stepIdx];
+  const val = s => { const [n, d] = String(s).split('/').map(Number); return d !== undefined ? n / d : n; };
+  const cv = val(correct);
+  const [a, b] = correct.split('/');
+  const opts = [correct];
+  const candidates = [`${b}/${a}`, ...q.choices, `${a}/${Number(a) + Number(b)}`];
+  for (const c of candidates) {
+    if (opts.length >= 4) break;
+    if (opts.includes(c) || !Number.isFinite(val(c)) || Math.abs(val(c) - cv) < 1e-9) continue;
+    opts.push(c);
+  }
+  return shuffleArr(opts);
+}
+
+function renderScaffoldLine(q) {
+  const line = $('scaffold-line');
+  line.innerHTML = '';
+  const label = document.createElement('span');
+  label.textContent = `P(${scaffoldEventName(q)})`;
+  line.appendChild(label);
+  q.steps.forEach((s, i) => {
+    const eq = document.createElement('span');
+    eq.textContent = '=';
+    line.appendChild(eq);
+    const slot = document.createElement('span');
+    slot.className = 'scaffold-slot' + (i < scaffoldStep ? ' filled' : i === scaffoldStep ? ' current' : '');
+    slot.textContent = i < scaffoldStep ? s : '?';
+    line.appendChild(slot);
+  });
+}
+
+function renderScaffoldOptions(q) {
+  const wrap = $('scaffold-options');
+  wrap.innerHTML = '';
+  scaffoldOptionsFor(q, scaffoldStep).forEach(valStr => {
+    const btn = document.createElement('button');
+    btn.className   = 'choice-btn';
+    btn.type        = 'button';
+    btn.textContent = valStr;
+    btn.disabled    = true;
+    btn.onclick     = e => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      handleScaffoldTap(valStr, btn);
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+function handleScaffoldTap(valStr, btn) {
+  if (performance.now() < _questionInputReadyAt) return;
+  if (gState.current !== S.QUESTION) return;
+  const q = shuffledQuestions[activeRoomIdx][activeQIdx];
+  clearQuestionTimers();
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+
+  if (valStr === q.steps[scaffoldStep]) {
+    btn.classList.add('correct');
+    scaffoldStep++;
+    renderScaffoldLine(q);
+    if (scaffoldStep >= q.steps.length) {
+      advanceAfterCorrect();
+    } else {
+      AudioManager.play('pickup');
+      _questionAdvanceTimer = setTimeout(() => {
+        if (gState.current !== S.QUESTION) return;
+        renderScaffoldOptions(q);
+        document.querySelectorAll('#scaffold-options .choice-btn').forEach(b => { b.disabled = false; });
+        startQuestionCountdown(); // fresh 15s for the next blank
+        _questionAdvanceTimer = null;
+      }, 500);
+    }
+  } else {
+    btn.classList.add('wrong');
+    penalizeWrong();
+  }
 }
 
 function handleAnswer(choiceIdx) {
@@ -407,71 +694,86 @@ function handleAnswer(choiceIdx) {
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
 
   if (choiceIdx === q.correct) {
-    document.querySelectorAll('.choice-btn')[choiceIdx].classList.add('correct');
-    AudioManager.play('pickup');
-    correctStreak++;
-    if (correctStreak === 3) AudioManager.play('pickup');
-
-    const answeredRoomIdx = activeRoomIdx;
-    activeQIdx++;
-    roomProgress[answeredRoomIdx] = activeQIdx;
-
-    if (activeQIdx >= ROOMS[answeredRoomIdx].questions.length) {
-      roomDone[answeredRoomIdx]   = true;
-      codeDigits[answeredRoomIdx] = ROOMS[answeredRoomIdx].codeDigit;
-
-      const score = calcScore(answeredRoomIdx);
-      if (bestScores[answeredRoomIdx] === null || score > bestScores[answeredRoomIdx]) {
-        bestScores[answeredRoomIdx] = score;
-        persistSave();
-      }
-
-      resetFear();
-      updateHUD();
-      const flashEl = $('room-clear-flash');
-      if (flashEl) { flashEl.classList.remove('active'); void flashEl.offsetWidth; flashEl.classList.add('active'); }
-      _questionAdvanceTimer = setTimeout(() => {
-        if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
-      }, 900);
-    } else {
-      _questionAdvanceTimer = setTimeout(() => {
-        if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) showQuestionUI();
-      }, 900);
-    }
-
+    document.querySelectorAll('#choices-grid .choice-btn')[choiceIdx].classList.add('correct');
+    advanceAfterCorrect();
   } else {
-    document.querySelectorAll('.choice-btn')[choiceIdx].classList.add('wrong');
-    correctStreak = 0;
-    updateHUD();
-    wrongCount++;
-    roomWrong[activeRoomIdx]++;
-    const roomWrongNow = roomWrong[activeRoomIdx];
-    const max = maxWrongAnswers();
+    document.querySelectorAll('#choices-grid .choice-btn')[choiceIdx].classList.add('wrong');
+    penalizeWrong();
+  }
+}
 
-    if (roomWrongNow >= max) {
-      triggerChase({ clearQuestionTimers, showHUD });
-      return;
+function advanceAfterCorrect() {
+  AudioManager.play('pickup');
+  correctStreak++;
+  if (correctStreak === 3) AudioManager.play('pickup');
+
+  const answeredRoomIdx = activeRoomIdx;
+  activeQIdx++;
+  roomProgress[answeredRoomIdx] = activeQIdx;
+
+  if (activeQIdx >= shuffledQuestions[answeredRoomIdx].length) {
+    roomDone[answeredRoomIdx]   = true;
+    codeDigits[answeredRoomIdx] = ROOMS[answeredRoomIdx].codeDigit;
+
+    const score = calcScore(answeredRoomIdx);
+    if (bestScores[answeredRoomIdx] === null || score > bestScores[answeredRoomIdx]) {
+      bestScores[answeredRoomIdx] = score;
+      persistSave();
     }
 
-    applyFear(roomWrongNow);
-    const fearVol = fearStage(roomWrongNow).enemyVol;
-    AudioManager.setVolume('enemyNear', Math.min(1, fearVol + 0.42), 0.02);
-    setTimeout(() => AudioManager.setVolume('enemyNear', fearVol, 0.7), 380);
-    flashWrongVignette(roomWrongNow);
-
-    const msg = wrongProgress(roomWrongNow) < 0.4
-      ? '⚠ The ghost stirs…'
-      : '⚠ The ghost grows stronger…';
-    $('question-wrong-count').textContent =
-      `${msg}  (${roomWrongNow}/${max})`;
-
-    _wrongResetTimer = setTimeout(() => {
-      if (gState.current === S.QUESTION) {
-        document.querySelectorAll('.choice-btn').forEach(b => { b.disabled = false; b.classList.remove('wrong'); });
-      }
-      _wrongResetTimer = null;
-    }, 700);
+    resetFear();
+    updateNoteVisibility();
+    updateDoorLocks();   // swings the next room's door open
+    updateHUD();
+    const flashEl = $('room-clear-flash');
+    if (flashEl) { flashEl.classList.remove('active'); void flashEl.offsetWidth; flashEl.classList.add('active'); }
+    _questionAdvanceTimer = setTimeout(() => {
+      if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
+    }, 900);
+  } else {
+    // Next question lives on another note — send the player hunting (req 5).
+    updateNoteVisibility();
+    const fb = $('question-wrong-count');
+    fb.style.color = '#7fae7f';
+    fb.textContent = '✓ Correct! The next problem is on another note — find it.';
+    _questionAdvanceTimer = setTimeout(() => {
+      if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
+    }, 1300);
   }
+}
+
+function penalizeWrong() {
+  correctStreak = 0;
+  updateHUD();
+  wrongCount++;
+  roomWrong[activeRoomIdx]++;
+  const roomWrongNow = roomWrong[activeRoomIdx];
+  const max = maxWrongAnswers();
+
+  if (roomWrongNow >= max) {
+    triggerChase({ clearQuestionTimers, showHUD });
+    return;
+  }
+
+  applyFear(roomWrongNow);
+  const fearVol = fearStage(roomWrongNow).enemyVol;
+  AudioManager.setVolume('enemyNear', Math.min(1, fearVol + 0.42), 0.02);
+  setTimeout(() => AudioManager.setVolume('enemyNear', fearVol, 0.7), 380);
+  flashWrongVignette(roomWrongNow);
+
+  const msg = wrongProgress(roomWrongNow) < 0.4
+    ? '⚠ The ghost stirs…'
+    : '⚠ The ghost grows stronger…';
+  $('question-wrong-count').textContent =
+    `${msg}  (${roomWrongNow}/${max})`;
+
+  _wrongResetTimer = setTimeout(() => {
+    if (gState.current === S.QUESTION) {
+      document.querySelectorAll('.choice-btn').forEach(b => { b.disabled = false; b.classList.remove('wrong'); });
+    }
+    _wrongResetTimer = null;
+  }, 700);
+  startQuestionCountdown(); // fresh 15s for the retry
 }
 
 function calcScore(roomIdx) {
@@ -681,52 +983,65 @@ function goToStory() {
 }
 
 // ── P-Learn slides ────────────────────────────────────────────────────────────
+// Lesson text follows the researchers' PDF ("P-Learn Feature" section) verbatim.
+// Example 3's answer labels are corrected (the PDF's own copy has copy-paste
+// errors there — flagged in docs/requirements-tracking.md).
 const PLEARN_SLIDES = [
   {
     label: 'LESSON 1 / 6 — INTRODUCTION', title: 'What is Probability?',
-    body: `Probability tells us how <em>likely</em> an event is to happen.<br><br>
-           It is always a number between <strong>0</strong> and <strong>1</strong>:<br><br>
-           &nbsp;&nbsp;• <strong>0</strong> = Impossible — will <em>never</em> happen<br>
-           &nbsp;&nbsp;• <strong>0.5</strong> = Equal chance — could go either way<br>
-           &nbsp;&nbsp;• <strong>1</strong> = Certain — will <em>always</em> happen`, note: null,
+    body: `In real life, several circumstances may happen. Fortunately, we have a
+           mathematical concept that deals with the possibility of the occurrence of a
+           particular happening or event, and this is known as <strong>probability</strong>.<br><br>
+           It is also referred to as the <em>measure of chances</em>.`, note: null,
   },
   {
-    label: 'LESSON 2 / 6 — KEY TERMS', title: 'Important Terms',
-    body: `<strong>Experiment</strong> — any activity that produces outcomes<br>
-           <em style="color:#8899bb">e.g. flipping a coin, rolling a die</em><br><br>
-           <strong>Sample Space (S)</strong> — the set of ALL possible outcomes<br>
-           <em style="color:#8899bb">e.g. {Heads, Tails} for a coin flip</em><br><br>
-           <strong>Event (E)</strong> — the specific outcome(s) we want<br><br>
-           <strong>Favorable Outcomes</strong> — outcomes that match our event`, note: null,
+    label: 'LESSON 2 / 6 — KEY TERMS', title: 'Key Terms',
+    body: `<strong>Experiments</strong> — activities such as tossing of coins, rolling of dice,
+           drawing a card, or doing any activity that has several possible results like
+           predicting the weather.<br><br>
+           <strong>Outcomes</strong> — the individual results of these experiments, like 6
+           turning up in a single roll of a die.<br><br>
+           <strong>Event</strong> — any subset of the sample space, including the empty set.
+           <em style="color:#8899bb">Ex.: the event for even numbers on a single roll of a die refers to {2, 4, 6}.</em><br><br>
+           <strong>Simple Event</strong> — an event that has one possible outcome.<br><br>
+           <strong>Favorable Outcomes</strong> — an event that has produced the desired result
+           or expected event.`, note: null,
   },
   {
-    label: 'LESSON 3 / 6 — THE FORMULA', title: 'How to Calculate Probability',
-    body: `To find the probability of an event, always use this formula:`,
-    note: 'P(Event) = Favorable Outcomes ÷ Total Possible Outcomes',
+    label: 'LESSON 3 / 6 — THE FORMULA', title: 'Solving Simple Probability',
+    body: `We can solve the problems involving simple probability by identifying the number
+           of favorable outcomes divided by the total number of possible outcomes. These can
+           be computed using the formula:<br><br>
+           <em style="color:#8899bb">Examples that use probability: dice, deck of cards, coins,
+           spinners, evens, odds, etc.</em>`,
+    note: 'P(event) = number of favorable outcomes ÷ number of possible outcomes',
   },
   {
-    label: 'LESSON 4 / 6 — EASY EXAMPLE', title: 'Example: Rolling a Die',
-    body: `<strong>Problem:</strong> A fair die is rolled. What is P(rolling a 3)?<br><br>
-           → Sample Space = {1, 2, 3, 4, 5, 6} &nbsp;→&nbsp; Total = <strong>6</strong><br>
-           → Favorable outcomes = {3} &nbsp;→&nbsp; Count = <strong>1</strong><br><br>
-           Apply the formula:`,
-    note: 'P(3) = 1 ÷ 6 = 1/6 ≈ 0.17',
+    label: 'LESSON 4 / 6 — EXAMPLE 1', title: 'Rolling a Die',
+    body: `<strong>Problem:</strong> What is the probability of getting a number greater than 4
+           when a die is rolled?<br><br>
+           → number of favorable outcomes = <strong>2</strong> (5 and 6 are numbers greater than 4)<br>
+           → number of possible outcomes = <strong>6</strong> (there are 6 faces on a die)<br><br>
+           The probability of getting a number greater than 4 when a die is rolled is <strong>1/3</strong>.`,
+    note: 'P(number greater than 4) = 2/6 = 1/3',
   },
   {
-    label: 'LESSON 5 / 6 — MODERATE EXAMPLE', title: 'Example: Marbles in a Bag',
-    body: `<strong>Problem:</strong> A bag has 4 red and 6 blue marbles. What is P(red)?<br><br>
-           → Total marbles = 4 + 6 = <strong>10</strong><br>
-           → Favorable (red) = <strong>4</strong><br><br>
-           Apply the formula:`,
-    note: 'P(red) = 4 ÷ 10 = 2/5 = 0.4',
+    label: 'LESSON 5 / 6 — EXAMPLE 2', title: 'Tossing a Coin',
+    body: `<strong>Problem:</strong> A coin is tossed once. What is the probability of getting
+           a head?<br><br>
+           → number of favorable outcomes = <strong>1</strong> {head}<br>
+           → number of possible outcomes = <strong>2</strong> {tail, head}<br><br>
+           The probability of getting a head is <strong>1/2</strong>.`,
+    note: 'P(getting a head) = 1/2',
   },
   {
-    label: 'LESSON 6 / 6 — HARD EXAMPLE', title: 'Real-Life Word Problem',
-    body: `<strong>Problem:</strong> A class of 30 students has 18 girls. A student is picked at random. What is P(girl)?<br><br>
-           → Step 1: Identify total → <strong>30</strong> students<br>
-           → Step 2: Identify favorable → <strong>18</strong> girls<br>
-           → Step 3: Apply the formula:`,
-    note: 'P(girl) = 18 ÷ 30 = 3/5 = 0.6',
+    label: 'LESSON 6 / 6 — EXAMPLE 3', title: 'Books on a Shelf',
+    body: `<strong>Problem:</strong> A shelf has 15 fiction, 10 non-fiction, and 15 reference
+           books. What is the probability of selecting non-fiction?<br><br>
+           → number of favorable outcomes = <strong>10</strong> (there are 10 non-fiction books)<br>
+           → number of possible outcomes = <strong>40</strong> (there are 40 books in total)<br><br>
+           The probability of selecting a non-fiction book is <strong>1/4</strong>.`,
+    note: 'P(selecting non-fiction) = 10/40 = 1/4',
   },
 ];
 let plearnIdx = 0;
@@ -819,6 +1134,29 @@ function updateStartCameraTransition(now) {
   return true;
 }
 
+// ── Vacant-room entry sounds (spec 1.3: crying/laughing tied to the rooms) ────
+const VACANT_ENTRY_SOUNDS = [
+  'randomCrying1', 'randomCrying2', 'randomLaughKids', 'randomLaughEvil',
+  'randomMoan', 'randomScareWhisper',
+];
+const _vacantSoundCooldown = VACANT_ROOMS.map(() => 0);
+let _insideVacantIdx = -1;
+
+function updateVacantRoomSounds() {
+  const x = camera.position.x, z = camera.position.z;
+  const idx = x < -CFG.world.hallW / 2
+    ? VACANT_ROOMS.findIndex(v => z > v.zS && z < v.zE)
+    : -1;
+  if (idx !== -1 && idx !== _insideVacantIdx) {
+    const now = performance.now();
+    if (now > _vacantSoundCooldown[idx]) {
+      _vacantSoundCooldown[idx] = now + 30000;
+      AudioManager.play(VACANT_ENTRY_SOUNDS[Math.floor(Math.random() * VACANT_ENTRY_SOUNDS.length)]);
+    }
+  }
+  _insideVacantIdx = idx;
+}
+
 // ── Threat audio ──────────────────────────────────────────────────────────────
 let tensionTimer = 0;
 function updateThreatAudio(dt) {
@@ -852,6 +1190,7 @@ function animate() {
   const t   = now * 0.001;
 
   updateFlickerLights(t, dt);
+  updateDoors(dt);
 
   if (updateStartCameraTransition(now)) { renderer.render(scene, camera); return; }
   if (gState.current === S.LOSE) { initLoseCanvas(); updateLoseCanvas(); return; }
@@ -860,6 +1199,7 @@ function animate() {
 
   updateThreatAudio(dt);
   updateAmbientScares(dt);
+  if (gState.current === S.PLAYING) updateVacantRoomSounds();
 
   if (gState.current === S.CHASE) { updateChase(dt); renderer.render(scene, camera); return; }
   if (gState.current !== S.PLAYING) { renderer.render(scene, camera); return; }
@@ -896,16 +1236,24 @@ function animate() {
   // ── Interaction prompt ────────────────────────────────────────────────────
   nearObject = findNearObject();
   setCanInteract(Boolean(nearObject));
-  if (nearObject) {
-    const action = GameDevice.controls === 'touch' ? 'Tap !' : '[ E ]';
-    elPrompt.textContent = nearObject.userData.isKeypad ? `${action} Enter Code` : `${action} Examine`;
+  if (_promptOverride && performance.now() < _promptOverride.until) {
+    elPrompt.textContent = _promptOverride.text;
     elPrompt.style.opacity = '1';
   } else {
-    elPrompt.style.opacity = '0';
-  }
-  if (!nearObject && GameDevice.controls === 'keyboardMouse' && document.pointerLockElement !== renderer.domElement) {
-    elPrompt.textContent   = 'Click Game Area To Look';
-    elPrompt.style.opacity = '1';
+    _promptOverride = null;
+    if (nearObject) {
+      const action = GameDevice.controls === 'touch' ? 'Tap !' : '[ E ]';
+      elPrompt.textContent = nearObject.userData.isKeypad ? `${action} Enter Code`
+        : nearObject.userData.isDoor ? `${action} Open Door`
+        : `${action} Examine`;
+      elPrompt.style.opacity = '1';
+    } else {
+      elPrompt.style.opacity = '0';
+    }
+    if (!nearObject && GameDevice.controls === 'keyboardMouse' && document.pointerLockElement !== renderer.domElement) {
+      elPrompt.textContent   = 'Click Game Area To Look';
+      elPrompt.style.opacity = '1';
+    }
   }
 
   renderer.render(scene, camera);
@@ -990,6 +1338,24 @@ elSensitivity?.addEventListener('input', e => {
   updateSensitivityUI();
   persistSave();
 });
+let _volPreviewAt = 0;
+document.querySelectorAll('.settings-vol').forEach(slider => {
+  slider.addEventListener('input', e => {
+    const cat = e.target.dataset.cat;
+    const v = Math.max(0, Math.min(1, Number(e.target.value) / 100));
+    soundVols[cat] = v;
+    AudioManager.setCategoryVolume(cat, v);
+    updateVolumeUI();
+    persistSave();
+    // Audible preview (throttled) so the level can be judged while dragging
+    const now = performance.now();
+    if (now - _volPreviewAt > 300) {
+      _volPreviewAt = now;
+      if (cat === 'footsteps')  AudioManager.play('footstep');
+      if (cat === 'jumpscares') AudioManager.play('randomTone');
+    }
+  });
+});
 $('btn-settings-back').onclick = () => {
   if (settingsFrom === 'options') openOptions(false); else showScreen('menu');
 };
@@ -1031,12 +1397,14 @@ function triggerDevWin() {
   clearScareSprite();
   cleanupChase();
   roomDone      = [true, true, true];
-  roomProgress  = ROOMS.map(room => room.questions.length);
+  roomProgress  = shuffledQuestions.map(qs => qs.length);
   roomWrong     = [0, 0, 0];
   codeDigits    = ROOMS.map(room => room.codeDigit);
   bestScores    = [100, 100, 100];
   correctStreak = 0;
   gameStartTime = Date.now();
+  updateNoteVisibility();
+  updateDoorLocks({ instant: true });
   updateHUD();
   resetFear();
   triggerWin({ recordRun: false });
@@ -1050,7 +1418,10 @@ if (import.meta.env.DEV) {
       position: { x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2) },
       lookSensitivity: +lookSensitivity.toFixed(2),
       canInteract: Boolean(nearObject), target: nearObject?.userData || null,
+      pLearnMode: CFG.gameplay.pLearnMode,
+      doorsOpen: [...doorIsOpen],
     }),
+    getDrawnQuestions: () => shuffledQuestions.map(qs => qs.map(q => q.text.slice(0, 40))),
     setPose(p = {}) {
       look.yaw = p.yaw ?? look.yaw; look.pitch = p.pitch ?? look.pitch;
       camera.position.set(p.x ?? camera.position.x, p.y ?? camera.position.y, p.z ?? camera.position.z);
@@ -1063,6 +1434,7 @@ if (import.meta.env.DEV) {
   devScareBtn?.removeAttribute('hidden');
   devScareBtn?.addEventListener('click', triggerDevWin);
   window.__devPlay    = () => { resetProgress(); startGame(); };
+  window.__devBlackout = triggerBlackout;
   window.__scene      = scene;
   window.__devLose    = () => { resetProgress(); startGame(); triggerLose(); };
   window.__devWin     = triggerDevWin;
@@ -1073,5 +1445,7 @@ setMenuCamera();
 applyDeviceProfile();
 updateMenuName();
 updateFullscreenLabel();
+updateNoteVisibility();
+updateDoorLocks({ instant: true });
 animate();
 preloadAssets();

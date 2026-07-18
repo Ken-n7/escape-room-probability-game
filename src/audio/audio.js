@@ -14,6 +14,34 @@ import { AUDIO_ASSETS } from './audio-assets.js';
 
 const SOUNDS = AUDIO_ASSETS;
 
+// ── Volume categories (Settings sliders, spec 6.3) ─────────────────────────────
+const SOUND_CATEGORY = {
+  ambient:            'music',
+  footstep:           'footsteps',
+  jumpscare:          'jumpscares',
+  ghostScream:        'jumpscares',
+  randomScareWhisper: 'jumpscares',
+  randomScareHit:     'jumpscares',
+  randomMoan:         'jumpscares',
+  randomTone:         'jumpscares',
+  randomRunning:      'jumpscares',
+  randomScream:       'jumpscares',
+  enemyNear:          'jumpscares',
+  randomCrying1:      'jumpscares',
+  randomCrying2:      'jumpscares',
+  randomLaughKids:    'jumpscares',
+  randomLaughEvil:    'jumpscares',
+  randomWhisper2:     'jumpscares',
+  randomKnock:        'jumpscares',
+  randomMoan2:        'jumpscares',
+  ambientSwell:       'music',
+  // uiClick / pageTurn / pickup / win stay unscaled
+};
+const _catVols = { music: 1, footsteps: 1, jumpscares: 1 };
+const _catOf   = name => SOUND_CATEGORY[name] || null;
+const _catVol  = name => { const c = _catOf(name); return c ? _catVols[c] : 1; };
+const _rawTargets = {};   // last requested (pre-category) volume per loop sound
+
 // ── Internals ──────────────────────────────────────────────────────────────────
 let _ctx = null;
 const _bufs  = {};   // decoded AudioBuffers
@@ -69,7 +97,8 @@ function _startLoop(name) {
   const g   = ac.createGain();
   src.buffer     = buf;
   src.loop       = true;
-  g.gain.value   = SOUNDS[name].vol;
+  _rawTargets[name] = SOUNDS[name].vol;
+  g.gain.value   = SOUNDS[name].vol * _catVol(name);
   src.connect(g).connect(masterGain());
   src.start();
   _gains[name] = g;
@@ -119,7 +148,7 @@ export const AudioManager = {
     const src = ac.createBufferSource();
     const g   = ac.createGain();
     src.buffer   = buf;
-    g.gain.value = SOUNDS[name]?.vol ?? 1;
+    g.gain.value = (SOUNDS[name]?.vol ?? 1) * _catVol(name);
     src.connect(g).connect(masterGain());
     src.start();
   },
@@ -136,16 +165,33 @@ export const AudioManager = {
    * @param {number} ramp  ramp duration in seconds (default 0.3)
    */
   setVolume(name, vol, ramp = 0.3) {
+    _rawTargets[name] = vol;
     const g = _gains[name];
     if (!g) return;
     const ac = ctx();
     g.gain.cancelScheduledValues(ac.currentTime);
     g.gain.setValueAtTime(g.gain.value, ac.currentTime);
     g.gain.linearRampToValueAtTime(
-      Math.max(0, Math.min(1, vol)),
+      Math.max(0, Math.min(1, vol)) * _catVol(name),
       ac.currentTime + ramp
     );
   },
+
+  /**
+   * Set a category volume (0–1) from the Settings sliders.
+   * Categories: 'music' (background drone), 'footsteps', 'jumpscares'
+   * (scare stings, screams, whispers, tension breathing).
+   */
+  setCategoryVolume(cat, vol) {
+    if (!(cat in _catVols)) return;
+    _catVols[cat] = Math.max(0, Math.min(1, vol));
+    // Re-apply on any running loops in that category
+    Object.keys(_gains).forEach(name => {
+      if (_catOf(name) === cat) this.setVolume(name, _rawTargets[name] ?? SOUNDS[name]?.vol ?? 1, 0.15);
+    });
+  },
+
+  getCategoryVolume(cat) { return _catVols[cat] ?? 1; },
 
   /** Stop a looping sound cleanly. */
   stop(name) {

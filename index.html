@@ -443,6 +443,28 @@
       transform:scale(1.1);
     }
     #question-room-label { color:#aa99bb; font-size:0.8rem; letter-spacing:2px; margin-bottom:8px; }
+    #question-timer {
+      display:flex; align-items:center; gap:10px;
+      margin-bottom:10px;
+    }
+    #question-timer[hidden] { display:none; }
+    #question-timer-bar-wrap {
+      flex:1; height:6px; border-radius:3px;
+      background:rgba(255,255,255,0.10);
+      overflow:hidden;
+    }
+    #question-timer-bar {
+      height:100%; width:100%; border-radius:3px;
+      background:#7fae7f;
+      transition:width 0.15s linear, background 0.3s;
+    }
+    #question-timer-num {
+      font-family:monospace; font-size:0.95rem; min-width:2ch;
+      text-align:right; color:#cfe3cf; letter-spacing:1px;
+    }
+    #question-timer.low #question-timer-bar { background:#cc3333; }
+    #question-timer.low #question-timer-num { color:#ff6666; animation:timer-pulse 0.5s infinite alternate; }
+    @keyframes timer-pulse { from { opacity:1; } to { opacity:0.45; } }
     #question-text {
       color:#fff; font-size:clamp(1rem,2vw,1.2rem); line-height:1.7;
       margin:16px 0 24px; background:rgba(60,50,80,0.7);
@@ -454,6 +476,34 @@
       border-radius:6px; display:none;
     }
     #choices-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+    /* ── MODERATE solution scaffold (tap-to-fill) ────────────────────────── */
+    #scaffold[hidden] { display:none; }
+    #scaffold-help {
+      color:var(--muted); font-size:0.78rem; margin-bottom:10px;
+      font-family:monospace;
+    }
+    #scaffold-line {
+      display:flex; align-items:center; justify-content:center;
+      gap:10px; flex-wrap:wrap;
+      font-family:monospace; font-size:1.25rem; color:var(--chalk);
+      background:rgba(9,32,28,.72); border:1px solid rgba(143,211,189,.3);
+      border-radius:8px; padding:14px; margin-bottom:16px;
+    }
+    .scaffold-slot {
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:64px; height:40px; padding:0 10px;
+      border:1px dashed rgba(143,211,189,.5); border-radius:6px;
+      color:rgba(143,211,189,.55);
+    }
+    .scaffold-slot.filled { border-style:solid; color:#aaffcc; border-color:rgba(143,211,189,.8); }
+    .scaffold-slot.current {
+      border-color:var(--amber); color:var(--amber);
+      box-shadow:0 0 10px rgba(212,155,69,.35);
+      animation:slotPulse 0.9s infinite alternate;
+    }
+    @keyframes slotPulse { from { opacity:1; } to { opacity:.55; } }
+    #scaffold-options { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .choice-btn {
       padding:14px 16px; border-radius:8px; border:1px solid #553355;
       background:rgba(60,40,80,0.75); color:#ddd;
@@ -522,7 +572,8 @@
       color:#ffcc88; font-family:monospace; font-size:1rem;
       letter-spacing:2px; outline:none;
     }
-    #settings-sensitivity {
+    #settings-sensitivity,
+    .settings-vol {
       width:100%; accent-color:#d49b45; touch-action:pan-x;
       cursor:pointer;
     }
@@ -1604,6 +1655,7 @@
         padding:22px;
       }
       #choices-grid { grid-template-columns:1fr; }
+      #scaffold-options { grid-template-columns:1fr; }
       #ready-content h2,
       #s-win h1,
       #s-lose h1,
@@ -1724,6 +1776,8 @@
       .about-section-title {
         font-size:.68rem;
       }
+      /* keep the countdown clear of the round exit button */
+      #question-timer { margin-right:46px; }
       #plearn-title,
       #settings-box h2,
       #about-box h2,
@@ -2145,8 +2199,17 @@
   <div id="question-box">
     <button id="btn-question-exit" type="button" aria-label="Return to room">×</button>
     <div id="question-room-label">ROOM 1</div>
+    <div id="question-timer" hidden>
+      <div id="question-timer-bar-wrap"><div id="question-timer-bar"></div></div>
+      <span id="question-timer-num">15</span>
+    </div>
     <div id="question-text">Question goes here.</div>
     <div id="hint-box"></div>
+    <div id="scaffold" hidden>
+      <div id="scaffold-help">Complete the solution — tap the value that fills the glowing blank.</div>
+      <div id="scaffold-line"></div>
+      <div id="scaffold-options"></div>
+    </div>
     <div id="choices-grid">
       <button class="choice-btn" data-idx="0"></button>
       <button class="choice-btn" data-idx="1"></button>
@@ -2187,6 +2250,30 @@
       <input id="settings-sensitivity" type="range" min="45" max="180" step="5" value="100"/>
     </div>
 
+    <div class="settings-row">
+      <label class="settings-label-line" for="settings-vol-music">
+        <span>MUSIC VOLUME</span>
+        <span id="settings-vol-music-value">100%</span>
+      </label>
+      <input id="settings-vol-music" class="settings-vol" data-cat="music" type="range" min="0" max="100" step="5" value="100"/>
+    </div>
+
+    <div class="settings-row">
+      <label class="settings-label-line" for="settings-vol-footsteps">
+        <span>FOOTSTEPS VOLUME</span>
+        <span id="settings-vol-footsteps-value">100%</span>
+      </label>
+      <input id="settings-vol-footsteps" class="settings-vol" data-cat="footsteps" type="range" min="0" max="100" step="5" value="100"/>
+    </div>
+
+    <div class="settings-row">
+      <label class="settings-label-line" for="settings-vol-jumpscares">
+        <span>JUMPSCARE VOLUME</span>
+        <span id="settings-vol-jumpscares-value">100%</span>
+      </label>
+      <input id="settings-vol-jumpscares" class="settings-vol" data-cat="jumpscares" type="range" min="0" max="100" step="5" value="100"/>
+    </div>
+
     <div id="settings-scores">
       <h3>ROOM SCORES</h3>
       <div class="score-row">
@@ -2221,7 +2308,7 @@
 
     <div class="about-section">
       <div class="about-section-title">PURPOSE</div>
-      <p>An interactive 3D escape room game designed as an educational intervention for Grade 8 students studying Simple Probability. Learners solve probability problems to escape from haunted classrooms.</p>
+      <p>The primary goal of this study is to enhance students’ skills in solving probability problems through an interactive, game-based learning activity. By engaging in the game, students are expected to develop a stronger conceptual understanding of probability while also experiencing an enjoyable and meaningful learning process.</p>
     </div>
 
     <div class="about-section">
@@ -2244,8 +2331,14 @@
     </div>
 
     <div class="about-section">
+      <div class="about-section-title">DISCLAIMER</div>
+      <p>No copyright infringement is intended. All scenarios and situations presented in this game are products of the researchers’ creativity and are inspired by educational purposes only.</p>
+    </div>
+
+    <div class="about-section">
       <div class="about-section-title">ASSET CREDITS</div>
       <p>Ending street scene: <a href="https://sketchfab.com/3d-models/horror-street-lamp-a1d343f3935e429484c8ec8c31786a57" target="_blank" rel="noopener">Horror Street Lamp</a> by Ujjval Singhal, licensed under Creative Commons Attribution 4.0.</p>
+      <p>Additional sound effects from <a href="https://freesound.org" target="_blank" rel="noopener">freesound.org</a> (Creative Commons 0) and <a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a>.</p>
     </div>
 
     <button class="modal-back-btn" id="btn-about-back">← BACK TO MENU</button>

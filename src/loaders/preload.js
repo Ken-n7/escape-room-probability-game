@@ -3,6 +3,7 @@ import { setGltf as setChaseGltf  } from '../scares/chase.js';
 import { setGltf as setScareGltf  } from '../scares/scare.js';
 import { setGltf as setLoseGltf   } from '../scares/lose-canvas.js';
 import { showScreen } from '../ui/hud.js';
+import { gState, S } from '../core/game-state.js';
 
 const MODELS = [
   { path: '/assets/3D/horror-woman.glb',                               store: setChaseGltf, label: 'Loading entity data...'          },
@@ -76,5 +77,7 @@ export async function preloadAssets() {
   // Fade out loading screen, then switch straight to the scene-backed menu.
   screen.style.opacity = '0';
   await new Promise(r => setTimeout(r, 580));
-  showScreen('menu');
+  // Don't stomp another screen if the game already moved on (e.g. dev helpers).
+  if (gState.current === S.MENU) showScreen('menu');
+  else screen.classList.add('hidden');
 }
