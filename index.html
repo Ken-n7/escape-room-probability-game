@@ -572,7 +572,8 @@
       color:#ffcc88; font-family:monospace; font-size:1rem;
       letter-spacing:2px; outline:none;
     }
-    #settings-sensitivity {
+    #settings-sensitivity,
+    .settings-vol {
       width:100%; accent-color:#d49b45; touch-action:pan-x;
       cursor:pointer;
     }
@@ -2245,6 +2246,30 @@
         <span id="settings-sensitivity-value">100%</span>
       </label>
       <input id="settings-sensitivity" type="range" min="45" max="180" step="5" value="100"/>
+    </div>
+
+    <div class="settings-row">
+      <label class="settings-label-line" for="settings-vol-music">
+        <span>MUSIC VOLUME</span>
+        <span id="settings-vol-music-value">100%</span>
+      </label>
+      <input id="settings-vol-music" class="settings-vol" data-cat="music" type="range" min="0" max="100" step="5" value="100"/>
+    </div>
+
+    <div class="settings-row">
+      <label class="settings-label-line" for="settings-vol-footsteps">
+        <span>FOOTSTEPS VOLUME</span>
+        <span id="settings-vol-footsteps-value">100%</span>
+      </label>
+      <input id="settings-vol-footsteps" class="settings-vol" data-cat="footsteps" type="range" min="0" max="100" step="5" value="100"/>
+    </div>
+
+    <div class="settings-row">
+      <label class="settings-label-line" for="settings-vol-jumpscares">
+        <span>JUMPSCARE VOLUME</span>
+        <span id="settings-vol-jumpscares-value">100%</span>
+      </label>
+      <input id="settings-vol-jumpscares" class="settings-vol" data-cat="jumpscares" type="range" min="0" max="100" step="5" value="100"/>
     </div>
 
     <div id="settings-scores">

@@ -67,7 +67,7 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 |---|-------------|--------|-------|
 | 6.1 | Player Profile: enter/edit name | ✅ | Name field in Settings, persisted, shown in HUD and menu. |
 | 6.2 | Reset progress with confirmation prompt | ✅ | "Reset all progress and scores?" confirm; clears best scores/time. |
-| 6.3 | Sound sensitivity controls for background music, footsteps, and jumpscare volumes | ❌ | Only mouse-look sensitivity exists. No volume sliders. Audio system ([audio.js](../src/audio/audio.js)) already supports per-sound volume, so this is UI work. |
+| 6.3 | Sound sensitivity controls for background music, footsteps, and jumpscare volumes | ✅ | Three Settings sliders (Music / Footsteps / Jumpscares, 0–100%) mapped to sound categories in [audio.js](../src/audio/audio.js) (`setCategoryVolume`). Jumpscare category covers stings, screams, whispers, and the tension breathing loop. Values persist in the save and apply live, with a throttled audible preview while dragging. |
 
 ## 7. Prototype / Presentation (Canva reference)
 
@@ -114,7 +114,8 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
    2026-07-18 — tap-to-fill scaffold for Moderate; Hard stays MC per the PDF bank.
 7. ~~**P-Learn / About text alignment (5.1, 7.7)**~~ ✅ Done 2026-07-18 — PDF text imported
    verbatim; Example 3's PDF errors corrected and flagged (5.1 ❓).
-8. **Sound volume settings (6.3)** — sliders for music / footsteps / jumpscares.
+8. ~~**Sound volume settings (6.3)**~~ ✅ Done 2026-07-18 — Music / Footsteps / Jumpscares
+   sliders in Settings, persisted, applied live.
 9. **Accounts + researcher monitoring (4.1–4.3)** — the only backend item; scope TBD.
 
 ## Changelog
@@ -144,3 +145,5 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
   Decision recorded: Hard stays 4-choice MC per the PDF's own bank.
 - 2026-07-18 — Queue item 7 done: P-Learn slides and About Us aligned verbatim with the
   PDF. Flagged the PDF's Example 3 copy-paste/answer errors (imported as 10/40 = 1/4).
+- 2026-07-18 — Queue item 8 done: volume sliders for background music, footsteps, and
+  jumpscares in Settings (persisted, live category volumes in the audio manager).

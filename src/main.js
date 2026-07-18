@@ -79,8 +79,17 @@ let bestScores = _save.bestScores || [null, null, null];
 let bestTime   = _save.bestTime   || null;
 setLookSensitivity(normalizeSensitivity(_save.lookSensitivity));
 
+// Sound category volumes (spec 6.3) — 0..1, applied via AudioManager
+const soundVols = { music: 1, footsteps: 1, jumpscares: 1, ..._save.soundVols };
+Object.entries(soundVols).forEach(([cat, v]) => {
+  const n = Number(v);
+  const clamped = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1;
+  soundVols[cat] = clamped;
+  AudioManager.setCategoryVolume(cat, clamped);
+});
+
 function persistSave() {
-  writeSave({ playerName, bestScores, bestTime, lookSensitivity });
+  writeSave({ playerName, bestScores, bestTime, lookSensitivity, soundVols });
 }
 
 // ── Game state ────────────────────────────────────────────────────────────────
@@ -200,6 +209,16 @@ function updateSensitivityUI() {
   const percent = Math.round(lookSensitivity * 100);
   elSensitivity.value = String(percent);
   elSensitivityValue.textContent = percent + '%';
+}
+
+function updateVolumeUI() {
+  document.querySelectorAll('.settings-vol').forEach(slider => {
+    const cat = slider.dataset.cat;
+    const percent = Math.round((soundVols[cat] ?? 1) * 100);
+    slider.value = String(percent);
+    const label = $(slider.id + '-value');
+    if (label) label.textContent = percent + '%';
+  });
 }
 
 function updateSettingsScores() {
@@ -375,6 +394,7 @@ function openSettings(from = 'menu') {
   $('settings-name').value = playerName;
   $('settings-saved').textContent = '';
   updateSensitivityUI();
+  updateVolumeUI();
   updateFullscreenLabel();
   updateSettingsScores();
   $('btn-settings-back').textContent = from === 'options' ? '← BACK TO GAME' : '← BACK TO MENU';
@@ -1314,6 +1334,24 @@ elSensitivity?.addEventListener('input', e => {
   setLookSensitivity(normalizeSensitivity(Number(e.target.value)));
   updateSensitivityUI();
   persistSave();
+});
+let _volPreviewAt = 0;
+document.querySelectorAll('.settings-vol').forEach(slider => {
+  slider.addEventListener('input', e => {
+    const cat = e.target.dataset.cat;
+    const v = Math.max(0, Math.min(1, Number(e.target.value) / 100));
+    soundVols[cat] = v;
+    AudioManager.setCategoryVolume(cat, v);
+    updateVolumeUI();
+    persistSave();
+    // Audible preview (throttled) so the level can be judged while dragging
+    const now = performance.now();
+    if (now - _volPreviewAt > 300) {
+      _volPreviewAt = now;
+      if (cat === 'footsteps')  AudioManager.play('footstep');
+      if (cat === 'jumpscares') AudioManager.play('randomTone');
+    }
+  });
 });
 $('btn-settings-back').onclick = () => {
   if (settingsFrom === 'options') openOptions(false); else showScreen('menu');
