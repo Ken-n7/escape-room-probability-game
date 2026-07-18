@@ -1,6 +1,12 @@
 # Design Exploration — Room Layout v2 & Note Hunting
 
-Research + proposal doc. Nothing here is built yet — read, mark up, veto freely.
+> **Status 2026-07-19:** Layout superseded by the owner's pick — an **L-shaped**
+> school (5 vacant + 3 real + 2 decoy rooms) instead of §2's straight interleave.
+> Built and shipped; see the tracking doc changelog. Proposal B (containers)
+> is still pending and unchanged. Decoy doors are **always unlocked** (the
+> "cruel" fake-locked variant was not chosen).
+
+Research + proposal doc — read, mark up, veto freely.
 The two problems being solved (raised 2026-07-18):
 
 1. **Layout is too legible.** Question rooms all on the right, vacant rooms all on

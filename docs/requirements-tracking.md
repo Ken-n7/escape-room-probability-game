@@ -17,8 +17,8 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1.1 | 5 main doors: Entrance, Room 1 (Easy), Room 2 (Moderate), Room 3 (Hard), Exit | 🟡 | 3 level rooms + exit door with keypad exist along one hallway ([world.js](../src/world/world.js), rooms at z 7–19 / 23–35 / 39–51, exit at z 53.5). No distinct entrance door — player spawns inside. |
-| 1.2 | Level rooms not close/beside each other | 🟡 | Rooms are separated by ~4 units of hallway wall, but there is nothing between them. |
+| 1.1 | 5 main doors: Entrance, Room 1 (Easy), Room 2 (Moderate), Room 3 (Hard), Exit | ✅ | L-shaped school (2026-07-19): leg 1 holds Room 1 → Decoy 1 → Room 2, the corridor bends right at a corner, leg 2 holds Decoy 2 → Room 3 → exit door with keypad. **5 wooden doors** (3 real + 2 decoys that look identical) + the exit. No distinct entrance door — player spawns inside (unchanged). |
+| 1.2 | Level rooms not close/beside each other | ✅ | Decoy classrooms and vacant rooms sit between the levels; the corner splits the school in two. Walking Room 2 → Room 3 crosses the corner past two dark doorways and a decoy. |
 | 1.3 | At least 5 empty/vacant rooms between levels for creepy aesthetics (crying/laughing sounds, school works, abandoned rooms) — Slendrina-style | ✅ | 5 vacant abandoned classrooms along the left side of the hallway ([world.js](../src/world/world.js) `VACANT_ROOMS`): dark open doorways between the lockers, overturned/askew desks, scattered school work, chalk scrawls ("HELP US", "P(ESCAPE) = 0"…). Entering one triggers a creepy sound with a 30s per-room cooldown — now drawing from real **crying and laughing** clips (freesound.org CC0) plus moans/whispers, as the spec asks. |
 | 1.4 | Doors 2 and 3 locked until previous room completed | ✅ | Wooden door panels in every doorway ([world.js](../src/world/world.js) `buildDoor`). Rooms 2/3 start locked (blocking movement) and swing open with an audio cue when the previous room is cleared. Room 1's door starts open. Notes can no longer be examined through walls from the hallway. |
 | 1.5 | Jumpscare when trying to open a locked door | ✅ | Interacting with a locked door flashes the jumpscare face + sting + screenshake (non-lethal) and shows "🔒 LOCKED — clear Room N first" ([main.js](../src/main.js) `triggerLockedDoorScare`, 4s cooldown so it can't be spammed). |
@@ -156,3 +156,13 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
   the dark, then stutters back — 25% chance the ghost is standing there when they
   return. Can only start while roaming (never inside a question), mutually exclusive
   with the ghost apparition, cleaned up on reset.
+- 2026-07-19 — **Layout v2 (owner-requested, per design doc):** the school is now
+  L-shaped. Leg 1: Room 1 → Decoy 1 → Room 2 with two vacant rooms opposite; a vacant
+  doorway sits dead ahead at the corner; leg 2: Decoy 2 → Room 3 → exit keypad, with
+  two more vacants. The 2 decoy classrooms have identical wooden doors (always
+  unlocked, open on interact), full classroom interiors with **lying chalkboard
+  labels** ("ROOM 2"/"ROOM 3"), desks facing the back wall, a faint "IT LIED" scrawl,
+  no notes — and stepping inside trips the blackout once per run. World builder
+  rewritten around per-room frames (rooms can face any wall). Also fixed: corridor
+  floors/ceilings were mis-sized on the old map; chalkboard text was occluded by its
+  frame; chase spawn no longer clamps to the old single-hallway x-range.
