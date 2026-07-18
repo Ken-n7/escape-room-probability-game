@@ -30,8 +30,8 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 | 2.1 | Exactly 5 problems per level | ✅ | 5 questions per room ([questions.js](../src/data/questions.js)), order shuffled each run. |
 | 2.2 | If time runs out, player restarts the level with a *different* problem | ✅ | On timeout the room resets to Q1 and its 5 problems are re-drawn from the full bank. An in-modal "TIME'S UP" notice shows, then the player re-examines the note to start over. |
 | 2.3 | 15-second answer time limit — starts only when the player begins answering, not while browsing/roaming | ✅ | Countdown bar + seconds in the question modal; starts when the question opens (roaming untimed), resets to 15s on each new question and each wrong-answer retry. P-LEARN mode is untimed. Limit configurable via `CFG.gameplay.answerTimeSeconds`. **Known accepted behavior:** closing the modal cancels the timer (browsing is untimed per spec), so a player can dodge a near-timeout by exiting — flag to researchers if this matters. |
-| 2.4 | Player roams the room to find questions/problems | ✅ | 5 notes per room at scattered spots: teacher's desk, two student desks, bookshelf side, back wall by the exit sign ([world.js](../src/world/world.js) `noteSpots`). |
-| 2.5 | Questions are NOT continuous — after answering problem 1, the player must find problem 2 elsewhere in the room | ✅ | One question per note; only the next unsolved note is visible/interactable. After a correct answer the modal shows "Find the next note", closes, and the next note appears elsewhere. Timeout resets the hunt to note 1 with fresh problems. |
+| 2.4 | Player roams the room to find questions/problems | ✅ | **Container search (2026-07-19, design doc Proposal B):** each classroom has 6 searchable hiding spots — teacher's desk drawer, corner cabinet, backpack, bookshelf book, trash bin, chalk tray. The current problem hides in ONE of them, randomized per question per run. Wrong containers open visually, give creepy flavor text, and can trigger a small scare (12/18/24% by room). After 2 wrong searches the right container glints (rescue rule). Searching is untimed — the 15s timer still starts at the question. |
+| 2.5 | Questions are NOT continuous — after answering problem 1, the player must find problem 2 elsewhere in the room | ✅ | After each correct answer the containers reset and the next problem re-hides in a random container. Timeout re-hides and redraws the problems. Decoy classrooms have the same 6 containers — all permanently empty, with their own flavor text and a higher scare chance. |
 | 2.6 | Wrong-answer consequences | ✅ | (Not in PDF, but present) 5 wrong answers per room trigger a chase; caught = lose. Fear staging escalates fog/vignette/audio. |
 
 ## 3. Question Content
@@ -166,3 +166,9 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
   rewritten around per-room frames (rooms can face any wall). Also fixed: corridor
   floors/ceilings were mis-sized on the old map; chalkboard text was occluded by its
   frame; chase spawn no longer clamps to the old single-hallway x-range.
+- 2026-07-19 — **Container hunting (design doc Proposal B):** face-up notes replaced by
+  6 searchable containers per classroom (drawer, cabinet, backpack, book, bin, chalk
+  tray) with open/closed visual states. One holds the current problem (random per
+  question per run — Granny/Slendrina-style placement randomization); wrong searches
+  give flavor text + escalating scare chance; rescue glint after 2 wrong searches.
+  Decoy classrooms have the same containers, always empty.

@@ -166,6 +166,14 @@ const paperMat     = new THREE.MeshBasicMaterial({ color: 0x6e6a5e });
 const bookMats     = [0x6b1a1a, 0x1a3a5b, 0x1a5b2a, 0x5b4a1a, 0x3a1a5b]
   .map(c => new THREE.MeshBasicMaterial({ color: c }));
 
+// Searchable-container materials (design doc Proposal B)
+const drawerMat   = new THREE.MeshBasicMaterial({ color: 0x3b2a15 });
+const cabinetMat  = new THREE.MeshBasicMaterial({ color: 0x2f3d2f });
+const backpackMat = new THREE.MeshBasicMaterial({ color: 0x4a2233 });
+const bookPullMat = new THREE.MeshBasicMaterial({ color: 0x8a2525 });
+const binMat      = new THREE.MeshBasicMaterial({ color: 0x2e2e34 });
+const eraserMat   = new THREE.MeshBasicMaterial({ color: 0x555048 });
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  GEOMETRY BATCH SYSTEM — merge all static geometry by material
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -378,33 +386,96 @@ function buildClassroom(scene, def, interactiveObjects) {
     scrawl.rotation.order = 'YXZ';
     scrawl.rotation.set(0, -Math.PI/2 + f.theta, 0);
     scene.add(scrawl);
-    return null;
   }
 
-  // Interactive notes — one per question, scattered around the room (real only)
-  const noteSpots = [
-    { u: tdu,        y: 0.84, v: tdv + 0.1, rx: -Math.PI/2, ry: 0 },          // teacher's desk
-    { u: 3.5,        y: 0.78, v: 2,         rx: -Math.PI/2, ry: 0 },          // front-left student desk
-    { u: 8.5,        y: 0.78, v: 4.5,       rx: -Math.PI/2, ry: 0 },          // back-right student desk
-    { u: bsu + 0.14, y: 1.3,  v: bsv,       rx: 0,          ry: Math.PI/2 },  // bookshelf side
-    { u: 8,          y: 1.4,  v: W - 0.02,  rx: 0,          ry: Math.PI },    // back wall near exit sign
-  ];
-  return noteSpots.map((s, noteIndex) => {
-    const noteMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.35, 0.45),
-      new THREE.MeshBasicMaterial({ color: 0xffffaa })
-    );
-    const np = P(s.u, s.v);
-    noteMesh.position.set(np.x, s.y, np.z);
-    noteMesh.rotation.order = 'YXZ';
-    noteMesh.rotation.set(s.rx, s.ry + f.theta, 0);
-    noteMesh.userData.isInteractive = true;
-    noteMesh.userData.roomIndex = def.idx;
-    noteMesh.userData.noteIndex = noteIndex;
-    scene.add(noteMesh);
-    interactiveObjects.push(noteMesh);
-    return noteMesh;
-  });
+  return buildContainers(scene, def, interactiveObjects);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SEARCHABLE CONTAINERS (Proposal B) — 6 hiding spots per classroom. The
+//  question notes live INSIDE these; main.js picks which one holds the current
+//  note. Each container has a closed and an "opened / rummaged" pose so the
+//  room visibly changes as the player searches it. Decoy classrooms get the
+//  same containers — all permanently empty.
+// ═══════════════════════════════════════════════════════════════════════════════
+function buildContainers(scene, def, interactiveObjects) {
+  const { f, P, rect, BX } = frameHelpers(def);
+  const th = f.theta;
+  const isDecoy = def.idx === null;
+  const containers = [];
+  const W3 = (u, y, v) => { const p = P(u, v); return { x: p.x, y, z: p.z }; };
+
+  const reg = (obj, handle, closed, open) => {
+    handle.userData.isContainer    = true;
+    handle.userData.roomIndex      = def.idx;
+    handle.userData.decoy          = isDecoy;
+    handle.userData.containerIndex = containers.length;
+    interactiveObjects.push(handle);
+    obj.rotation.order = 'YXZ';
+    const apply = t => {
+      obj.position.set(t.pos.x, t.pos.y, t.pos.z);
+      obj.rotation.set(t.rot[0], t.rot[1], t.rot[2]);
+    };
+    apply(closed);
+    scene.add(obj);
+    containers.push({ handle, setOpen: o => apply(o ? open : closed) });
+  };
+
+  // 0 · teacher's desk drawer — slides out toward the class
+  {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.22, 0.5), drawerMat);
+    reg(m, m,
+      { pos: W3(10.5, 0.62, 6.8),  rot: [0, th, 0] },
+      { pos: W3(10.5, 0.62, 6.42), rot: [0, th, 0] });
+  }
+
+  // 1 · storage cabinet in the back corner — door creaks open
+  {
+    BX(0.6, 2.1, 0.9, 11.05, 1.05, 0.95, deskMat);
+    const cb = rect(10.75, 11.35, 0.5, 1.4);
+    _addBox(cb.minX, cb.maxX, cb.minZ, cb.maxZ);
+    const g = new THREE.Group();
+    const doorMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.9, 0.86), cabinetMat);
+    doorMesh.position.set(0, 0, 0.43);
+    g.add(doorMesh);
+    reg(g, doorMesh,
+      { pos: W3(10.73, 1.1, 0.52), rot: [0, th, 0] },
+      { pos: W3(10.73, 1.1, 0.52), rot: [0, th - 1.5, 0] });
+  }
+
+  // 2 · backpack dropped between the desk rows — tips over when rummaged
+  {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.44, 0.2), backpackMat);
+    reg(m, m,
+      { pos: W3(5.2, 0.22, 3.3),  rot: [0.12, th + 0.7, 0] },
+      { pos: W3(5.25, 0.12, 3.4), rot: [1.35, th + 0.9, 0] });
+  }
+
+  // 3 · a red book on the shelf — pulls out and leans
+  {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.2), bookPullMat);
+    reg(m, m,
+      { pos: W3(0.62, 1.53, 1.7), rot: [0, th, 0] },
+      { pos: W3(0.82, 1.5, 1.72), rot: [0, th, -0.4] });
+  }
+
+  // 4 · trash bin by the door — knocks over
+  {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.44, 10), binMat);
+    reg(m, m,
+      { pos: W3(0.7, 0.22, 6.1),  rot: [0, 0, 0] },
+      { pos: W3(0.88, 0.14, 6.35), rot: [0, th, 1.35] });
+  }
+
+  // 5 · chalkboard tray eraser — shoved aside
+  {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.1), eraserMat);
+    reg(m, m,
+      { pos: W3(11.7, 0.86, 5.1),  rot: [0, th, 0] },
+      { pos: W3(11.66, 0.86, 5.7), rot: [0, th + 0.6, 0] });
+  }
+
+  return containers;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -686,10 +757,14 @@ export function buildWorld(scene) {
 
   buildCorridors();
 
-  const roomNotes = [null, null, null];
-  classrooms.forEach(def => {
-    const notes = buildClassroom(scene, def, interactiveObjects);
-    if (def.idx !== null) roomNotes[def.idx] = notes;
+  let decoyCounter = 0;
+  const classroomContainers = classrooms.map(def => {
+    const containers = buildClassroom(scene, def, interactiveObjects);
+    if (def.idx === null) {
+      const di = decoyCounter++;
+      containers.forEach(c => { c.handle.userData.decoyIndex = di; });
+    }
+    return { key: def.key, realIdx: def.idx, containers };
   });
   const roomDoors = classrooms.map((def, i) => buildDoor(scene, def, i, interactiveObjects));
   vacants.forEach((def, i) => buildVacantRoom(scene, def, i));
@@ -713,7 +788,7 @@ export function buildWorld(scene) {
   return {
     wallBoxes: _collision,
     interactiveObjects,
-    roomNotes,
+    classroomContainers,
     roomDoors,
     realRoomRects,
     decoyRects,

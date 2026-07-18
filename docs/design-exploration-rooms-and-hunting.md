@@ -1,10 +1,12 @@
 # Design Exploration — Room Layout v2 & Note Hunting
 
-> **Status 2026-07-19:** Layout superseded by the owner's pick — an **L-shaped**
-> school (5 vacant + 3 real + 2 decoy rooms) instead of §2's straight interleave.
-> Built and shipped; see the tracking doc changelog. Proposal B (containers)
-> is still pending and unchanged. Decoy doors are **always unlocked** (the
-> "cruel" fake-locked variant was not chosen).
+> **Status 2026-07-19:** BOTH halves are built and shipped — see the tracking doc
+> changelog. Layout: the owner picked an **L-shaped** school (5 vacant + 3 real +
+> 2 decoy rooms) instead of §2's straight interleave; decoy doors are **always
+> unlocked** (the "cruel" fake-locked variant was not chosen). Note hunting:
+> §3's soft-search containers, as designed (6 spots, random placement, rescue
+> glint after 2 wrong searches, scares on wrong searches, escalating by room).
+> Still unbuilt from this doc: §4.4 world-violations polish.
 
 Research + proposal doc — read, mark up, veto freely.
 The two problems being solved (raised 2026-07-18):
