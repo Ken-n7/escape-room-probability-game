@@ -20,8 +20,8 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 | 1.1 | 5 main doors: Entrance, Room 1 (Easy), Room 2 (Moderate), Room 3 (Hard), Exit | 🟡 | 3 level rooms + exit door with keypad exist along one hallway ([world.js](../src/world/world.js), rooms at z 7–19 / 23–35 / 39–51, exit at z 53.5). No distinct entrance door — player spawns inside. |
 | 1.2 | Level rooms not close/beside each other | 🟡 | Rooms are separated by ~4 units of hallway wall, but there is nothing between them. |
 | 1.3 | At least 5 empty/vacant rooms between levels for creepy aesthetics (crying/laughing sounds, school works, abandoned rooms) — Slendrina-style | ❌ | No vacant rooms exist. Hallway has lockers only. Ambient scare sounds (moans, whispers, screams) exist globally but are not tied to rooms. |
-| 1.4 | Doors 2 and 3 locked until previous room completed | ❌ | All rooms are open from the start; only the exit keypad requires all 3 rooms done ([main.js](../src/main.js) `openKeypad`). |
-| 1.5 | Jumpscare when trying to open a locked door | ❌ | No locked doors, so no trigger. (Jumpscare systems do exist and could be reused: [scare.js](../src/scares/scare.js), [chase.js](../src/scares/chase.js).) |
+| 1.4 | Doors 2 and 3 locked until previous room completed | ✅ | Wooden door panels in every doorway ([world.js](../src/world/world.js) `buildDoor`). Rooms 2/3 start locked (blocking movement) and swing open with an audio cue when the previous room is cleared. Room 1's door starts open. Notes can no longer be examined through walls from the hallway. |
+| 1.5 | Jumpscare when trying to open a locked door | ✅ | Interacting with a locked door flashes the jumpscare face + sting + screenshake (non-lethal) and shows "🔒 LOCKED — clear Room N first" ([main.js](../src/main.js) `triggerLockedDoorScare`, 4s cooldown so it can't be spammed). |
 
 ## 2. Gameplay Flow
 
@@ -105,7 +105,9 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
    fresh draw. P-LEARN untimed. One accepted-behavior note flagged in 2.3.
 3. ~~**One-note-per-question flow (2.5)**~~ ✅ Done 2026-07-18 — 5 scattered notes per
    room, one question each, sequential hunt with visibility gating.
-4. **Locked doors with jumpscare (1.4, 1.5)** — gate room 2 behind room 1, room 3 behind room 2.
+4. ~~**Locked doors with jumpscare (1.4, 1.5)**~~ ✅ Done 2026-07-18 — door panels in all
+   doorways; rooms 2/3 gated behind the previous room, locked-door attempts trigger a
+   non-lethal jumpscare.
 5. **Empty creepy rooms (1.3)** — at least 5 vacant rooms along the hallway.
 6. **Moderate `P(insert)` scaffold + Hard unguided format (3.2, 3.3).**
 7. **P-Learn / About text alignment (5.1, 7.7).**
@@ -127,3 +129,8 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
 - 2026-07-18 — Queue item 3 done: one note per question, 5 scattered spots per room,
   sequential hunt (only the next unsolved note is visible). Timeout resets the hunt
   to note 1.
+- 2026-07-18 — Queue item 4 done: locked doors with jumpscare. Rooms 2/3 physically
+  locked until the previous room is cleared; doors swing open on unlock. Locked-door
+  attempts fire a non-lethal jumpscare + "LOCKED" prompt. Also fixed: notes can no
+  longer be interacted with through walls, and the loading screen no longer stomps
+  the active screen if the game state moved on.

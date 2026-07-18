@@ -1,7 +1,7 @@
 import * as THREE                  from 'three';
 import { CFG }                    from './core/config.js';
 import { ROOMS, EXIT_CODE, QUESTIONS_PER_ROOM } from './data/questions.js';
-import { buildWorld, flickerLights } from './world/world.js';
+import { buildWorld, flickerLights, DOOR_OPEN_ANGLE } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
@@ -26,7 +26,7 @@ import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase
 import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
-const { wallBoxes, interactiveObjects, roomNotes } = buildWorld(scene);
+const { wallBoxes, interactiveObjects, roomNotes, roomDoors } = buildWorld(scene);
 
 // ── Menu camera ────────────────────────────────────────────────────────────────
 const MENU_CAMERA_VIEW = {
@@ -229,7 +229,62 @@ function resetProgress() {
   resetAmbientScares();
   cleanupChase();
   updateNoteVisibility();
+  updateDoorLocks({ instant: true });
   updateHUD();
+}
+
+// ── Locked doors (spec 1.4/1.5) ───────────────────────────────────────────────
+// Room 2's door stays shut until Room 1 is cleared, Room 3's until Room 2 is.
+// Trying a locked door triggers a (non-lethal) jumpscare.
+const doorIsOpen = [true, false, false];
+
+function updateDoorLocks({ instant = false } = {}) {
+  roomDoors.forEach((door, i) => {
+    const locked  = i > 0 && !roomDone[i - 1];
+    const wasOpen = doorIsOpen[i];
+    doorIsOpen[i] = !locked;
+    door.panel.userData.locked = locked;
+    if (instant) door.group.rotation.y = locked ? 0 : DOOR_OPEN_ANGLE;
+    else if (!wasOpen && !locked) AudioManager.play('randomTone');
+  });
+}
+
+const DOOR_SWING_SPEED = 1.6; // rad/sec
+function updateDoors(dt) {
+  roomDoors.forEach((door, i) => {
+    const target = doorIsOpen[i] ? DOOR_OPEN_ANGLE : 0;
+    const cur = door.group.rotation.y;
+    if (Math.abs(cur - target) < 0.001) return;
+    const step = DOOR_SWING_SPEED * dt;
+    door.group.rotation.y = cur < target
+      ? Math.min(target, cur + step)
+      : Math.max(target, cur - step);
+  });
+}
+
+let _doorScareUntil = 0;
+function triggerLockedDoorScare(doorIdx) {
+  setPromptOverride(`🔒 LOCKED — clear Room ${doorIdx} first`, 2200);
+  const now = performance.now();
+  if (now < _doorScareUntil) return;
+  _doorScareUntil = now + 4000;
+
+  const overlay = $('jumpscare-overlay');
+  overlay.classList.add('active');
+  overlay.style.opacity = '1';
+  document.body.classList.add('screenshake');
+  AudioManager.play('jumpscare');
+  flashWrongVignette(0);
+  setTimeout(() => {
+    document.body.classList.remove('screenshake');
+    overlay.style.transition = 'opacity 0.6s';
+    overlay.style.opacity = '0';
+  }, 420);
+  setTimeout(() => {
+    overlay.classList.remove('active');
+    overlay.style.transition = '';
+    overlay.style.opacity = '';
+  }, 1150);
 }
 
 // One note per question: only the note matching the room's current progress
@@ -242,6 +297,13 @@ function updateNoteVisibility() {
   });
 }
 
+// Transient message shown in the interact prompt (e.g. "LOCKED") that survives
+// the per-frame prompt refresh until it expires.
+let _promptOverride = null;
+function setPromptOverride(text, ms) {
+  _promptOverride = { text, until: performance.now() + ms };
+}
+
 function clearMovementInput() {
   Object.keys(keys).forEach(code => { keys[code] = false; });
   footstepTimer = 0;
@@ -251,14 +313,26 @@ function clearMovementInput() {
 const INTERACT_DOT = 0.72;
 const INTERACT_DIR  = new THREE.Vector3();
 const INTERACT_TO   = new THREE.Vector3();
+const INTERACT_POS  = new THREE.Vector3();
 let nearObject = null;
+
+// Notes can only be examined from inside their room — stops reaching through
+// walls (and through locked doors) from the hallway.
+function isInsideRoom(roomIdx) {
+  const [zS, zE] = CFG.world.rooms[roomIdx];
+  return camera.position.x > CFG.world.hallW / 2 &&
+         camera.position.z > zS && camera.position.z < zE;
+}
 
 function findNearObject() {
   let best = null, bestScore = -Infinity;
   camera.getWorldDirection(INTERACT_DIR);
   interactiveObjects.forEach(obj => {
     if (!obj.visible) return;
-    INTERACT_TO.subVectors(obj.position, camera.position);
+    if (obj.userData.isDoor && !obj.userData.locked) return;
+    if (obj.userData.noteIndex !== undefined && !isInsideRoom(obj.userData.roomIndex)) return;
+    obj.getWorldPosition(INTERACT_POS);
+    INTERACT_TO.subVectors(INTERACT_POS, camera.position);
     const d = INTERACT_TO.length();
     if (d > CFG.player.interactR) return;
     const facing = INTERACT_TO.normalize().dot(INTERACT_DIR);
@@ -272,6 +346,7 @@ function findNearObject() {
 function tryInteract() {
   if (gState.current !== S.PLAYING || !nearObject) return;
   if (nearObject.userData.isKeypad)                      openKeypad();
+  else if (nearObject.userData.isDoor)                   triggerLockedDoorScare(nearObject.userData.doorIndex);
   else if (nearObject.userData.roomIndex !== undefined)  openQuestion(nearObject.userData.roomIndex);
 }
 
@@ -279,6 +354,7 @@ function tryInteract() {
 function resolveCollision(pos) {
   const R = CFG.player.radius;
   for (const b of wallBoxes) {
+    if (b.doorIndex !== undefined && doorIsOpen[b.doorIndex]) continue;
     const x0=b.minX-R, x1=b.maxX+R, z0=b.minZ-R, z1=b.maxZ+R;
     if (pos.x>x0 && pos.x<x1 && pos.z>z0 && pos.z<z1) {
       const d0=x1-pos.x, d1=pos.x-x0, d2=z1-pos.z, d3=pos.z-z0;
@@ -508,6 +584,7 @@ function handleAnswer(choiceIdx) {
 
       resetFear();
       updateNoteVisibility();
+      updateDoorLocks();   // swings the next room's door open
       updateHUD();
       const flashEl = $('room-clear-flash');
       if (flashEl) { flashEl.classList.remove('active'); void flashEl.offsetWidth; flashEl.classList.add('active'); }
@@ -939,6 +1016,7 @@ function animate() {
   const t   = now * 0.001;
 
   updateFlickerLights(t, dt);
+  updateDoors(dt);
 
   if (updateStartCameraTransition(now)) { renderer.render(scene, camera); return; }
   if (gState.current === S.LOSE) { initLoseCanvas(); updateLoseCanvas(); return; }
@@ -983,16 +1061,24 @@ function animate() {
   // ── Interaction prompt ────────────────────────────────────────────────────
   nearObject = findNearObject();
   setCanInteract(Boolean(nearObject));
-  if (nearObject) {
-    const action = GameDevice.controls === 'touch' ? 'Tap !' : '[ E ]';
-    elPrompt.textContent = nearObject.userData.isKeypad ? `${action} Enter Code` : `${action} Examine`;
+  if (_promptOverride && performance.now() < _promptOverride.until) {
+    elPrompt.textContent = _promptOverride.text;
     elPrompt.style.opacity = '1';
   } else {
-    elPrompt.style.opacity = '0';
-  }
-  if (!nearObject && GameDevice.controls === 'keyboardMouse' && document.pointerLockElement !== renderer.domElement) {
-    elPrompt.textContent   = 'Click Game Area To Look';
-    elPrompt.style.opacity = '1';
+    _promptOverride = null;
+    if (nearObject) {
+      const action = GameDevice.controls === 'touch' ? 'Tap !' : '[ E ]';
+      elPrompt.textContent = nearObject.userData.isKeypad ? `${action} Enter Code`
+        : nearObject.userData.isDoor ? `${action} Open Door`
+        : `${action} Examine`;
+      elPrompt.style.opacity = '1';
+    } else {
+      elPrompt.style.opacity = '0';
+    }
+    if (!nearObject && GameDevice.controls === 'keyboardMouse' && document.pointerLockElement !== renderer.domElement) {
+      elPrompt.textContent   = 'Click Game Area To Look';
+      elPrompt.style.opacity = '1';
+    }
   }
 
   renderer.render(scene, camera);
@@ -1125,6 +1211,7 @@ function triggerDevWin() {
   correctStreak = 0;
   gameStartTime = Date.now();
   updateNoteVisibility();
+  updateDoorLocks({ instant: true });
   updateHUD();
   resetFear();
   triggerWin({ recordRun: false });
@@ -1139,6 +1226,7 @@ if (import.meta.env.DEV) {
       lookSensitivity: +lookSensitivity.toFixed(2),
       canInteract: Boolean(nearObject), target: nearObject?.userData || null,
       pLearnMode: CFG.gameplay.pLearnMode,
+      doorsOpen: [...doorIsOpen],
     }),
     getDrawnQuestions: () => shuffledQuestions.map(qs => qs.map(q => q.text.slice(0, 40))),
     setPose(p = {}) {
@@ -1164,5 +1252,6 @@ applyDeviceProfile();
 updateMenuName();
 updateFullscreenLabel();
 updateNoteVisibility();
+updateDoorLocks({ instant: true });
 animate();
 preloadAssets();
