@@ -58,7 +58,7 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 5.1 | Lesson content: PDF's P-Learn text verbatim (What is Probability, key terms, formula, Examples 1–3) | 🟡 | 6 lesson slides exist ([main.js](../src/main.js) `PLEARN_SLIDES`) covering the same topics, but wording/examples are paraphrased. Align text and examples with the PDF (die > 4, coin toss, bookshelf). |
+| 5.1 | Lesson content: PDF's P-Learn text verbatim (What is Probability, key terms, formula, Examples 1–3) | ✅ | All 6 slides now carry the PDF text: intro, the 5 key terms, the formula + examples list, and the PDF's own Examples 1–3 (die > 4, coin toss, bookshelf). **❓ Flag for researchers:** the PDF's Example 3 contains copy-paste errors — labels say "P(selecting fiction)" / "P(number greater than 4)" and the closing line says **1/3**, but 10/40 simplifies to **1/4**. Imported with corrected labels and 1/4. |
 | 5.2 | "Pascroll dapat" — scrollable presentation | 🟡 | Implemented as prev/next slides with dot navigation instead of one scrolling page. Confirm slides are acceptable. |
 
 ## 6. Settings Feature
@@ -80,7 +80,7 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
 | 7.1–7.6 | Prototype visuals (title, menu, ready screen, classroom, question UI) | ✅ | Superseded by current design — no further work. |
-| 7.7 | About Us: study goal + no-copyright statement | 🟡 | About screen exists; align wording with the PDF's About Us text (study goal + "no copyright infringement" statement). |
+| 7.7 | About Us: study goal + no-copyright statement | ✅ | PURPOSE section now carries the PDF's study-goal paragraph verbatim; a DISCLAIMER section carries the "no copyright infringement" statement verbatim. Extra sections (difficulty levels, features, asset credits) kept. |
 
 ---
 
@@ -112,7 +112,8 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
    hallway with abandoned props, scrawls, and entry-triggered scare sounds.
 6. ~~**Moderate `P(insert)` scaffold + Hard unguided format (3.2, 3.3)**~~ ✅ Done
    2026-07-18 — tap-to-fill scaffold for Moderate; Hard stays MC per the PDF bank.
-7. **P-Learn / About text alignment (5.1, 7.7).**
+7. ~~**P-Learn / About text alignment (5.1, 7.7)**~~ ✅ Done 2026-07-18 — PDF text imported
+   verbatim; Example 3's PDF errors corrected and flagged (5.1 ❓).
 8. **Sound volume settings (6.3)** — sliders for music / footsteps / jumpscares.
 9. **Accounts + researcher monitoring (4.1–4.3)** — the only backend item; scope TBD.
 
@@ -141,3 +142,5 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
 - 2026-07-18 — Queue item 6 done: Moderate questions now use the tap-to-fill
   `P(event) = ▢ = ▢` scaffold (wrong taps penalized, fresh 15s per blank).
   Decision recorded: Hard stays 4-choice MC per the PDF's own bank.
+- 2026-07-18 — Queue item 7 done: P-Learn slides and About Us aligned verbatim with the
+  PDF. Flagged the PDF's Example 3 copy-paste/answer errors (imported as 10/40 = 1/4).
