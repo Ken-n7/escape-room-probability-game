@@ -963,52 +963,65 @@ function goToStory() {
 }
 
 // ── P-Learn slides ────────────────────────────────────────────────────────────
+// Lesson text follows the researchers' PDF ("P-Learn Feature" section) verbatim.
+// Example 3's answer labels are corrected (the PDF's own copy has copy-paste
+// errors there — flagged in docs/requirements-tracking.md).
 const PLEARN_SLIDES = [
   {
     label: 'LESSON 1 / 6 — INTRODUCTION', title: 'What is Probability?',
-    body: `Probability tells us how <em>likely</em> an event is to happen.<br><br>
-           It is always a number between <strong>0</strong> and <strong>1</strong>:<br><br>
-           &nbsp;&nbsp;• <strong>0</strong> = Impossible — will <em>never</em> happen<br>
-           &nbsp;&nbsp;• <strong>0.5</strong> = Equal chance — could go either way<br>
-           &nbsp;&nbsp;• <strong>1</strong> = Certain — will <em>always</em> happen`, note: null,
+    body: `In real life, several circumstances may happen. Fortunately, we have a
+           mathematical concept that deals with the possibility of the occurrence of a
+           particular happening or event, and this is known as <strong>probability</strong>.<br><br>
+           It is also referred to as the <em>measure of chances</em>.`, note: null,
   },
   {
-    label: 'LESSON 2 / 6 — KEY TERMS', title: 'Important Terms',
-    body: `<strong>Experiment</strong> — any activity that produces outcomes<br>
-           <em style="color:#8899bb">e.g. flipping a coin, rolling a die</em><br><br>
-           <strong>Sample Space (S)</strong> — the set of ALL possible outcomes<br>
-           <em style="color:#8899bb">e.g. {Heads, Tails} for a coin flip</em><br><br>
-           <strong>Event (E)</strong> — the specific outcome(s) we want<br><br>
-           <strong>Favorable Outcomes</strong> — outcomes that match our event`, note: null,
+    label: 'LESSON 2 / 6 — KEY TERMS', title: 'Key Terms',
+    body: `<strong>Experiments</strong> — activities such as tossing of coins, rolling of dice,
+           drawing a card, or doing any activity that has several possible results like
+           predicting the weather.<br><br>
+           <strong>Outcomes</strong> — the individual results of these experiments, like 6
+           turning up in a single roll of a die.<br><br>
+           <strong>Event</strong> — any subset of the sample space, including the empty set.
+           <em style="color:#8899bb">Ex.: the event for even numbers on a single roll of a die refers to {2, 4, 6}.</em><br><br>
+           <strong>Simple Event</strong> — an event that has one possible outcome.<br><br>
+           <strong>Favorable Outcomes</strong> — an event that has produced the desired result
+           or expected event.`, note: null,
   },
   {
-    label: 'LESSON 3 / 6 — THE FORMULA', title: 'How to Calculate Probability',
-    body: `To find the probability of an event, always use this formula:`,
-    note: 'P(Event) = Favorable Outcomes ÷ Total Possible Outcomes',
+    label: 'LESSON 3 / 6 — THE FORMULA', title: 'Solving Simple Probability',
+    body: `We can solve the problems involving simple probability by identifying the number
+           of favorable outcomes divided by the total number of possible outcomes. These can
+           be computed using the formula:<br><br>
+           <em style="color:#8899bb">Examples that use probability: dice, deck of cards, coins,
+           spinners, evens, odds, etc.</em>`,
+    note: 'P(event) = number of favorable outcomes ÷ number of possible outcomes',
   },
   {
-    label: 'LESSON 4 / 6 — EASY EXAMPLE', title: 'Example: Rolling a Die',
-    body: `<strong>Problem:</strong> A fair die is rolled. What is P(rolling a 3)?<br><br>
-           → Sample Space = {1, 2, 3, 4, 5, 6} &nbsp;→&nbsp; Total = <strong>6</strong><br>
-           → Favorable outcomes = {3} &nbsp;→&nbsp; Count = <strong>1</strong><br><br>
-           Apply the formula:`,
-    note: 'P(3) = 1 ÷ 6 = 1/6 ≈ 0.17',
+    label: 'LESSON 4 / 6 — EXAMPLE 1', title: 'Rolling a Die',
+    body: `<strong>Problem:</strong> What is the probability of getting a number greater than 4
+           when a die is rolled?<br><br>
+           → number of favorable outcomes = <strong>2</strong> (5 and 6 are numbers greater than 4)<br>
+           → number of possible outcomes = <strong>6</strong> (there are 6 faces on a die)<br><br>
+           The probability of getting a number greater than 4 when a die is rolled is <strong>1/3</strong>.`,
+    note: 'P(number greater than 4) = 2/6 = 1/3',
   },
   {
-    label: 'LESSON 5 / 6 — MODERATE EXAMPLE', title: 'Example: Marbles in a Bag',
-    body: `<strong>Problem:</strong> A bag has 4 red and 6 blue marbles. What is P(red)?<br><br>
-           → Total marbles = 4 + 6 = <strong>10</strong><br>
-           → Favorable (red) = <strong>4</strong><br><br>
-           Apply the formula:`,
-    note: 'P(red) = 4 ÷ 10 = 2/5 = 0.4',
+    label: 'LESSON 5 / 6 — EXAMPLE 2', title: 'Tossing a Coin',
+    body: `<strong>Problem:</strong> A coin is tossed once. What is the probability of getting
+           a head?<br><br>
+           → number of favorable outcomes = <strong>1</strong> {head}<br>
+           → number of possible outcomes = <strong>2</strong> {tail, head}<br><br>
+           The probability of getting a head is <strong>1/2</strong>.`,
+    note: 'P(getting a head) = 1/2',
   },
   {
-    label: 'LESSON 6 / 6 — HARD EXAMPLE', title: 'Real-Life Word Problem',
-    body: `<strong>Problem:</strong> A class of 30 students has 18 girls. A student is picked at random. What is P(girl)?<br><br>
-           → Step 1: Identify total → <strong>30</strong> students<br>
-           → Step 2: Identify favorable → <strong>18</strong> girls<br>
-           → Step 3: Apply the formula:`,
-    note: 'P(girl) = 18 ÷ 30 = 3/5 = 0.6',
+    label: 'LESSON 6 / 6 — EXAMPLE 3', title: 'Books on a Shelf',
+    body: `<strong>Problem:</strong> A shelf has 15 fiction, 10 non-fiction, and 15 reference
+           books. What is the probability of selecting non-fiction?<br><br>
+           → number of favorable outcomes = <strong>10</strong> (there are 10 non-fiction books)<br>
+           → number of possible outcomes = <strong>40</strong> (there are 40 books in total)<br><br>
+           The probability of selecting a non-fiction book is <strong>1/4</strong>.`,
+    note: 'P(selecting non-fiction) = 10/40 = 1/4',
   },
 ];
 let plearnIdx = 0;
