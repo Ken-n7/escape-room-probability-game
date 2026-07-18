@@ -93,6 +93,7 @@ function lockerTex() {
 //  Hallway lockers stay Lambert so fluorescent flicker visibly changes the hall.
 // ═══════════════════════════════════════════════════════════════════════════════
 const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#3c3c3c'), emissive: 0x050608, emissiveIntensity: 0.22 });
+const doorPanelMat = new THREE.MeshLambertMaterial({ map: grungeTex('#41301c'), emissive: 0x080503, emissiveIntensity: 0.3 });
 const floorMat     = new THREE.MeshLambertMaterial({ map: floorTex(), emissive: 0x070707, emissiveIntensity: 0.28 });
 const ceilMat      = new THREE.MeshLambertMaterial({ color: 0x202020, emissive: 0x030304, emissiveIntensity: 0.16 });
 // — furniture stays MeshBasicMaterial (saves lighting calc on tiny geometry) —
@@ -269,6 +270,45 @@ function buildRoom(scene, roomIndex, interactiveObjects) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  ROOM DOORS — rooms 2 and 3 stay locked until the previous room is cleared
+//  (spec 1.4). The hinge group sits at the doorway's near edge; main.js swings
+//  rotation.y open once the gate condition is met.
+// ═══════════════════════════════════════════════════════════════════════════════
+export const DOOR_OPEN_ANGLE = 1.92;   // ~110°, swings into the room past the bookshelf
+
+function buildDoor(scene, roomIndex, interactiveObjects) {
+  const [, , dzS, dzE] = rooms[roomIndex];
+  const w = dzE - dzS;
+
+  const group = new THREE.Group();
+  group.position.set(HALF_W, 0, dzS);
+
+  // Panel is a child offset from the hinge, so the group's rotation swings it
+  // and getWorldPosition() (used by the interact check) tracks the door centre.
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.09, doorH - 0.05, w - 0.06),
+    doorPanelMat
+  );
+  panel.position.set(0, (doorH - 0.05) / 2, (w - 0.06) / 2 + 0.03);
+  panel.userData.isDoor    = true;
+  panel.userData.doorIndex = roomIndex;
+  panel.userData.locked    = roomIndex > 0;
+  group.add(panel);
+  interactiveObjects.push(panel);
+
+  // Handle plates on both faces, latch side
+  const handleGeo = new THREE.BoxGeometry(0.05, 0.2, 0.06);
+  [-0.08, 0.08].forEach(hx => {
+    const handle = new THREE.Mesh(handleGeo, darkMat);
+    handle.position.set(hx, 1.05, w - 0.35);
+    group.add(handle);
+  });
+
+  scene.add(group);
+  return { group, panel };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  EXIT DOOR
 // ═══════════════════════════════════════════════════════════════════════════════
 function buildExitDoor(scene, interactiveObjects) {
@@ -438,6 +478,10 @@ function buildCollision() {
   // Hall lockers protrude into the walking lane slightly.
   add(-hw-0.3,-hw+0.5,0,hl);
 
+  // Room doors — main.js skips these boxes once the door is open.
+  rooms.forEach(([,,dzS,dzE], i) =>
+    boxes.push({ minX: hw-0.15, maxX: hw+0.15, minZ: dzS, maxZ: dzE, doorIndex: i }));
+
   rooms.forEach(([zS, zE]) => {
     const cx = HALF_W + roomW / 2;
     const cz = (zS + zE) / 2;
@@ -466,6 +510,7 @@ export function buildWorld(scene) {
   buildHallway();
   const interactiveObjects = [];
   const roomNotes = rooms.map((_, i) => buildRoom(scene, i, interactiveObjects));
+  const roomDoors = rooms.map((_, i) => buildDoor(scene, i, interactiveObjects));
   rooms.forEach(([zS, zE], i) => {
     const light = new THREE.PointLight(ROOM_LIGHT_COLORS[i], 1.15, 12, 2);
     light.position.set(HALF_W + roomW / 2, 2.0, (zS + zE) / 2);
@@ -474,5 +519,5 @@ export function buildWorld(scene) {
   buildExitDoor(scene, interactiveObjects);
   addLights(scene);
   _flush(scene);   // merge all batched geometry → ~15 draw calls total
-  return { wallBoxes: buildCollision(), interactiveObjects, roomNotes, exitZ };
+  return { wallBoxes: buildCollision(), interactiveObjects, roomNotes, roomDoors, exitZ };
 }
