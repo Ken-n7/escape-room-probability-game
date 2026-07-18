@@ -151,3 +151,8 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
   laughs, whisper, knocking, moan, drone swell). Vacant rooms now use real
   crying/laughing; ambient noise pool grew from 4 to 10 sounds. Credit line added
   to About.
+- 2026-07-18 — New blackout scare (not in PDF; owner-requested): as a third outcome of
+  the roaming tension trigger (~22%), every light dies for ~2.5–3.5s with a sound in
+  the dark, then stutters back — 25% chance the ghost is standing there when they
+  return. Can only start while roaming (never inside a question), mutually exclusive
+  with the ghost apparition, cleaned up on reset.

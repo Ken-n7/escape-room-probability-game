@@ -18,7 +18,10 @@ const NOISE_SOUNDS = [
 ];
 const WALK_DELAY   = 3.2;   // commit to movement before tension can pay off
 const TURN_TRIGGER = 0.55;
-const VISUAL_CHANCE = 0.32;
+const VISUAL_CHANCE   = 0.32;  // ghost apparition
+const BLACKOUT_CHANCE = 0.22;  // total light failure (rest of the roll = noise)
+const BLACKOUT_SOUNDS = ['randomKnock', 'randomWhisper2', 'randomCrying2', 'randomRunning'];
+const BLACKOUT_GHOST_CHANCE = 0.25; // ghost standing there when the lights return
 
 const _cooldownRng = () => 34 + Math.random() * 28;
 const _initialCooldownRng = () => 18 + Math.random() * 14;
@@ -115,8 +118,45 @@ export function clearScareSprite() {
   if (_state.mixer)     { _state.mixer.stopAllAction(); _state.mixer = null; }
 }
 
+// ── Blackout scare — every light in the school dies for a few seconds ────────
+// Uses the same dim/restore pair as the ghost spawn, so the two are mutually
+// exclusive (double-dimming would corrupt the saved light intensities).
+const _blackout = { active: false, timers: [] };
+
+export function clearBlackout() {
+  _blackout.timers.forEach(clearTimeout);
+  _blackout.timers = [];
+  if (_blackout.active) {
+    _restoreWorldLights();
+    _blackout.active = false;
+  }
+}
+
+export function triggerBlackout() {
+  if (_blackout.active || _state.sprite) return;
+  _blackout.active = true;
+  const at = (ms, fn) => _blackout.timers.push(setTimeout(fn, ms));
+
+  _dimWorldLights();                       // lights cut
+
+  // something moves in the dark…
+  at(650, () => AudioManager.play(
+    BLACKOUT_SOUNDS[Math.floor(Math.random() * BLACKOUT_SOUNDS.length)]));
+
+  // stutter back on: on → off → on (strictly alternating dim/restore pairs)
+  const hold = 2400 + Math.random() * 1000;
+  at(hold,       () => _restoreWorldLights());
+  at(hold + 90,  () => _dimWorldLights());
+  at(hold + 240, () => {
+    _restoreWorldLights();
+    _blackout.active = false;
+    _blackout.timers = [];
+    if (Math.random() < BLACKOUT_GHOST_CHANCE) _spawnScare(0);
+  });
+}
+
 function _spawnScare(turnDir) {
-  if (_state.sprite) return;
+  if (_state.sprite || _blackout.active) return;
 
   _loadModel(gltf => {
     if (_state.sprite) return;
@@ -167,8 +207,10 @@ function _playRandomNoise() {
 }
 
 function _resolveTensionTrigger(turnDir) {
-  if (Math.random() < VISUAL_CHANCE) _spawnScare(turnDir);
-  else _playRandomNoise();
+  const roll = Math.random();
+  if (roll < VISUAL_CHANCE)                         _spawnScare(turnDir);
+  else if (roll < VISUAL_CHANCE + BLACKOUT_CHANCE)  triggerBlackout();
+  else                                              _playRandomNoise();
   _state.cooldown  = _cooldownRng();
   _state.turnAccum = 0;
   _state.walkTime  = 0;
@@ -217,6 +259,7 @@ export function updateAmbientScares(dt) {
 
 export function resetAmbientScares() {
   clearScareSprite();
+  clearBlackout();
   _state.prevYaw    = null;
   _state.turnAccum  = 0;
   _state.turnWindow = 0;
