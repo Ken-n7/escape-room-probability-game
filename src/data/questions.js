@@ -16,8 +16,8 @@
 //    hint     shown before the question in P-LEARN mode
 //    steps    (MODERATE only) the correct fill-in values for the PDF's
 //             "P(insert) = (insert)/(insert)" solution scaffold, in order —
-//             substitution first, then simplification. Rendered answer-only
-//             for now; the scaffold UI is tracked in docs/requirements-tracking.md.
+//             substitution first, then simplification. Rendered as the
+//             tap-to-fill scaffold in the question modal (main.js).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const ROOMS = [

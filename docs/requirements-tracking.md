@@ -43,8 +43,8 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
 | 3.1 | Room 1 Easy: PDF's 15 multiple-choice items, verbatim | ✅ | All 15 items imported verbatim; 5 drawn at random per run. **❓ Flag for researchers:** the PDF key for item 10 ("number of favorable outcome/s" for one coin toss) marks **1/2**, but the count of favorable outcomes is **1** — imported with the conceptually correct key pending confirmation (see note in [questions.js](../src/data/questions.js)). |
-| 3.2 | Room 2 Moderate: PDF's 10 guided problems — favorable/total given, player fills in the `P(insert)` solution steps | 🟡 | All 10 items imported verbatim **with their solution-step data** (`steps` field). Currently rendered answer-only in the 4-choice modal; the tap-to-fill scaffold UI is queue item 6. |
-| 3.3 | Room 3 Hard: PDF's 10 independent real-life word problems | 🟡 | All 10 items imported verbatim; rendered as 4-choice MC. Whether Hard should use a non-MC answer format is part of queue item 6. |
+| 3.2 | Room 2 Moderate: PDF's 10 guided problems — favorable/total given, player fills in the `P(insert)` solution steps | ✅ | Tap-to-fill scaffold: the modal shows `P(event) = ▢ = ▢` and the player taps the value that fills each glowing blank in order (substitution → simplified). Wrong taps count as wrong answers; each blank gets a fresh 15s. Distractors for the substitution blank are generated so no numerically-equivalent value is marked wrong; the final blank uses the PDF's own answer choices. |
+| 3.3 | Room 3 Hard: PDF's 10 independent real-life word problems | ✅ | **Decision (2026-07-18):** Hard stays 4-choice multiple choice — that is the format of the PDF's own Hard bank, and "independent" is expressed by giving no scaffold/steps (the player identifies data and computes alone). Flag to researchers if they wanted free-input answers instead. |
 
 ## 4. Accounts & Progress
 
@@ -110,7 +110,8 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
    non-lethal jumpscare.
 5. ~~**Empty creepy rooms (1.3)**~~ ✅ Done 2026-07-18 — 5 vacant classrooms off the
    hallway with abandoned props, scrawls, and entry-triggered scare sounds.
-6. **Moderate `P(insert)` scaffold + Hard unguided format (3.2, 3.3).**
+6. ~~**Moderate `P(insert)` scaffold + Hard unguided format (3.2, 3.3)**~~ ✅ Done
+   2026-07-18 — tap-to-fill scaffold for Moderate; Hard stays MC per the PDF bank.
 7. **P-Learn / About text alignment (5.1, 7.7).**
 8. **Sound volume settings (6.3)** — sliders for music / footsteps / jumpscares.
 9. **Accounts + researcher monitoring (4.1–4.3)** — the only backend item; scope TBD.
@@ -137,3 +138,6 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
   the active screen if the game state moved on.
 - 2026-07-18 — Queue item 5 done: 5 vacant creepy rooms on the hallway's left side
   (open doorways, abandoned desks, papers, chalk scrawls, entry-triggered sounds).
+- 2026-07-18 — Queue item 6 done: Moderate questions now use the tap-to-fill
+  `P(event) = ▢ = ▢` scaffold (wrong taps penalized, fresh 15s per blank).
+  Decision recorded: Hard stays 4-choice MC per the PDF's own bank.
