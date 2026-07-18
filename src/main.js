@@ -1,7 +1,7 @@
 import * as THREE                  from 'three';
 import { CFG }                    from './core/config.js';
 import { ROOMS, EXIT_CODE, QUESTIONS_PER_ROOM } from './data/questions.js';
-import { buildWorld, flickerLights, DOOR_OPEN_ANGLE, VACANT_ROOMS } from './world/world.js';
+import { buildWorld, flickerLights, DOOR_OPEN_ANGLE } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
@@ -26,7 +26,12 @@ import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase
 import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
-const { wallBoxes, interactiveObjects, roomNotes, roomDoors } = buildWorld(scene);
+const {
+  wallBoxes, interactiveObjects, roomNotes, roomDoors,
+  realRoomRects, decoyRects, vacantRects,
+} = buildWorld(scene);
+
+const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
 
 // ── Menu camera ────────────────────────────────────────────────────────────────
 const MENU_CAMERA_VIEW = {
@@ -249,29 +254,46 @@ function resetProgress() {
   cleanupChase();
   updateNoteVisibility();
   updateDoorLocks({ instant: true });
+  _decoyTripped = decoyRects.map(() => false);
   updateHUD();
 }
 
-// ── Locked doors (spec 1.4/1.5) ───────────────────────────────────────────────
-// Room 2's door stays shut until Room 1 is cleared, Room 3's until Room 2 is.
-// Trying a locked door triggers a (non-lethal) jumpscare.
-const doorIsOpen = [true, false, false];
+// ── Doors (spec 1.4/1.5 + decoys) ─────────────────────────────────────────────
+// 5 wooden doors: 3 real classrooms + 2 decoys. Real rooms 2/3 stay locked
+// (with a jumpscare on attempt) until the previous level is cleared. Decoy
+// doors are always unlocked and swing open when interacted with — the room
+// inside just isn't what it pretends to be.
+const doorIsOpen = roomDoors.map(d => d.realIdx === 0);   // room 1 starts open
 
 function updateDoorLocks({ instant = false } = {}) {
   roomDoors.forEach((door, i) => {
-    const locked  = i > 0 && !roomDone[i - 1];
+    if (door.realIdx === null) {
+      door.panel.userData.locked = false;
+      if (instant) {              // resets shut the decoys again
+        doorIsOpen[i] = false;
+        door.group.rotation.y = door.baseTheta;
+      }
+      return;
+    }
+    const locked  = door.realIdx > 0 && !roomDone[door.realIdx - 1];
     const wasOpen = doorIsOpen[i];
     doorIsOpen[i] = !locked;
     door.panel.userData.locked = locked;
-    if (instant) door.group.rotation.y = locked ? 0 : DOOR_OPEN_ANGLE;
+    if (instant) door.group.rotation.y = door.baseTheta + (locked ? 0 : DOOR_OPEN_ANGLE);
     else if (!wasOpen && !locked) AudioManager.play('randomTone');
   });
+}
+
+function openDecoyDoor(i) {
+  if (doorIsOpen[i]) return;
+  doorIsOpen[i] = true;
+  AudioManager.play('randomTone');
 }
 
 const DOOR_SWING_SPEED = 1.6; // rad/sec
 function updateDoors(dt) {
   roomDoors.forEach((door, i) => {
-    const target = doorIsOpen[i] ? DOOR_OPEN_ANGLE : 0;
+    const target = door.baseTheta + (doorIsOpen[i] ? DOOR_OPEN_ANGLE : 0);
     const cur = door.group.rotation.y;
     if (Math.abs(cur - target) < 0.001) return;
     const step = DOOR_SWING_SPEED * dt;
@@ -282,8 +304,8 @@ function updateDoors(dt) {
 }
 
 let _doorScareUntil = 0;
-function triggerLockedDoorScare(doorIdx) {
-  setPromptOverride(`🔒 LOCKED — clear Room ${doorIdx} first`, 2200);
+function triggerLockedDoorScare(prevRoomNum) {
+  setPromptOverride(`🔒 LOCKED — clear Room ${prevRoomNum} first`, 2200);
   const now = performance.now();
   if (now < _doorScareUntil) return;
   _doorScareUntil = now + 4000;
@@ -338,9 +360,7 @@ let nearObject = null;
 // Notes can only be examined from inside their room — stops reaching through
 // walls (and through locked doors) from the hallway.
 function isInsideRoom(roomIdx) {
-  const [zS, zE] = CFG.world.rooms[roomIdx];
-  return camera.position.x > CFG.world.hallW / 2 &&
-         camera.position.z > zS && camera.position.z < zE;
+  return inRect(realRoomRects[roomIdx], camera.position.x, camera.position.z);
 }
 
 function findNearObject() {
@@ -348,7 +368,8 @@ function findNearObject() {
   camera.getWorldDirection(INTERACT_DIR);
   interactiveObjects.forEach(obj => {
     if (!obj.visible) return;
-    if (obj.userData.isDoor && !obj.userData.locked) return;
+    // Doors: interactable when locked (→ scare) or when a closed decoy (→ open)
+    if (obj.userData.isDoor && !obj.userData.locked && doorIsOpen[obj.userData.doorIndex]) return;
     if (obj.userData.noteIndex !== undefined && !isInsideRoom(obj.userData.roomIndex)) return;
     obj.getWorldPosition(INTERACT_POS);
     INTERACT_TO.subVectors(INTERACT_POS, camera.position);
@@ -364,9 +385,15 @@ function findNearObject() {
 
 function tryInteract() {
   if (gState.current !== S.PLAYING || !nearObject) return;
-  if (nearObject.userData.isKeypad)                      openKeypad();
-  else if (nearObject.userData.isDoor)                   triggerLockedDoorScare(nearObject.userData.doorIndex);
-  else if (nearObject.userData.roomIndex !== undefined)  openQuestion(nearObject.userData.roomIndex);
+  if (nearObject.userData.isKeypad) {
+    openKeypad();
+  } else if (nearObject.userData.isDoor) {
+    const i = nearObject.userData.doorIndex;
+    if (nearObject.userData.locked) triggerLockedDoorScare(roomDoors[i].realIdx);
+    else openDecoyDoor(i);
+  } else if (nearObject.userData.roomIndex !== undefined) {
+    openQuestion(nearObject.userData.roomIndex);
+  }
 }
 
 // ── Collision ─────────────────────────────────────────────────────────────────
@@ -1139,14 +1166,12 @@ const VACANT_ENTRY_SOUNDS = [
   'randomCrying1', 'randomCrying2', 'randomLaughKids', 'randomLaughEvil',
   'randomMoan', 'randomScareWhisper',
 ];
-const _vacantSoundCooldown = VACANT_ROOMS.map(() => 0);
+const _vacantSoundCooldown = vacantRects.map(() => 0);
 let _insideVacantIdx = -1;
 
 function updateVacantRoomSounds() {
   const x = camera.position.x, z = camera.position.z;
-  const idx = x < -CFG.world.hallW / 2
-    ? VACANT_ROOMS.findIndex(v => z > v.zS && z < v.zE)
-    : -1;
+  const idx = vacantRects.findIndex(r => inRect(r, x, z));
   if (idx !== -1 && idx !== _insideVacantIdx) {
     const now = performance.now();
     if (now > _vacantSoundCooldown[idx]) {
@@ -1155,6 +1180,18 @@ function updateVacantRoomSounds() {
     }
   }
   _insideVacantIdx = idx;
+}
+
+// ── Decoy rooms — stepping inside for the first time each run kills the lights
+let _decoyTripped = decoyRects.map(() => false);
+
+function updateDecoyTraps() {
+  const x = camera.position.x, z = camera.position.z;
+  decoyRects.forEach((r, i) => {
+    if (_decoyTripped[i] || !inRect(r, x, z)) return;
+    _decoyTripped[i] = true;
+    triggerBlackout();
+  });
 }
 
 // ── Threat audio ──────────────────────────────────────────────────────────────
@@ -1199,7 +1236,7 @@ function animate() {
 
   updateThreatAudio(dt);
   updateAmbientScares(dt);
-  if (gState.current === S.PLAYING) updateVacantRoomSounds();
+  if (gState.current === S.PLAYING) { updateVacantRoomSounds(); updateDecoyTraps(); }
 
   if (gState.current === S.CHASE) { updateChase(dt); renderer.render(scene, camera); return; }
   if (gState.current !== S.PLAYING) { renderer.render(scene, camera); return; }
@@ -1420,6 +1457,8 @@ if (import.meta.env.DEV) {
       canInteract: Boolean(nearObject), target: nearObject?.userData || null,
       pLearnMode: CFG.gameplay.pLearnMode,
       doorsOpen: [...doorIsOpen],
+      doorKeys: roomDoors.map(d => d.key),
+      decoysTripped: [..._decoyTripped],
     }),
     getDrawnQuestions: () => shuffledQuestions.map(qs => qs.map(q => q.text.slice(0, 40))),
     setPose(p = {}) {
