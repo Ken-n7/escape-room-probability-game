@@ -20,7 +20,7 @@ import {
   showScreen, showHUD, hideOptionsConfirm,
   updateFullscreenLabel, toggleFullscreen, setCanInteract,
 } from './ui/hud.js';
-import { updateAmbientScares, resetAmbientScares, clearScareSprite } from './scares/scare.js';
+import { updateAmbientScares, resetAmbientScares, clearScareSprite, triggerBlackout } from './scares/scare.js';
 import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
@@ -1434,6 +1434,7 @@ if (import.meta.env.DEV) {
   devScareBtn?.removeAttribute('hidden');
   devScareBtn?.addEventListener('click', triggerDevWin);
   window.__devPlay    = () => { resetProgress(); startGame(); };
+  window.__devBlackout = triggerBlackout;
   window.__scene      = scene;
   window.__devLose    = () => { resetProgress(); startGame(); triggerLose(); };
   window.__devWin     = triggerDevWin;
