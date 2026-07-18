@@ -5,6 +5,18 @@ import { CFG } from '../core/config.js';
 
 const { hallW, hallH, hallL, roomW, roomH, doorW, doorH, rooms, exitZ } = CFG.world;
 const HALF_W = hallW / 2;
+
+// Vacant, abandoned rooms on the LEFT side of the hallway (spec 1.3) — dark open
+// doorways between the lockers. main.js uses this table for entry-sound triggers.
+export const VACANT_DEPTH = 7;
+export const VACANT_ROOMS = [
+  { zS: 2,  zE: 10, dzS: 4.7,  dzE: 6.7  },
+  { zS: 12, zE: 20, dzS: 14.7, dzE: 16.7 },
+  { zS: 22, zE: 30, dzS: 24.7, dzE: 26.7 },
+  { zS: 32, zE: 40, dzS: 34.7, dzE: 36.7 },
+  { zS: 44, zE: 52, dzS: 46.7, dzE: 48.7 },
+];
+const VACANT_DOOR_H = 2.6;
 const ROOM_LIGHT_COLORS = [0xffaa44, 0x4488ff, 0x44ff88];
 const FLUORESCENT_MODEL_PATH = '/assets/3D/fluorescent/mounted_fluorescent_lights_1k.gltf';
 const HALL_LIGHT_ZS = [5.5, 16.5, 27, 38, 49];
@@ -139,8 +151,9 @@ function _flush(scene) {
   _batch.clear();
 }
 
-const bx = (w,h,d,x,y,z,mat)      => _push(_bxGeo(w,h,d), mat, x, y, z);
-const pl = (w,h,x,y,z,rx,ry,mat)  => _push(_plGeo(w,h),   mat, x, y, z, rx, ry);
+const bx  = (w,h,d,x,y,z,mat)        => _push(_bxGeo(w,h,d), mat, x, y, z);
+const bxr = (w,h,d,x,y,z,rx,ry,mat)  => _push(_bxGeo(w,h,d), mat, x, y, z, rx, ry);
+const pl  = (w,h,x,y,z,rx,ry,mat)    => _push(_plGeo(w,h),   mat, x, y, z, rx, ry);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  HALLWAY
@@ -150,7 +163,16 @@ function buildHallway() {
 
   pl(hl, hw*2,  0,  0,  hl/2, -Math.PI/2, 0, floorMat);
   pl(hl, hw*2,  0, hh,  hl/2,  Math.PI/2, 0, ceilMat);
-  pl(hl, hh,  -hw, hh/2, hl/2, 0, Math.PI/2, wallMat);   // left wall
+
+  // Left wall — segments around the vacant-room door openings
+  let lz = 0;
+  VACANT_ROOMS.forEach(({ dzS, dzE }) => {
+    if (lz < dzS) { const l = dzS - lz; pl(l, hh, -hw, hh/2, lz+l/2, 0, Math.PI/2, wallMat); }
+    const topH = hh - VACANT_DOOR_H;
+    if (topH > 0.05) { const l = dzE - dzS; pl(l, topH, -hw, hh-topH/2, (dzS+dzE)/2, 0, Math.PI/2, wallMat); }
+    lz = dzE;
+  });
+  if (lz < hl) { const l = hl - lz; pl(l, hh, -hw, hh/2, lz+l/2, 0, Math.PI/2, wallMat); }
 
   // Right wall — segments around door openings
   let pz = 0;
@@ -169,10 +191,13 @@ function buildHallway() {
   const exTopH = hh - doorH;
   if (exTopH > 0) pl(exDW, exTopH, 0, hh-exTopH/2, hl, 0, Math.PI, wallMat);
 
-  // ~56 lockers → all merged into ONE draw call
+  // Lockers → all merged into ONE draw call (gaps at vacant-room doorways)
   const lW = 0.9, lH = 2.5, lD = 0.35;
-  for (let z = 0.5; z < hl - 1; z += lW + 0.05)
+  for (let z = 0.5; z < hl - 1; z += lW + 0.05) {
+    const blocksDoor = VACANT_ROOMS.some(v => z + lW > v.dzS - 0.15 && z < v.dzE + 0.15);
+    if (blocksDoor) continue;
     bx(lW, lH, lD, -hw+lD/2, lH/2, z+lW/2, lockerMat);
+  }
 
   // Fluorescent fixtures are loaded as GLTF in addLights().
 }
@@ -267,6 +292,94 @@ function buildRoom(scene, roomIndex, interactiveObjects) {
     return noteMesh;
   });
   return roomNoteMeshes;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VACANT ROOMS — abandoned classrooms for creepy aesthetics (spec 1.3).
+//  Dark open doorways off the left side of the hallway; overturned desks,
+//  scattered school work, chalk scrawls. No lights — ambient only.
+// ═══════════════════════════════════════════════════════════════════════════════
+const paperMat = new THREE.MeshBasicMaterial({ color: 0x6e6a5e });
+const _vacantPropBoxes = [];
+
+function scrawlTex(lines) {
+  const cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, 512, 256);
+  ctx.fillStyle = 'rgba(170,150,140,0.85)';
+  ctx.font = 'bold 40px Georgia';
+  ctx.textAlign = 'center';
+  lines.forEach((l, i) => {
+    ctx.save();
+    ctx.translate(256 + (Math.random()-0.5)*30, 100 + i * 62);
+    ctx.rotate((Math.random()-0.5)*0.09);
+    ctx.fillText(l, 0, 0);
+    ctx.restore();
+  });
+  return new THREE.CanvasTexture(cv);
+}
+
+const VACANT_SCRAWLS = [
+  ['HELP US'],
+  ['IT COUNTS', 'THE OUTCOMES'],
+  ['P(ESCAPE) = 0'],
+  ['DON’T LOOK', 'BEHIND YOU'],
+  ['NOTHING IS', 'CERTAIN HERE'],
+];
+
+function buildVacantRoom(scene, i) {
+  const { zS, zE, dzS, dzE } = VACANT_ROOMS[i];
+  const d = VACANT_DEPTH, rH = roomH, rL = zE - zS;
+  const cx = -HALF_W - d / 2, cz = (zS + zE) / 2;
+
+  pl(d, rL, cx, 0,  cz, -Math.PI/2, 0, floorMat);
+  pl(d, rL, cx, rH, cz,  Math.PI/2, 0, ceilMat);
+  pl(rL, rH, -HALF_W-d, rH/2, cz, 0,  Math.PI/2, wallMat);  // far wall
+  pl(d,  rH, cx, rH/2, zS, 0, 0,        wallMat);
+  pl(d,  rH, cx, rH/2, zE, 0, Math.PI,  wallMat);
+
+  // Inner wall (room side of the hallway wall), segmented around the doorway
+  const preDoor = dzS - zS, postDoor = zE - dzE, topH = rH - VACANT_DOOR_H;
+  if (preDoor  > 0) pl(preDoor,  rH, -HALF_W, rH/2, zS+preDoor/2,   0, -Math.PI/2, wallMat);
+  if (postDoor > 0) pl(postDoor, rH, -HALF_W, rH/2, dzE+postDoor/2, 0, -Math.PI/2, wallMat);
+  if (topH > 0.05)  pl(dzE-dzS, topH, -HALF_W, rH-topH/2, (dzS+dzE)/2, 0, -Math.PI/2, wallMat);
+
+  // Dark door frame
+  const fT = 0.1;
+  bx(fT, VACANT_DOOR_H, fT, -HALF_W+fT/2, VACANT_DOOR_H/2, dzS, doorFrameMat);
+  bx(fT, VACANT_DOOR_H, fT, -HALF_W+fT/2, VACANT_DOOR_H/2, dzE, doorFrameMat);
+  bx(fT, fT, dzE-dzS,   -HALF_W+fT/2, VACANT_DOOR_H+fT/2, (dzS+dzE)/2, doorFrameMat);
+
+  // Overturned / abandoned desks
+  const tip = 1.25 + Math.random() * 0.35;
+  bxr(0.9, 0.06, 0.65, cx - 1 + Math.random(), 0.38, zS + 2 + Math.random() * 2, tip, Math.random() * Math.PI, deskMat);
+  bxr(0.9, 0.06, 0.65, cx + 0.5, 0.72, zE - 2.5, 0, 0.4 + Math.random() * 0.5, deskMat); // askew but upright
+  bx(0.05, 0.72, 0.05, cx + 0.15, 0.36, zE - 2.7, darkMat);
+  bx(0.05, 0.72, 0.05, cx + 0.85, 0.36, zE - 2.3, darkMat);
+  // Broken chair on its side
+  bxr(0.7, 0.05, 0.6, cx - 2, 0.3, cz + 0.5, Math.PI / 2 - 0.25, 1.1, deskMat);
+
+  // Scattered school work
+  for (let p = 0; p < 6; p++) {
+    pl(0.25, 0.33,
+      cx + (Math.random() - 0.5) * (d - 1.5),
+      0.012 + p * 0.002,
+      zS + 1 + Math.random() * (rL - 2),
+      -Math.PI / 2, Math.random() * Math.PI, paperMat);
+  }
+
+  // Chalk scrawl on the far wall
+  const scrawl = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.6, 1.3),
+    new THREE.MeshBasicMaterial({ map: scrawlTex(VACANT_SCRAWLS[i]), transparent: true, opacity: 0.5 })
+  );
+  scrawl.position.set(-HALF_W - d + 0.03, 1.7, cz + (Math.random() - 0.5) * 2);
+  scrawl.rotation.y = Math.PI / 2;
+  scene.add(scrawl);
+
+  // Rough collision for the upright desk (tipped props stay walkable)
+  _vacantPropBoxes.push({ minX: cx - 0.1, maxX: cx + 1.1, minZ: zE - 3.1, maxZ: zE - 1.9 });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -463,8 +576,19 @@ function buildCollision() {
   const addBox = (x, z, w, d, pad = 0.08) =>
     add(x - w / 2 - pad, x + w / 2 + pad, z - d / 2 - pad, z + d / 2 + pad);
 
-  add(-hw-0.3,-hw, 0, hl);
+  // Left hallway wall — segmented around vacant-room doorways
+  let lz = 0;
+  VACANT_ROOMS.forEach(({ dzS, dzE }) => { add(-hw-0.3,-hw, lz, dzS); lz = dzE; });
+  add(-hw-0.3,-hw, lz, hl);
   add(-hw, hw, -0.3, 0);
+
+  // Vacant room shells + props
+  VACANT_ROOMS.forEach(({ zS, zE }) => {
+    add(-hw-VACANT_DEPTH-0.3, -hw-VACANT_DEPTH, zS, zE);   // far wall
+    add(-hw-VACANT_DEPTH, -hw, zS-0.3, zS);                // near-side wall
+    add(-hw-VACANT_DEPTH, -hw, zE, zE+0.3);                // far-side wall
+  });
+  boxes.push(..._vacantPropBoxes);
   let pz = 0;
   rooms.forEach(([,,dzS,dzE]) => { add(hw,hw+0.3,pz,dzS); pz=dzE; });
   add(hw,hw+0.3,pz,hl);
@@ -475,8 +599,10 @@ function buildCollision() {
     add(hw,hw+roomW+0.3,zE,zE+0.3);
     add(hw+roomW,hw+roomW+0.3,zS,zE);
   });
-  // Hall lockers protrude into the walking lane slightly.
-  add(-hw-0.3,-hw+0.5,0,hl);
+  // Hall lockers protrude into the walking lane slightly (gap at vacant doors).
+  lz = 0;
+  VACANT_ROOMS.forEach(({ dzS, dzE }) => { add(-hw-0.3,-hw+0.5, lz, dzS-0.15); lz = dzE+0.15; });
+  add(-hw-0.3,-hw+0.5, lz, hl);
 
   // Room doors — main.js skips these boxes once the door is open.
   rooms.forEach(([,,dzS,dzE], i) =>
@@ -511,6 +637,7 @@ export function buildWorld(scene) {
   const interactiveObjects = [];
   const roomNotes = rooms.map((_, i) => buildRoom(scene, i, interactiveObjects));
   const roomDoors = rooms.map((_, i) => buildDoor(scene, i, interactiveObjects));
+  VACANT_ROOMS.forEach((_, i) => buildVacantRoom(scene, i));
   rooms.forEach(([zS, zE], i) => {
     const light = new THREE.PointLight(ROOM_LIGHT_COLORS[i], 1.15, 12, 2);
     light.position.set(HALF_W + roomW / 2, 2.0, (zS + zE) / 2);
