@@ -279,6 +279,25 @@
       border-color:rgba(255,236,190,0.58);
       transition:none;
     }
+    #mobile-jump {
+      position:absolute;
+      right:22px;
+      bottom:52px;
+      width:72px;
+      height:72px;
+      border-radius:50%;
+      border:1px solid rgba(255,236,190,0.28);
+      background:radial-gradient(circle at 35% 30%, rgba(255,245,218,0.14), rgba(40,10,10,0.6) 58%, rgba(0,0,0,0.72));
+      color:rgba(255,236,190,0.85);
+      font-size:1.7rem;
+      line-height:1;
+      pointer-events:auto;
+      touch-action:manipulation;
+      box-shadow:0 6px 20px rgba(0,0,0,0.58), inset 0 0 10px rgba(255,236,190,0.07);
+    }
+    #mobile-jump:active {
+      background:radial-gradient(circle at 35% 30%, rgba(255,245,218,0.22), rgba(80,10,10,0.7) 58%, rgba(0,0,0,0.78));
+    }
     body[data-controls="touch"] #mobile-controls { display:block; }
     body[data-controls="touch"] #interact-prompt { bottom:154px; font-size:1.1rem; padding:10px 24px; }
     body[data-controls="touch"] #hud-player { display:none; }
@@ -2060,6 +2079,7 @@
     <div id="mobile-joystick" aria-label="Move" role="application">
       <div id="mobile-joystick-knob"></div>
     </div>
+    <button id="mobile-jump" type="button" aria-label="Jump">⤒</button>
   </div>
 </div>
 <div id="vignette"></div>
