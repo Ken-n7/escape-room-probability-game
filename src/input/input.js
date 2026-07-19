@@ -270,8 +270,8 @@ export function initInput(callbacks = {}) {
   document.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (MOVE_KEYS.has(e.code) || LOOK_KEYS.has(e.code)) e.preventDefault();
-    // Space = jump while playing; block page scroll and focused-button re-clicks
-    if (e.code === 'Space' && gState.current === S.PLAYING) e.preventDefault();
+    // Jumping disabled — Space no longer bound. (Kept in case it returns.)
+    // if (e.code === 'Space' && gState.current === S.PLAYING) e.preventDefault();
     if (e.code === 'KeyE') _cb.onInteract?.();
     if (e.code === 'KeyR') { e.preventDefault(); _cb.onRestartKey?.(); }
     if (e.code === 'Escape' || e.code === 'KeyP') {

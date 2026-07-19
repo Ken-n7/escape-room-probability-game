@@ -217,7 +217,7 @@ function scrawlTex(lines) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MATERIALS
 // ═══════════════════════════════════════════════════════════════════════════════
-const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#3c3c3c'), emissive: 0x050608, emissiveIntensity: 0.22 });
+const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#3c3c3c'), emissive: 0x050608, emissiveIntensity: 0.22, side: THREE.DoubleSide });
 const doorPanelMat = new THREE.MeshLambertMaterial({ map: doorTex(), emissive: 0x0a0704, emissiveIntensity: 0.35 });
 const doorTrimMat  = new THREE.MeshLambertMaterial({ map: grungeTex('#2b1c0e'), emissive: 0x060402, emissiveIntensity: 0.3 });
 const floorMat     = new THREE.MeshLambertMaterial({ map: floorTex(), emissive: 0x070707, emissiveIntensity: 0.28 });
@@ -268,6 +268,16 @@ const bx  = (w,h,d,x,y,z,mat)        => _push(_bxGeo(w,h,d), mat, x, y, z);
 const bxr = (w,h,d,x,y,z,rx,ry,mat)  => _push(_bxGeo(w,h,d), mat, x, y, z, rx, ry);
 const pl  = (w,h,x,y,z,rx,ry,mat)    => _push(_plGeo(w,h),   mat, x, y, z, rx, ry);
 
+// Floor plane with size-proportional UVs so tiles stay square on the long
+// corridor instead of stretching. ~3 world units per texture image, matching
+// the room floors' density (which use the default 0..1 UV × repeat(4,4)).
+const _floorTiled = (w, h, x, y, z, rx, ry, mat) => {
+  const g = new THREE.PlaneGeometry(w, h);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 12, uv.getY(i) * h / 12);
+  _push(g, mat, x, y, z, rx, ry);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CORRIDORS — two legs + corner, walls segmented around door openings
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -314,10 +324,10 @@ function doorGapsFor(orient) {
 
 function buildCorridors() {
   // Floors + ceilings (leg 1 owns the corner square)
-  pl(hallW, leg1Len, 0, 0, leg1Len/2, -Math.PI/2, 0, floorMat);
+  _floorTiled(hallW, leg1Len, 0, 0, leg1Len/2, -Math.PI/2, 0, floorMat);
   pl(hallW, leg1Len, 0, hallH, leg1Len/2, Math.PI/2, 0, ceilMat);
   const leg2Len = leg2EndX - HALF_W;
-  pl(leg2Len, hallW, HALF_W + leg2Len/2, 0, (leg2Z0+leg2Z1)/2, -Math.PI/2, 0, floorMat);
+  _floorTiled(leg2Len, hallW, HALF_W + leg2Len/2, 0, (leg2Z0+leg2Z1)/2, -Math.PI/2, 0, floorMat);
   pl(leg2Len, hallW, HALF_W + leg2Len/2, hallH, (leg2Z0+leg2Z1)/2, Math.PI/2, 0, ceilMat);
 
   // Walls (visual + collision), segmented around the door openings
@@ -330,15 +340,15 @@ function buildCorridors() {
 
   // Lockers — leg1 west wall + leg2 south wall, gaps at doorways.
   // Box depth goes INTO the wall so the wide textured door faces the corridor.
-  const lW = 0.9, lH = 2.5, lD = 0.35;
-  const wGaps = doorGapsFor('W'), sGaps = doorGapsFor('S');
-  for (let z = 0.5; z < leg1Len - 1; z += lW + 0.05) {
-    if (wGaps.some(g => z + lW > g.a0 - 0.15 && z < g.a1 + 0.15)) continue;
-    bx(lD, lH, lW, -HALF_W + lD/2, lH/2, z + lW/2, lockerMat);
+  const lW = 0.9, lH = 2.5, lD = 0.35, lGap = 0.04;   // lGap keeps the locker
+  const wGaps = doorGapsFor('W'), sGaps = doorGapsFor('S');   // back off the wall
+  for (let z = 0.5; z < leg1Len - 1; z += lW + 0.05) {         // plane (no z-fight,
+    if (wGaps.some(g => z + lW > g.a0 - 0.15 && z < g.a1 + 0.15)) continue;   // no bleed-through)
+    bx(lD, lH, lW, -HALF_W + lGap + lD/2, lH/2, z + lW/2, lockerMat);
   }
   for (let x = HALF_W + 1; x < leg2EndX - 1; x += lW + 0.05) {
     if (sGaps.some(g => x + lW > g.a0 - 0.15 && x < g.a1 + 0.15)) continue;
-    bxr(lD, lH, lW, x + lW/2, lH/2, leg2Z0 + lD/2, 0, Math.PI/2, lockerMat);
+    bxr(lD, lH, lW, x + lW/2, lH/2, leg2Z0 + lGap + lD/2, 0, Math.PI/2, lockerMat);
   }
   // Locker protrusion collision strips
   let p = 0;
@@ -347,6 +357,14 @@ function buildCorridors() {
   p = HALF_W;
   sGaps.sort((a,b)=>a.a0-b.a0).forEach(g => { _addBox(p, g.a0-0.15, leg2Z0-0.3, leg2Z0+0.5); p = g.a1+0.15; });
   _addBox(p, leg2EndX, leg2Z0-0.3, leg2Z0+0.5);
+
+  // Litter — a few loose papers drifted across the corridor floors. Random flat
+  // rotations, tiny y-stagger so overlapping sheets don't z-fight. Kept clear of
+  // the locker strips so nothing pokes through a wall.
+  const paper = (x, z, i) =>
+    pl(0.24, 0.32, x, 0.012 + i * 0.002, z, -Math.PI/2, Math.random() * Math.PI, paperMat);
+  for (let i = 0; i < 11; i++) paper((Math.random() - 0.5) * 4.4, 1.5 + Math.random() * (leg1Len - 3), i);
+  for (let i = 0; i < 7; i++)  paper(HALF_W + 1.5 + Math.random() * (leg2EndX - HALF_W - 3), leg2Z0 + 0.7 + Math.random() * (hallW - 1.6), i);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -408,11 +426,10 @@ function buildClassroom(scene, def, interactiveObjects) {
   const tdr = rect(tdu - 0.55, tdu + 0.55, tdv - 0.95, tdv + 0.95);
   _addBox(tdr.minX, tdr.maxX, tdr.minZ, tdr.maxZ);
 
-  // 6 student desks in 2 rows × 3 columns, all FACING the chalkboard (+u).
-  // Chairs sit behind each desk. Decoys: chairs on the wrong side — the whole
-  // class silently faces away from the board.
-  const chairU = isDecoy ? 0.75 : -0.75;
-  const backU  = isDecoy ? 1.04 : -1.04;
+  // 6 student desks in 2 rows × 3 columns, all FACING the chalkboard (+u),
+  // chairs tucked behind each desk. Same layout in real and decoy rooms.
+  const chairU = -0.75;
+  const backU  = -1.04;
   [[4.2, 2.4], [4.2, 6], [4.2, 9.6], [6.8, 2.4], [6.8, 6], [6.8, 9.6]].forEach(([du, dv]) => {
     BX(0.65, 0.06, 0.9, du, 0.72, dv, deskMat);                    // desk top
     [[-0.26, -0.4], [0.26, -0.4], [-0.26, 0.4], [0.26, 0.4]].forEach(([lu, lv]) =>

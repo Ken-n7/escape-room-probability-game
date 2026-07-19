@@ -33,7 +33,7 @@ export const AUDIO_ASSETS = {
     vol: 0,
   },
   jumpscare: {
-    src: `${AUDIO_DIR}jumpscare_sting.wav`,
+    src: `${AUDIO_DIR}jumpscares/sound_effects75-eyesaur-jumpscare-sound-482110.mp3`,
     loop: false,
     vol: 1,
   },
