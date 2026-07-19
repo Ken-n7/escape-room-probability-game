@@ -27,17 +27,11 @@ import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
 const {
-  wallBoxes, interactiveObjects, classroomContainers, roomDoors,
+  wallBoxes, interactiveObjects, roomNotes, roomDoors,
   realRoomRects, decoyRects, vacantRects,
 } = buildWorld(scene);
 
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
-
-// Containers grouped for the search mechanic (Proposal B)
-const containersByRealRoom = [null, null, null];
-classroomContainers.forEach(e => { if (e.realIdx !== null) containersByRealRoom[e.realIdx] = e.containers; });
-const containerByHandle = new Map();
-classroomContainers.forEach(e => e.containers.forEach(c => containerByHandle.set(c.handle, c)));
 
 // ── Menu camera ────────────────────────────────────────────────────────────────
 const MENU_CAMERA_VIEW = {
@@ -258,7 +252,7 @@ function resetProgress() {
   shuffleRooms();
   resetAmbientScares();
   cleanupChase();
-  resetAllSearches();
+  updateNoteVisibility();
   updateDoorLocks({ instant: true });
   _decoyTripped = decoyRects.map(() => false);
   updateHUD();
@@ -334,98 +328,14 @@ function triggerLockedDoorScare(prevRoomNum) {
   }, 1150);
 }
 
-// ── Note hunting via searchable containers (design doc Proposal B) ────────────
-// Each classroom has 6 containers; ONE holds the current problem, re-rolled for
-// every question and every run. Wrong containers give flavor text (and maybe a
-// scare); after 2 wrong searches the right container starts glinting so nobody
-// gets hard-stuck. Searching is untimed — the 15s timer starts at the question.
-const noteContainer  = [0, 0, 0];
-const wrongSearches  = [0, 0, 0];
-const searchedNow    = [new Set(), new Set(), new Set()];
-const decoySearched  = new Set();
-const GLINT_AFTER    = 2;
-
-const SEARCH_FLAVOR = [
-  'Empty… something shifted behind you.',
-  'Nothing. The air feels colder.',
-  'Just dust and dead insects.',
-  'Empty. Keep looking…',
-];
-const DECOY_FLAVOR = [
-  'Empty. This room is wrong.',
-  'Nothing here. Nothing was ever here.',
-  'Empty. Why does this room even exist?',
-];
-
-function resetRoomSearch(r) {
-  wrongSearches[r] = 0;
-  searchedNow[r].clear();
-  noteContainer[r] = Math.floor(Math.random() * containersByRealRoom[r].length);
-  containersByRealRoom[r].forEach(c => c.setOpen(false));
-}
-
-function resetAllSearches() {
-  for (let r = 0; r < 3; r++) resetRoomSearch(r);
-  decoySearched.clear();
-  classroomContainers.forEach(e => {
-    if (e.realIdx === null) e.containers.forEach(c => c.setOpen(false));
+// One note per question: only the note matching the room's current progress
+// is visible, so the player hunts for the next problem after solving each.
+function updateNoteVisibility() {
+  roomNotes.forEach((notes, ri) => {
+    notes.forEach((note, ni) => {
+      note.visible = !roomDone[ri] && ni === roomProgress[ri];
+    });
   });
-}
-
-function maybeSearchScare(p) {
-  if (Math.random() >= p) return;
-  AudioManager.play(Math.random() < 0.5 ? 'randomWhisper2' : 'randomKnock');
-  flashWrongVignette(0);
-}
-
-function searchContainer(obj) {
-  const entry = containerByHandle.get(obj);
-  if (!entry) return;
-  AudioManager.play('pageTurn');
-  entry.setOpen(true);
-  const r = obj.userData.roomIndex;
-
-  if (r === null) {   // decoy classroom — always empty
-    decoySearched.add(obj.userData.decoyIndex + ':' + obj.userData.containerIndex);
-    setPromptOverride(DECOY_FLAVOR[Math.floor(Math.random() * DECOY_FLAVOR.length)], 2400);
-    maybeSearchScare(0.2);
-    return;
-  }
-  if (obj.userData.containerIndex === noteContainer[r]) {
-    openQuestion(r);
-    return;
-  }
-  searchedNow[r].add(obj.userData.containerIndex);
-  wrongSearches[r]++;
-  setPromptOverride(SEARCH_FLAVOR[Math.floor(Math.random() * SEARCH_FLAVOR.length)], 2400);
-  maybeSearchScare(0.12 + r * 0.06);   // searches get meaner room by room
-}
-
-// Rescue glint: one shared pulsing marker over the correct container
-const glintMesh = new THREE.Mesh(
-  new THREE.SphereGeometry(0.07, 8, 8),
-  new THREE.MeshBasicMaterial({
-    color: 0xffe27a, transparent: true, opacity: 0.85,
-    blending: THREE.AdditiveBlending, depthWrite: false,
-  })
-);
-glintMesh.visible = false;
-scene.add(glintMesh);
-const _glintPos = new THREE.Vector3();
-
-function updateGlint(t) {
-  let target = null;
-  for (let r = 0; r < 3; r++) {
-    if (!roomDone[r] && wrongSearches[r] >= GLINT_AFTER && isInsideRoom(r)) {
-      target = containersByRealRoom[r][noteContainer[r]].handle;
-      break;
-    }
-  }
-  if (!target) { glintMesh.visible = false; return; }
-  target.getWorldPosition(_glintPos);
-  glintMesh.position.set(_glintPos.x, _glintPos.y + 0.45, _glintPos.z);
-  glintMesh.scale.setScalar(1 + Math.sin(t * 5) * 0.35);
-  glintMesh.visible = true;
 }
 
 // Transient message shown in the interact prompt (e.g. "LOCKED") that survives
@@ -460,17 +370,7 @@ function findNearObject() {
     if (!obj.visible) return;
     // Doors: interactable when locked (→ scare) or when a closed decoy (→ open)
     if (obj.userData.isDoor && !obj.userData.locked && doorIsOpen[obj.userData.doorIndex]) return;
-    if (obj.userData.isContainer) {
-      const r = obj.userData.roomIndex;
-      if (r !== null) {
-        // Real room: must be inside, room unfinished, and not already searched
-        if (roomDone[r] || !isInsideRoom(r)) return;
-        if (searchedNow[r].has(obj.userData.containerIndex)) return;
-      } else {
-        if (!inRect(decoyRects[obj.userData.decoyIndex], camera.position.x, camera.position.z)) return;
-        if (decoySearched.has(obj.userData.decoyIndex + ':' + obj.userData.containerIndex)) return;
-      }
-    }
+    if (obj.userData.noteIndex !== undefined && !isInsideRoom(obj.userData.roomIndex)) return;
     obj.getWorldPosition(INTERACT_POS);
     INTERACT_TO.subVectors(INTERACT_POS, camera.position);
     const d = INTERACT_TO.length();
@@ -491,8 +391,8 @@ function tryInteract() {
     const i = nearObject.userData.doorIndex;
     if (nearObject.userData.locked) triggerLockedDoorScare(roomDoors[i].realIdx);
     else openDecoyDoor(i);
-  } else if (nearObject.userData.isContainer) {
-    searchContainer(nearObject);
+  } else if (nearObject.userData.roomIndex !== undefined) {
+    openQuestion(nearObject.userData.roomIndex);
   }
 }
 
@@ -627,13 +527,13 @@ function handleQuestionTimeout() {
   correctStreak = 0;
   AudioManager.play('randomScareWhisper');
   flashWrongVignette(roomWrong[roomIdx]);
-  resetRoomSearch(roomIdx);
+  updateNoteVisibility();
   updateHUD();
 
   // Show the verdict inside the modal, then return the player to the room.
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
   $('question-wrong-count').textContent =
-    "⏰ TIME'S UP! The problems have changed — search the room to start over.";
+    "⏰ TIME'S UP! The problems have changed — examine the note to start over.";
   _questionAdvanceTimer = setTimeout(() => {
     if (gState.current === S.QUESTION && activeRoomIdx === roomIdx) closeQuestion();
   }, 2200);
@@ -849,6 +749,7 @@ function advanceAfterCorrect() {
     }
 
     resetFear();
+    updateNoteVisibility();
     updateDoorLocks();   // swings the next room's door open
     updateHUD();
     const flashEl = $('room-clear-flash');
@@ -857,11 +758,11 @@ function advanceAfterCorrect() {
       if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
     }, 900);
   } else {
-    // The next problem hides in a different container — send the player hunting.
-    resetRoomSearch(answeredRoomIdx);
+    // Next question lives on another note — send the player hunting (req 5).
+    updateNoteVisibility();
     const fb = $('question-wrong-count');
     fb.style.color = '#7fae7f';
-    fb.textContent = '✓ Correct! The next problem is hidden somewhere else — search the room.';
+    fb.textContent = '✓ Correct! The next problem is on another note — find it.';
     _questionAdvanceTimer = setTimeout(() => {
       if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
     }, 1300);
@@ -1335,7 +1236,7 @@ function animate() {
 
   updateThreatAudio(dt);
   updateAmbientScares(dt);
-  if (gState.current === S.PLAYING) { updateVacantRoomSounds(); updateDecoyTraps(); updateGlint(t); }
+  if (gState.current === S.PLAYING) { updateVacantRoomSounds(); updateDecoyTraps(); }
 
   if (gState.current === S.CHASE) { updateChase(dt); renderer.render(scene, camera); return; }
   if (gState.current !== S.PLAYING) { renderer.render(scene, camera); return; }
@@ -1381,7 +1282,6 @@ function animate() {
       const action = GameDevice.controls === 'touch' ? 'Tap !' : '[ E ]';
       elPrompt.textContent = nearObject.userData.isKeypad ? `${action} Enter Code`
         : nearObject.userData.isDoor ? `${action} Open Door`
-        : nearObject.userData.isContainer ? `${action} Search`
         : `${action} Examine`;
       elPrompt.style.opacity = '1';
     } else {
@@ -1540,6 +1440,7 @@ function triggerDevWin() {
   bestScores    = [100, 100, 100];
   correctStreak = 0;
   gameStartTime = Date.now();
+  updateNoteVisibility();
   updateDoorLocks({ instant: true });
   updateHUD();
   resetFear();
@@ -1558,9 +1459,6 @@ if (import.meta.env.DEV) {
       doorsOpen: [...doorIsOpen],
       doorKeys: roomDoors.map(d => d.key),
       decoysTripped: [..._decoyTripped],
-      noteContainers: [...noteContainer],
-      wrongSearches: [...wrongSearches],
-      glintVisible: glintMesh.visible,
     }),
     getDrawnQuestions: () => shuffledQuestions.map(qs => qs.map(q => q.text.slice(0, 40))),
     setPose(p = {}) {
@@ -1586,7 +1484,7 @@ setMenuCamera();
 applyDeviceProfile();
 updateMenuName();
 updateFullscreenLabel();
-resetAllSearches();
+updateNoteVisibility();
 updateDoorLocks({ instant: true });
 animate();
 preloadAssets();
