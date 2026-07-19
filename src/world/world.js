@@ -115,6 +115,38 @@ function chalkboardTex(lines) {
   return new THREE.CanvasTexture(cv);
 }
 
+// Drop-ceiling tiles — grid of panels with water stains so the ceiling reads
+// instead of rendering as a black void.
+function ceilTex() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#33342f'; ctx.fillRect(0, 0, 256, 256);
+  // panel texture noise
+  for (let i = 0; i < 400; i++) {
+    const g = 42 + Math.floor(Math.random() * 16);
+    ctx.fillStyle = `rgba(${g},${g},${g-4},0.3)`;
+    ctx.fillRect(Math.random()*256, Math.random()*256, Math.random()*4+1, Math.random()*3+1);
+  }
+  // tile grid
+  ctx.strokeStyle = '#1f201c'; ctx.lineWidth = 3;
+  for (let i = 0; i <= 256; i += 64) {
+    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+  }
+  // water stains
+  for (let i = 0; i < 7; i++) {
+    ctx.fillStyle = `rgba(60,48,26,${0.12 + Math.random()*0.16})`;
+    ctx.beginPath();
+    ctx.ellipse(Math.random()*256, Math.random()*256, Math.random()*26+8, Math.random()*18+6, Math.random()*3, 0, Math.PI*2);
+    ctx.fill();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(3, 3);
+  return t;
+}
+
 function lockerTex() {
   const cv = document.createElement('canvas');
   cv.width = 128; cv.height = 256;
@@ -129,6 +161,39 @@ function lockerTex() {
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
+}
+
+// Wooden door with two recessed panels — replaces the flat grunge slab
+function doorTex() {
+  const cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 512;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#4a3520'; ctx.fillRect(0, 0, 256, 512);
+  // vertical wood grain
+  for (let x = 0; x < 256; x += 4) {
+    const g = 40 + Math.floor(Math.random() * 22);
+    ctx.fillStyle = `rgba(${g},${Math.floor(g*0.72)},${Math.floor(g*0.42)},0.35)`;
+    ctx.fillRect(x, 0, 2, 512);
+  }
+  // two recessed panels
+  const panel = (y, h) => {
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillRect(38, y, 180, h);
+    ctx.strokeStyle = 'rgba(20,12,4,0.9)'; ctx.lineWidth = 6;
+    ctx.strokeRect(38, y, 180, h);
+    ctx.strokeStyle = 'rgba(120,88,50,0.35)'; ctx.lineWidth = 2;
+    ctx.strokeRect(46, y + 8, 164, h - 16);
+  };
+  panel(42, 180);
+  panel(272, 180);
+  // edge shading
+  const grad = ctx.createLinearGradient(0, 0, 256, 0);
+  grad.addColorStop(0, 'rgba(0,0,0,0.45)');
+  grad.addColorStop(0.12, 'rgba(0,0,0,0)');
+  grad.addColorStop(0.88, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 512);
+  return new THREE.CanvasTexture(cv);
 }
 
 function scrawlTex(lines) {
@@ -153,9 +218,10 @@ function scrawlTex(lines) {
 //  MATERIALS
 // ═══════════════════════════════════════════════════════════════════════════════
 const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#3c3c3c'), emissive: 0x050608, emissiveIntensity: 0.22 });
-const doorPanelMat = new THREE.MeshLambertMaterial({ map: grungeTex('#41301c'), emissive: 0x080503, emissiveIntensity: 0.3 });
+const doorPanelMat = new THREE.MeshLambertMaterial({ map: doorTex(), emissive: 0x0a0704, emissiveIntensity: 0.35 });
+const doorTrimMat  = new THREE.MeshLambertMaterial({ map: grungeTex('#2b1c0e'), emissive: 0x060402, emissiveIntensity: 0.3 });
 const floorMat     = new THREE.MeshLambertMaterial({ map: floorTex(), emissive: 0x070707, emissiveIntensity: 0.28 });
-const ceilMat      = new THREE.MeshLambertMaterial({ color: 0x202020, emissive: 0x030304, emissiveIntensity: 0.16 });
+const ceilMat      = new THREE.MeshLambertMaterial({ map: ceilTex(), emissive: 0x14140f, emissiveIntensity: 0.5 });
 const lockerMat    = new THREE.MeshLambertMaterial({ map: lockerTex(), emissive: 0x020602, emissiveIntensity: 0.18 });
 const deskMat      = new THREE.MeshBasicMaterial({ color: 0x2e2010 });
 const darkMat      = new THREE.MeshBasicMaterial({ color: 0x0e0e0e });
@@ -262,16 +328,17 @@ function buildCorridors() {
   pl(hallW, hallH, 0, hallH/2, 0, 0, 0, wallMat);                                 // spawn back wall
   _addBox(-HALF_W, HALF_W, -0.3, 0);
 
-  // Lockers — leg1 west wall + leg2 south wall, gaps at doorways
+  // Lockers — leg1 west wall + leg2 south wall, gaps at doorways.
+  // Box depth goes INTO the wall so the wide textured door faces the corridor.
   const lW = 0.9, lH = 2.5, lD = 0.35;
   const wGaps = doorGapsFor('W'), sGaps = doorGapsFor('S');
   for (let z = 0.5; z < leg1Len - 1; z += lW + 0.05) {
     if (wGaps.some(g => z + lW > g.a0 - 0.15 && z < g.a1 + 0.15)) continue;
-    bx(lW, lH, lD, -HALF_W + lD/2, lH/2, z + lW/2, lockerMat);
+    bx(lD, lH, lW, -HALF_W + lD/2, lH/2, z + lW/2, lockerMat);
   }
   for (let x = HALF_W + 1; x < leg2EndX - 1; x += lW + 0.05) {
     if (sGaps.some(g => x + lW > g.a0 - 0.15 && x < g.a1 + 0.15)) continue;
-    bxr(lW, lH, lD, x + lW/2, lH/2, leg2Z0 + lD/2, 0, Math.PI/2, lockerMat);
+    bxr(lD, lH, lW, x + lW/2, lH/2, leg2Z0 + lD/2, 0, Math.PI/2, lockerMat);
   }
   // Locker protrusion collision strips
   let p = 0;
@@ -303,10 +370,13 @@ function buildClassroom(scene, def, interactiveObjects) {
   if (postDoor > 0) PL(postDoor, rH, 0, rH/2, dLoc[1]+postDoor/2, 0, Math.PI/2, wallMat);
   if (topH > 0.05)  PL(doorW, topH,  0, rH-topH/2, dCv,           0, Math.PI/2, wallMat);
 
-  const fT = 0.12;
-  BX(fT, doorH, fT, -fT/2, doorH/2, dLoc[0], doorFrameMat);
-  BX(fT, doorH, fT, -fT/2, doorH/2, dLoc[1], doorFrameMat);
-  BX(doorW, fT, fT, -fT/2, doorH+fT/2, dCv, doorFrameMat);
+  // Door frame: jambs through the wall + a header SPANNING the opening
+  // (the old header was a beam poking into the room), plus a threshold strip.
+  const fT = 0.14;
+  BX(0.34, doorH + 0.04, fT, 0, (doorH + 0.04)/2, dLoc[0] - fT/2, doorTrimMat);
+  BX(0.34, doorH + 0.04, fT, 0, (doorH + 0.04)/2, dLoc[1] + fT/2, doorTrimMat);
+  BX(0.34, 0.2, doorW + 2*fT, 0, doorH + 0.12, dCv, doorTrimMat);
+  BX(0.36, 0.03, doorW, 0, 0.015, dCv, doorTrimMat);
 
   // Room shell collision (side + far walls; door wall handled by corridor)
   const r1 = rect(0, D + 0.3, -0.3, 0);   _addBox(r1.minX, r1.maxX, r1.minZ, r1.maxZ);
@@ -327,28 +397,33 @@ function buildClassroom(scene, def, interactiveObjects) {
   scene.add(cbMesh);
   BX(0.06, cbH + 0.12, cbW + 0.12, D - 0.06, cbH/2 + 0.9, W/2, doorFrameMat);
 
-  // Teacher's desk
-  const tdu = D - 1.5, tdv = W/2 + 1;
-  BX(1.8, 0.08, 0.9, tdu, 0.78, tdv, deskMat);
-  BX(0.08, 0.78, 0.9, tdu - 0.8, 0.39, tdv, deskMat);
-  BX(0.08, 0.78, 0.9, tdu + 0.8, 0.39, tdv, deskMat);
-  const tdr = rect(tdu - 1.05, tdu + 1.05, tdv - 0.6, tdv + 0.6);
+  // Chalk tray under the board
+  BX(0.12, 0.05, 3.2, D - 0.14, 0.84, W/2, doorFrameMat);
+
+  // Teacher's desk — front-center under the chalkboard, facing the class (-u)
+  const tdu = D - 1.7, tdv = W/2;
+  BX(0.9, 0.08, 1.8, tdu, 0.78, tdv, deskMat);
+  BX(0.9, 0.78, 0.08, tdu, 0.39, tdv - 0.8, deskMat);
+  BX(0.9, 0.78, 0.08, tdu, 0.39, tdv + 0.8, deskMat);
+  const tdr = rect(tdu - 0.55, tdu + 0.55, tdv - 0.95, tdv + 0.95);
   _addBox(tdr.minX, tdr.maxX, tdr.minZ, tdr.maxZ);
 
-  // 6 student desks + chairs (decoys: chairs flipped — the class faces the wall)
-  const chairSide = isDecoy ? -0.6 : 0.6;
-  [[3.5, 2], [6, 2], [8.5, 2], [3.5, 4.5], [6, 4.5], [8.5, 4.5]].forEach(([du, dv]) => {
-    BX(0.9, 0.06, 0.65, du, 0.72, dv, deskMat);
-    BX(0.05, 0.72, 0.05, du - 0.4, 0.36, dv - 0.28, darkMat);
-    BX(0.05, 0.72, 0.05, du + 0.4, 0.36, dv - 0.28, darkMat);
-    BX(0.05, 0.72, 0.05, du - 0.4, 0.36, dv + 0.28, darkMat);
-    BX(0.05, 0.72, 0.05, du + 0.4, 0.36, dv + 0.28, darkMat);
-    BX(0.7, 0.05, 0.6, du, 0.48, dv + chairSide, deskMat);
-    [[-0.3, -0.25], [0.3, -0.25], [-0.3, 0.25], [0.3, 0.25]].forEach(([cu, cv]) =>
-      BX(0.05, 0.48, 0.05, du + cu, 0.24, dv + chairSide + cv, darkMat));
-    const dr = rect(du - 0.58, du + 0.58, dv - 0.46, dv + 0.46);
+  // 6 student desks in 2 rows × 3 columns, all FACING the chalkboard (+u).
+  // Chairs sit behind each desk. Decoys: chairs on the wrong side — the whole
+  // class silently faces away from the board.
+  const chairU = isDecoy ? 0.75 : -0.75;
+  const backU  = isDecoy ? 1.04 : -1.04;
+  [[4.2, 2.4], [4.2, 6], [4.2, 9.6], [6.8, 2.4], [6.8, 6], [6.8, 9.6]].forEach(([du, dv]) => {
+    BX(0.65, 0.06, 0.9, du, 0.72, dv, deskMat);                    // desk top
+    [[-0.26, -0.4], [0.26, -0.4], [-0.26, 0.4], [0.26, 0.4]].forEach(([lu, lv]) =>
+      BX(0.05, 0.72, 0.05, du + lu, 0.36, dv + lv, darkMat));
+    BX(0.6, 0.05, 0.7, du + chairU, 0.48, dv, deskMat);            // chair seat
+    [[-0.22, -0.3], [0.22, -0.3], [-0.22, 0.3], [0.22, 0.3]].forEach(([lu, lv]) =>
+      BX(0.05, 0.48, 0.05, du + chairU + lu, 0.24, dv + lv, darkMat));
+    BX(0.05, 0.6, 0.7, du + backU, 0.79, dv, deskMat);             // backrest
+    const dr = rect(du - 0.4, du + 0.4, dv - 0.53, dv + 0.53);
     _addBox(dr.minX, dr.maxX, dr.minZ, dr.maxZ);
-    const cr = rect(du - 0.44, du + 0.44, dv + chairSide - 0.43, dv + chairSide + 0.43);
+    const cr = rect(du + chairU - 0.35, du + chairU + 0.35, dv - 0.42, dv + 0.42);
     _addBox(cr.minX, cr.maxX, cr.minZ, cr.maxZ);
   });
 
@@ -361,7 +436,7 @@ function buildClassroom(scene, def, interactiveObjects) {
   _addBox(bsr.minX, bsr.maxX, bsr.minZ, bsr.maxZ);
 
   // Candle on the teacher's desk
-  BX(0.06, 0.18, 0.06, tdu - 0.5, 0.87, tdv - 0.2, candleMat);
+  BX(0.06, 0.18, 0.06, tdu - 0.2, 0.91, tdv - 0.65, candleMat);
 
   // Exit sign on the v=W side wall
   BX(0.7, 0.25, 0.05, D - 0.8, rH - 0.2, W - 0.1, exitSignMat);
@@ -382,9 +457,9 @@ function buildClassroom(scene, def, interactiveObjects) {
 
   // Interactive notes — one per question, scattered around the room (real only)
   const noteSpots = [
-    { u: tdu,        y: 0.84, v: tdv + 0.1, rx: -Math.PI/2, ry: 0 },          // teacher's desk
-    { u: 3.5,        y: 0.78, v: 2,         rx: -Math.PI/2, ry: 0 },          // front-left student desk
-    { u: 8.5,        y: 0.78, v: 4.5,       rx: -Math.PI/2, ry: 0 },          // back-right student desk
+    { u: tdu,        y: 0.87, v: tdv + 0.4, rx: -Math.PI/2, ry: 0 },          // teacher's desk
+    { u: 4.2,        y: 0.78, v: 2.4,       rx: -Math.PI/2, ry: 0 },          // front-left student desk
+    { u: 6.8,        y: 0.78, v: 9.6,       rx: -Math.PI/2, ry: 0 },          // back-right student desk
     { u: bsu + 0.14, y: 1.3,  v: bsv,       rx: 0,          ry: Math.PI/2 },  // bookshelf side
     { u: 8,          y: 1.4,  v: W - 0.02,  rx: 0,          ry: Math.PI },    // back wall near exit sign
   ];
@@ -434,11 +509,18 @@ function buildDoor(scene, def, doorIndex, interactiveObjects) {
   group.add(panel);
   interactiveObjects.push(panel);
 
-  const handleGeo = new THREE.BoxGeometry(0.05, 0.2, 0.06);
-  [-0.08, 0.08].forEach(hx => {
-    const handle = new THREE.Mesh(handleGeo, darkMat);
-    handle.position.set(hx, 1.05, w - 0.35);
-    group.add(handle);
+  // Round knob + backplate on both faces, latch side
+  const knobMat  = new THREE.MeshLambertMaterial({ color: 0x8a7a55, emissive: 0x2a2418, emissiveIntensity: 0.5 });
+  const plateGeo = new THREE.BoxGeometry(0.015, 0.24, 0.08);
+  const knobGeo  = new THREE.SphereGeometry(0.045, 10, 8);
+  [-1, 1].forEach(side => {
+    const plate = new THREE.Mesh(plateGeo, darkMat);
+    plate.position.set(side * 0.052, 1.05, w - 0.32);
+    group.add(plate);
+    const knob = new THREE.Mesh(knobGeo, knobMat);
+    knob.position.set(side * 0.1, 1.05, w - 0.32);
+    knob.scale.set(1, 1, 1.25);
+    group.add(knob);
   });
 
   scene.add(group);
@@ -473,10 +555,11 @@ function buildVacantRoom(scene, def, i) {
   if (postDoor > 0) PL(postDoor, rH, 0, rH/2, dLoc[1]+postDoor/2, 0, Math.PI/2, wallMat);
   if (topH > 0.05)  PL(dLoc[1]-dLoc[0], topH, 0, rH-topH/2, (dLoc[0]+dLoc[1])/2, 0, Math.PI/2, wallMat);
 
-  const fT = 0.1;
-  BX(fT, VACANT_DOOR_H, fT, -fT/2, VACANT_DOOR_H/2, dLoc[0], doorFrameMat);
-  BX(fT, VACANT_DOOR_H, fT, -fT/2, VACANT_DOOR_H/2, dLoc[1], doorFrameMat);
-  BX(fT, fT, dLoc[1]-dLoc[0], -fT/2, VACANT_DOOR_H+fT/2, (dLoc[0]+dLoc[1])/2, doorFrameMat);
+  // Doorway trim: jambs through the wall + header spanning the opening
+  const vfT = 0.12, vdCv = (dLoc[0] + dLoc[1]) / 2;
+  BX(0.32, VACANT_DOOR_H + 0.04, vfT, 0, (VACANT_DOOR_H + 0.04)/2, dLoc[0] - vfT/2, doorTrimMat);
+  BX(0.32, VACANT_DOOR_H + 0.04, vfT, 0, (VACANT_DOOR_H + 0.04)/2, dLoc[1] + vfT/2, doorTrimMat);
+  BX(0.32, 0.16, (dLoc[1] - dLoc[0]) + 2*vfT, 0, VACANT_DOOR_H + 0.1, vdCv, doorTrimMat);
 
   // Shell collision
   const r1 = rect(0, D + 0.3, -0.3, 0);    _addBox(r1.minX, r1.maxX, r1.minZ, r1.maxZ);
@@ -660,9 +743,9 @@ function addLights(scene) {
   // Candle + room light per classroom (decoys get a dimmer, colder light)
   classrooms.forEach(def => {
     const { P } = frameHelpers(def);
-    const cp = P(roomW - 2, roomW/2 + 0.8);
+    const cp = P(roomW - 1.9, roomW/2 - 0.65);   // over the teacher's desk candle
     const c = new THREE.PointLight(0xff7722, 5.8, 15);
-    c.position.set(cp.x, 1.1, cp.z);
+    c.position.set(cp.x, 1.15, cp.z);
     scene.add(c);
     flickerLights.push({ light: c, base: 5.8, speed: 3 + Math.random(), amp: 1.5, type: 'candle' });
 
