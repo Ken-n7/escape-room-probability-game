@@ -1,7 +1,7 @@
 import * as THREE                  from 'three';
 import { CFG }                    from './core/config.js';
 import { ROOMS, EXIT_CODE, QUESTIONS_PER_ROOM } from './data/questions.js';
-import { buildWorld, flickerLights, DOOR_OPEN_ANGLE, VACANT_ROOMS } from './world/world.js';
+import { buildWorld, flickerLights, DOOR_OPEN_ANGLE } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
@@ -26,7 +26,12 @@ import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase
 import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
-const { wallBoxes, interactiveObjects, roomNotes, roomDoors } = buildWorld(scene);
+const {
+  wallBoxes, interactiveObjects, roomNotes, roomDoors,
+  realRoomRects, decoyRects, vacantRects,
+} = buildWorld(scene);
+
+const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
 
 // ── Menu camera ────────────────────────────────────────────────────────────────
 const MENU_CAMERA_VIEW = {
@@ -165,12 +170,15 @@ function resetFear() {
 }
 
 let _wrongFeedbackTimer = null;
-function flashWrongVignette(fearLevel) {
+// Flash a vignette in from the edges, then settle back to the ambient fear
+// vignette. `edgeColor`/`flashOpacity` let callers pick the tint (red for wrong
+// answers, black for the locked-door scare).
+function flashVignette(fearLevel, edgeColor = 'rgba(84,0,0,0.72)', flashOpacity = 0.58) {
   const stage = fearStage(fearLevel);
   if (_wrongFeedbackTimer) { clearTimeout(_wrongFeedbackTimer); _wrongFeedbackTimer = null; }
   elVignette.style.transition = 'none';
-  elVignette.style.background = 'radial-gradient(ellipse at center, transparent 18%, rgba(84,0,0,0.72) 100%)';
-  elVignette.style.opacity    = '0.58';
+  elVignette.style.background = `radial-gradient(ellipse at center, transparent 18%, ${edgeColor} 100%)`;
+  elVignette.style.opacity    = String(flashOpacity);
   _wrongFeedbackTimer = setTimeout(() => {
     elVignette.style.transition = 'opacity 0.6s, background 0.6s';
     elVignette.style.background = stage.vigBg;
@@ -178,6 +186,8 @@ function flashWrongVignette(fearLevel) {
     _wrongFeedbackTimer = null;
   }, 350);
 }
+
+function flashWrongVignette(fearLevel) { flashVignette(fearLevel); }
 
 // ── HUD helpers ───────────────────────────────────────────────────────────────
 function updateHUD() {
@@ -249,29 +259,46 @@ function resetProgress() {
   cleanupChase();
   updateNoteVisibility();
   updateDoorLocks({ instant: true });
+  _decoyTripped = decoyRects.map(() => false);
   updateHUD();
 }
 
-// ── Locked doors (spec 1.4/1.5) ───────────────────────────────────────────────
-// Room 2's door stays shut until Room 1 is cleared, Room 3's until Room 2 is.
-// Trying a locked door triggers a (non-lethal) jumpscare.
-const doorIsOpen = [true, false, false];
+// ── Doors (spec 1.4/1.5 + decoys) ─────────────────────────────────────────────
+// 5 wooden doors: 3 real classrooms + 2 decoys. Real rooms 2/3 stay locked
+// (with a jumpscare on attempt) until the previous level is cleared. Decoy
+// doors are always unlocked and swing open when interacted with — the room
+// inside just isn't what it pretends to be.
+const doorIsOpen = roomDoors.map(d => d.realIdx === 0);   // room 1 starts open
 
 function updateDoorLocks({ instant = false } = {}) {
   roomDoors.forEach((door, i) => {
-    const locked  = i > 0 && !roomDone[i - 1];
+    if (door.realIdx === null) {
+      door.panel.userData.locked = false;
+      if (instant) {              // resets shut the decoys again
+        doorIsOpen[i] = false;
+        door.group.rotation.y = door.baseTheta;
+      }
+      return;
+    }
+    const locked  = door.realIdx > 0 && !roomDone[door.realIdx - 1];
     const wasOpen = doorIsOpen[i];
     doorIsOpen[i] = !locked;
     door.panel.userData.locked = locked;
-    if (instant) door.group.rotation.y = locked ? 0 : DOOR_OPEN_ANGLE;
+    if (instant) door.group.rotation.y = door.baseTheta + (locked ? 0 : DOOR_OPEN_ANGLE);
     else if (!wasOpen && !locked) AudioManager.play('randomTone');
   });
+}
+
+function openDecoyDoor(i) {
+  if (doorIsOpen[i]) return;
+  doorIsOpen[i] = true;
+  AudioManager.play('randomTone');
 }
 
 const DOOR_SWING_SPEED = 1.6; // rad/sec
 function updateDoors(dt) {
   roomDoors.forEach((door, i) => {
-    const target = doorIsOpen[i] ? DOOR_OPEN_ANGLE : 0;
+    const target = door.baseTheta + (doorIsOpen[i] ? DOOR_OPEN_ANGLE : 0);
     const cur = door.group.rotation.y;
     if (Math.abs(cur - target) < 0.001) return;
     const step = DOOR_SWING_SPEED * dt;
@@ -282,28 +309,39 @@ function updateDoors(dt) {
 }
 
 let _doorScareUntil = 0;
-function triggerLockedDoorScare(doorIdx) {
-  setPromptOverride(`🔒 LOCKED — clear Room ${doorIdx} first`, 2200);
+// Shown when the door is tried again while the scare is on cooldown — a plain
+// "it's locked" nudge instead of re-triggering the jumpscare.
+const LOCKED_NUDGES = [
+  "🔒 Locked. It won't budge.",
+  "🔒 The handle won't turn.",
+  '🔒 Still sealed shut.',
+  '🔒 Locked tight.',
+];
+function triggerLockedDoorScare(prevRoomNum) {
   const now = performance.now();
-  if (now < _doorScareUntil) return;
-  _doorScareUntil = now + 4000;
+  if (now < _doorScareUntil) {
+    // On cooldown: no jumpscare, just a fitting locked message so it can't be spammed.
+    setPromptOverride(LOCKED_NUDGES[Math.floor(Math.random() * LOCKED_NUDGES.length)], 1600);
+    return;
+  }
+  // Random cooldown so repeatedly hammering the door doesn't repeat the scare.
+  _doorScareUntil = now + 9000 + Math.random() * 8000;   // 9–17s
+  setPromptOverride(`🔒 LOCKED — clear Room ${prevRoomNum} first`, 2200);
 
   const overlay = $('jumpscare-overlay');
   overlay.classList.add('active');
   overlay.style.opacity = '1';
-  document.body.classList.add('screenshake');
   AudioManager.play('jumpscare');
-  flashWrongVignette(0);
+  flashVignette(0, 'rgba(0,0,0,0.94)', 0.72);   // black vignette closes in on the face
   setTimeout(() => {
-    document.body.classList.remove('screenshake');
     overlay.style.transition = 'opacity 0.6s';
     overlay.style.opacity = '0';
-  }, 420);
+  }, 700);   // grow (0.3s) + hold at full size before fading out
   setTimeout(() => {
     overlay.classList.remove('active');
     overlay.style.transition = '';
     overlay.style.opacity = '';
-  }, 1150);
+  }, 1400);
 }
 
 // One note per question: only the note matching the room's current progress
@@ -326,6 +364,7 @@ function setPromptOverride(text, ms) {
 function clearMovementInput() {
   Object.keys(keys).forEach(code => { keys[code] = false; });
   footstepTimer = 0;
+  _jumpY = 0; _jumpVy = 0; _jumpQueued = false;
 }
 
 // ── Interaction ───────────────────────────────────────────────────────────────
@@ -338,9 +377,7 @@ let nearObject = null;
 // Notes can only be examined from inside their room — stops reaching through
 // walls (and through locked doors) from the hallway.
 function isInsideRoom(roomIdx) {
-  const [zS, zE] = CFG.world.rooms[roomIdx];
-  return camera.position.x > CFG.world.hallW / 2 &&
-         camera.position.z > zS && camera.position.z < zE;
+  return inRect(realRoomRects[roomIdx], camera.position.x, camera.position.z);
 }
 
 function findNearObject() {
@@ -348,7 +385,8 @@ function findNearObject() {
   camera.getWorldDirection(INTERACT_DIR);
   interactiveObjects.forEach(obj => {
     if (!obj.visible) return;
-    if (obj.userData.isDoor && !obj.userData.locked) return;
+    // Doors: interactable when locked (→ scare) or when a closed decoy (→ open)
+    if (obj.userData.isDoor && !obj.userData.locked && doorIsOpen[obj.userData.doorIndex]) return;
     if (obj.userData.noteIndex !== undefined && !isInsideRoom(obj.userData.roomIndex)) return;
     obj.getWorldPosition(INTERACT_POS);
     INTERACT_TO.subVectors(INTERACT_POS, camera.position);
@@ -364,9 +402,15 @@ function findNearObject() {
 
 function tryInteract() {
   if (gState.current !== S.PLAYING || !nearObject) return;
-  if (nearObject.userData.isKeypad)                      openKeypad();
-  else if (nearObject.userData.isDoor)                   triggerLockedDoorScare(nearObject.userData.doorIndex);
-  else if (nearObject.userData.roomIndex !== undefined)  openQuestion(nearObject.userData.roomIndex);
+  if (nearObject.userData.isKeypad) {
+    openKeypad();
+  } else if (nearObject.userData.isDoor) {
+    const i = nearObject.userData.doorIndex;
+    if (nearObject.userData.locked) triggerLockedDoorScare(roomDoors[i].realIdx);
+    else openDecoyDoor(i);
+  } else if (nearObject.userData.roomIndex !== undefined) {
+    openQuestion(nearObject.userData.roomIndex);
+  }
 }
 
 // ── Collision ─────────────────────────────────────────────────────────────────
@@ -791,6 +835,10 @@ function closeQuestion() {
   showHUD();
   activeRoomIdx  = -1;
   gState.current = S.PLAYING;
+  // Hand control straight back: drop button focus (so Space can't re-click it)
+  // and re-grab the pointer without an extra click on the game area.
+  document.activeElement?.blur?.();
+  lockPointer();
 }
 
 // ── Jump scare ────────────────────────────────────────────────────────────────
@@ -807,7 +855,6 @@ function triggerJumpScare() {
     overlay.classList.add('active');
     overlay.style.opacity = '1';
 
-    document.body.classList.add('screenshake');
     renderer.domElement.style.filter = 'blur(2px) saturate(2.5) brightness(1.4)';
 
     elVignette.style.transition = 'none';
@@ -818,7 +865,6 @@ function triggerJumpScare() {
     AudioManager.playScream();
 
     setTimeout(() => {
-      document.body.classList.remove('screenshake');
       renderer.domElement.style.filter = '';
       elVignette.style.transition = 'background 0.35s, opacity 0.35s';
       elVignette.style.background = 'rgba(4,0,0,1)';
@@ -1139,14 +1185,12 @@ const VACANT_ENTRY_SOUNDS = [
   'randomCrying1', 'randomCrying2', 'randomLaughKids', 'randomLaughEvil',
   'randomMoan', 'randomScareWhisper',
 ];
-const _vacantSoundCooldown = VACANT_ROOMS.map(() => 0);
+const _vacantSoundCooldown = vacantRects.map(() => 0);
 let _insideVacantIdx = -1;
 
 function updateVacantRoomSounds() {
   const x = camera.position.x, z = camera.position.z;
-  const idx = x < -CFG.world.hallW / 2
-    ? VACANT_ROOMS.findIndex(v => z > v.zS && z < v.zE)
-    : -1;
+  const idx = vacantRects.findIndex(r => inRect(r, x, z));
   if (idx !== -1 && idx !== _insideVacantIdx) {
     const now = performance.now();
     if (now > _vacantSoundCooldown[idx]) {
@@ -1155,6 +1199,18 @@ function updateVacantRoomSounds() {
     }
   }
   _insideVacantIdx = idx;
+}
+
+// ── Decoy rooms — stepping inside for the first time each run kills the lights
+let _decoyTripped = decoyRects.map(() => false);
+
+function updateDecoyTraps() {
+  const x = camera.position.x, z = camera.position.z;
+  decoyRects.forEach((r, i) => {
+    if (_decoyTripped[i] || !inRect(r, x, z)) return;
+    _decoyTripped[i] = true;
+    triggerBlackout();
+  });
 }
 
 // ── Threat audio ──────────────────────────────────────────────────────────────
@@ -1176,6 +1232,30 @@ function updateThreatAudio(dt) {
 let prevTime = performance.now();
 let footstepTimer = 0;
 const STEP_INTERVAL = 0.42;
+
+// ── Jump (Space / mobile button) ──────────────────────────────────────────────
+const JUMP_VELOCITY = 4.6;   // ≈0.48u hop
+const GRAVITY       = 22;
+let _jumpY = 0, _jumpVy = 0, _jumpQueued = false;
+
+function tryJump() {
+  if (gState.current !== S.PLAYING) return;
+  if (_jumpY === 0 && _jumpVy === 0) _jumpVy = JUMP_VELOCITY;
+}
+
+function updateJump(dt) {
+  if (_jumpQueued) { tryJump(); _jumpQueued = false; }
+  if (keys['Space']) tryJump();
+  if (_jumpVy !== 0 || _jumpY > 0) {
+    _jumpVy -= GRAVITY * dt;
+    _jumpY  += _jumpVy * dt;
+    if (_jumpY <= 0) {
+      _jumpY = 0;
+      _jumpVy = 0;
+      AudioManager.play('footstep');   // landing thud
+    }
+  }
+}
 
 let _tabHidden = false;
 document.addEventListener('visibilitychange', () => { _tabHidden = document.hidden; });
@@ -1199,7 +1279,7 @@ function animate() {
 
   updateThreatAudio(dt);
   updateAmbientScares(dt);
-  if (gState.current === S.PLAYING) updateVacantRoomSounds();
+  if (gState.current === S.PLAYING) { updateVacantRoomSounds(); updateDecoyTraps(); }
 
   if (gState.current === S.CHASE) { updateChase(dt); renderer.render(scene, camera); return; }
   if (gState.current !== S.PLAYING) { renderer.render(scene, camera); return; }
@@ -1226,12 +1306,16 @@ function animate() {
     const spd  = CFG.player.speed * dt;
     if (fwd) { camera.position.x -= sinY*fwd*spd; camera.position.z -= cosY*fwd*spd; resolveCollision(camera.position); }
     if (rgt) { camera.position.x += cosY*rgt*spd; camera.position.z -= sinY*rgt*spd; resolveCollision(camera.position); }
-    camera.position.y = CFG.player.eyeH;
     footstepTimer -= dt;
-    if (footstepTimer <= 0) { AudioManager.play('footstep'); footstepTimer = STEP_INTERVAL; }
+    if (footstepTimer <= 0 && _jumpY === 0) { AudioManager.play('footstep'); footstepTimer = STEP_INTERVAL; }
   } else {
     footstepTimer = 0;
   }
+
+  // Jumping disabled — kept the code below in case we bring it back.
+  // updateJump(dt);
+  // camera.position.y = CFG.player.eyeH + _jumpY;
+  camera.position.y = CFG.player.eyeH;
 
   // ── Interaction prompt ────────────────────────────────────────────────────
   nearObject = findNearObject();
@@ -1315,7 +1399,12 @@ $('btn-code-submit').onclick   = () => {
   if (val === EXIT_CODE) triggerWin();
   else { $('code-error').textContent = '✗ Incorrect code. Try again.'; AudioManager.play('jumpscare'); }
 };
-$('btn-code-cancel').onclick   = () => { showHUD(); gState.current = S.PLAYING; };
+$('btn-code-cancel').onclick   = () => {
+  showHUD();
+  gState.current = S.PLAYING;
+  document.activeElement?.blur?.();
+  lockPointer();
+};
 $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-code-submit').click(); });
 $('btn-save-name').onclick     = () => {
   const n = $('settings-name').value.trim();
@@ -1334,7 +1423,8 @@ $('btn-reset-progress').onclick = () => {
   setTimeout(() => { $('settings-saved').textContent = ''; }, 2000);
 };
 elSensitivity?.addEventListener('input', e => {
-  setLookSensitivity(normalizeSensitivity(Number(e.target.value)));
+  // Slider value is a percent (45–180); convert to the 0.45–1.8 multiplier.
+  setLookSensitivity(normalizeSensitivity(Number(e.target.value) / 100));
   updateSensitivityUI();
   persistSave();
 });
@@ -1369,6 +1459,13 @@ $('persistent-fs-btn')?.addEventListener('click', () => {
 screens.pause.addEventListener('click', () => {
   if (gState.current === S.PAUSED) { showHUD(); gState.current = S.PLAYING; lockPointer(); }
 });
+
+// Jumping disabled — button hidden and its handler left commented out.
+$('mobile-jump')?.style.setProperty('display', 'none');
+// $('mobile-jump')?.addEventListener('pointerdown', e => {
+//   e.preventDefault();
+//   _jumpQueued = true;
+// });
 
 // ── Input callbacks ───────────────────────────────────────────────────────────
 initInput({
@@ -1420,6 +1517,8 @@ if (import.meta.env.DEV) {
       canInteract: Boolean(nearObject), target: nearObject?.userData || null,
       pLearnMode: CFG.gameplay.pLearnMode,
       doorsOpen: [...doorIsOpen],
+      doorKeys: roomDoors.map(d => d.key),
+      decoysTripped: [..._decoyTripped],
     }),
     getDrawnQuestions: () => shuffledQuestions.map(qs => qs.map(q => q.text.slice(0, 40))),
     setPose(p = {}) {
