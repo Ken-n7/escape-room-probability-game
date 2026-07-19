@@ -348,6 +348,7 @@ function setPromptOverride(text, ms) {
 function clearMovementInput() {
   Object.keys(keys).forEach(code => { keys[code] = false; });
   footstepTimer = 0;
+  _jumpY = 0; _jumpVy = 0; _jumpQueued = false;
 }
 
 // ── Interaction ───────────────────────────────────────────────────────────────
@@ -818,6 +819,10 @@ function closeQuestion() {
   showHUD();
   activeRoomIdx  = -1;
   gState.current = S.PLAYING;
+  // Hand control straight back: drop button focus (so Space can't re-click it)
+  // and re-grab the pointer without an extra click on the game area.
+  document.activeElement?.blur?.();
+  lockPointer();
 }
 
 // ── Jump scare ────────────────────────────────────────────────────────────────
@@ -1214,6 +1219,30 @@ let prevTime = performance.now();
 let footstepTimer = 0;
 const STEP_INTERVAL = 0.42;
 
+// ── Jump (Space / mobile button) ──────────────────────────────────────────────
+const JUMP_VELOCITY = 4.6;   // ≈0.48u hop
+const GRAVITY       = 22;
+let _jumpY = 0, _jumpVy = 0, _jumpQueued = false;
+
+function tryJump() {
+  if (gState.current !== S.PLAYING) return;
+  if (_jumpY === 0 && _jumpVy === 0) _jumpVy = JUMP_VELOCITY;
+}
+
+function updateJump(dt) {
+  if (_jumpQueued) { tryJump(); _jumpQueued = false; }
+  if (keys['Space']) tryJump();
+  if (_jumpVy !== 0 || _jumpY > 0) {
+    _jumpVy -= GRAVITY * dt;
+    _jumpY  += _jumpVy * dt;
+    if (_jumpY <= 0) {
+      _jumpY = 0;
+      _jumpVy = 0;
+      AudioManager.play('footstep');   // landing thud
+    }
+  }
+}
+
 let _tabHidden = false;
 document.addEventListener('visibilitychange', () => { _tabHidden = document.hidden; });
 
@@ -1263,12 +1292,14 @@ function animate() {
     const spd  = CFG.player.speed * dt;
     if (fwd) { camera.position.x -= sinY*fwd*spd; camera.position.z -= cosY*fwd*spd; resolveCollision(camera.position); }
     if (rgt) { camera.position.x += cosY*rgt*spd; camera.position.z -= sinY*rgt*spd; resolveCollision(camera.position); }
-    camera.position.y = CFG.player.eyeH;
     footstepTimer -= dt;
-    if (footstepTimer <= 0) { AudioManager.play('footstep'); footstepTimer = STEP_INTERVAL; }
+    if (footstepTimer <= 0 && _jumpY === 0) { AudioManager.play('footstep'); footstepTimer = STEP_INTERVAL; }
   } else {
     footstepTimer = 0;
   }
+
+  updateJump(dt);
+  camera.position.y = CFG.player.eyeH + _jumpY;
 
   // ── Interaction prompt ────────────────────────────────────────────────────
   nearObject = findNearObject();
@@ -1352,7 +1383,12 @@ $('btn-code-submit').onclick   = () => {
   if (val === EXIT_CODE) triggerWin();
   else { $('code-error').textContent = '✗ Incorrect code. Try again.'; AudioManager.play('jumpscare'); }
 };
-$('btn-code-cancel').onclick   = () => { showHUD(); gState.current = S.PLAYING; };
+$('btn-code-cancel').onclick   = () => {
+  showHUD();
+  gState.current = S.PLAYING;
+  document.activeElement?.blur?.();
+  lockPointer();
+};
 $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-code-submit').click(); });
 $('btn-save-name').onclick     = () => {
   const n = $('settings-name').value.trim();
@@ -1405,6 +1441,11 @@ $('persistent-fs-btn')?.addEventListener('click', () => {
 
 screens.pause.addEventListener('click', () => {
   if (gState.current === S.PAUSED) { showHUD(); gState.current = S.PLAYING; lockPointer(); }
+});
+
+$('mobile-jump')?.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  _jumpQueued = true;
 });
 
 // ── Input callbacks ───────────────────────────────────────────────────────────
