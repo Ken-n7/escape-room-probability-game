@@ -3,23 +3,57 @@ import { makeGLTFLoader } from '../loaders/gltf-loader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG } from '../core/config.js';
 
-const { hallW, hallH, hallL, roomW, roomH, doorW, doorH, rooms, exitZ } = CFG.world;
+const {
+  hallW, hallH, leg1Len, leg2EndX, leg2Z0, leg2Z1,
+  roomW, roomH, doorW, doorH, classrooms, vacants, vacantDepth,
+} = CFG.world;
 const HALF_W = hallW / 2;
-
-// Vacant, abandoned rooms on the LEFT side of the hallway (spec 1.3) — dark open
-// doorways between the lockers. main.js uses this table for entry-sound triggers.
-export const VACANT_DEPTH = 7;
-export const VACANT_ROOMS = [
-  { zS: 2,  zE: 10, dzS: 4.7,  dzE: 6.7  },
-  { zS: 12, zE: 20, dzS: 14.7, dzE: 16.7 },
-  { zS: 22, zE: 30, dzS: 24.7, dzE: 26.7 },
-  { zS: 32, zE: 40, dzS: 34.7, dzE: 36.7 },
-  { zS: 44, zE: 52, dzS: 46.7, dzE: 48.7 },
-];
 const VACANT_DOOR_H = 2.6;
 const ROOM_LIGHT_COLORS = [0xffaa44, 0x4488ff, 0x44ff88];
 const FLUORESCENT_MODEL_PATH = '/assets/3D/fluorescent/mounted_fluorescent_lights_1k.gltf';
-const HALL_LIGHT_ZS = [5.5, 16.5, 27, 38, 49];
+// Leg-1 fixtures sit at x=0 along z; leg-2 fixtures at z=49 along x (rotated 90°)
+const LEG1_LIGHT_ZS = [5.5, 16.5, 27, 38, 49];
+const LEG2_LIGHT_XS = [10, 21, 32, 41];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ROOM FRAMES — every room hangs off a corridor wall (orient E/W/N/S) and is
+//  built in LOCAL coords: u = depth into the room (0 at the door wall),
+//  v = along the door wall (0 at one edge). A per-room frame maps local → world
+//  and adds the frame's yaw to every rotation, so one set of interior code
+//  builds rooms facing any direction.
+// ═══════════════════════════════════════════════════════════════════════════════
+function frameFor(def) {
+  switch (def.orient) {
+    case 'E': return { ox:  HALF_W, oz: def.v0, ix:  1, iz: 0, lx: 0, lz:  1, theta: 0 };
+    case 'W': return { ox: -HALF_W, oz: def.v1, ix: -1, iz: 0, lx: 0, lz: -1, theta: Math.PI };
+    case 'N': return { ox: def.v1, oz: leg2Z1, ix: 0, iz:  1, lx: -1, lz: 0, theta: -Math.PI / 2 };
+    case 'S': return { ox: def.v0, oz: leg2Z0, ix: 0, iz: -1, lx:  1, lz: 0, theta:  Math.PI / 2 };
+  }
+}
+
+function frameHelpers(def) {
+  const f = frameFor(def);
+  const W = def.v1 - def.v0;
+  const P = (u, v) => ({ x: f.ox + u * f.ix + v * f.lx, z: f.oz + u * f.iz + v * f.lz });
+  const latPos = (f.lx + f.lz) > 0;
+  const dLoc = latPos
+    ? [def.door[0] - def.v0, def.door[1] - def.v0]
+    : [def.v1 - def.door[1], def.v1 - def.door[0]];
+  const rect = (u0, u1, v0, v1) => {
+    const a = P(u0, v0), b = P(u1, v1);
+    return {
+      minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x),
+      minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z),
+    };
+  };
+  const BX = (w, h, d, u, y, v, mat, rx = 0, ry = 0) => {
+    const p = P(u, v); _push(_bxGeo(w, h, d), mat, p.x, y, p.z, rx, ry + f.theta);
+  };
+  const PL = (w, h, u, y, v, rx, ry, mat) => {
+    const p = P(u, v); _push(_plGeo(w, h), mat, p.x, y, p.z, rx, ry + f.theta);
+  };
+  return { f, W, P, dLoc, rect, BX, PL };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CANVAS TEXTURES
@@ -81,6 +115,38 @@ function chalkboardTex(lines) {
   return new THREE.CanvasTexture(cv);
 }
 
+// Drop-ceiling tiles — grid of panels with water stains so the ceiling reads
+// instead of rendering as a black void.
+function ceilTex() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#33342f'; ctx.fillRect(0, 0, 256, 256);
+  // panel texture noise
+  for (let i = 0; i < 400; i++) {
+    const g = 42 + Math.floor(Math.random() * 16);
+    ctx.fillStyle = `rgba(${g},${g},${g-4},0.3)`;
+    ctx.fillRect(Math.random()*256, Math.random()*256, Math.random()*4+1, Math.random()*3+1);
+  }
+  // tile grid
+  ctx.strokeStyle = '#1f201c'; ctx.lineWidth = 3;
+  for (let i = 0; i <= 256; i += 64) {
+    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+  }
+  // water stains
+  for (let i = 0; i < 7; i++) {
+    ctx.fillStyle = `rgba(60,48,26,${0.12 + Math.random()*0.16})`;
+    ctx.beginPath();
+    ctx.ellipse(Math.random()*256, Math.random()*256, Math.random()*26+8, Math.random()*18+6, Math.random()*3, 0, Math.PI*2);
+    ctx.fill();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(3, 3);
+  return t;
+}
+
 function lockerTex() {
   const cv = document.createElement('canvas');
   cv.width = 128; cv.height = 256;
@@ -97,35 +163,82 @@ function lockerTex() {
   return t;
 }
 
+// Wooden door with two recessed panels — replaces the flat grunge slab
+function doorTex() {
+  const cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 512;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#4a3520'; ctx.fillRect(0, 0, 256, 512);
+  // vertical wood grain
+  for (let x = 0; x < 256; x += 4) {
+    const g = 40 + Math.floor(Math.random() * 22);
+    ctx.fillStyle = `rgba(${g},${Math.floor(g*0.72)},${Math.floor(g*0.42)},0.35)`;
+    ctx.fillRect(x, 0, 2, 512);
+  }
+  // two recessed panels
+  const panel = (y, h) => {
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillRect(38, y, 180, h);
+    ctx.strokeStyle = 'rgba(20,12,4,0.9)'; ctx.lineWidth = 6;
+    ctx.strokeRect(38, y, 180, h);
+    ctx.strokeStyle = 'rgba(120,88,50,0.35)'; ctx.lineWidth = 2;
+    ctx.strokeRect(46, y + 8, 164, h - 16);
+  };
+  panel(42, 180);
+  panel(272, 180);
+  // edge shading
+  const grad = ctx.createLinearGradient(0, 0, 256, 0);
+  grad.addColorStop(0, 'rgba(0,0,0,0.45)');
+  grad.addColorStop(0.12, 'rgba(0,0,0,0)');
+  grad.addColorStop(0.88, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 512);
+  return new THREE.CanvasTexture(cv);
+}
+
+function scrawlTex(lines) {
+  const cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, 512, 256);
+  ctx.fillStyle = 'rgba(170,150,140,0.85)';
+  ctx.font = 'bold 40px Georgia';
+  ctx.textAlign = 'center';
+  lines.forEach((l, i) => {
+    ctx.save();
+    ctx.translate(256 + (Math.random()-0.5)*30, 100 + i * 62);
+    ctx.rotate((Math.random()-0.5)*0.09);
+    ctx.fillText(l, 0, 0);
+    ctx.restore();
+  });
+  return new THREE.CanvasTexture(cv);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MATERIALS
-//  Large surfaces (walls, floor, ceiling) → MeshLambertMaterial so point lights
-//  create the horror atmosphere (dark corners, candle glow, flickering).
-//  Small furniture → MeshBasicMaterial (zero lighting cost, invisible diff).
-//  Hallway lockers stay Lambert so fluorescent flicker visibly changes the hall.
 // ═══════════════════════════════════════════════════════════════════════════════
-const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#3c3c3c'), emissive: 0x050608, emissiveIntensity: 0.22 });
-const doorPanelMat = new THREE.MeshLambertMaterial({ map: grungeTex('#41301c'), emissive: 0x080503, emissiveIntensity: 0.3 });
+const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#3c3c3c'), emissive: 0x050608, emissiveIntensity: 0.22, side: THREE.DoubleSide });
+const doorPanelMat = new THREE.MeshLambertMaterial({ map: doorTex(), emissive: 0x0a0704, emissiveIntensity: 0.35 });
+const doorTrimMat  = new THREE.MeshLambertMaterial({ map: grungeTex('#2b1c0e'), emissive: 0x060402, emissiveIntensity: 0.3 });
 const floorMat     = new THREE.MeshLambertMaterial({ map: floorTex(), emissive: 0x070707, emissiveIntensity: 0.28 });
-const ceilMat      = new THREE.MeshLambertMaterial({ color: 0x202020, emissive: 0x030304, emissiveIntensity: 0.16 });
-// — furniture stays MeshBasicMaterial (saves lighting calc on tiny geometry) —
+const ceilMat      = new THREE.MeshLambertMaterial({ map: ceilTex(), emissive: 0x14140f, emissiveIntensity: 0.5 });
 const lockerMat    = new THREE.MeshLambertMaterial({ map: lockerTex(), emissive: 0x020602, emissiveIntensity: 0.18 });
 const deskMat      = new THREE.MeshBasicMaterial({ color: 0x2e2010 });
 const darkMat      = new THREE.MeshBasicMaterial({ color: 0x0e0e0e });
 const doorFrameMat = new THREE.MeshBasicMaterial({ color: 0x1c1208 });
 const candleMat    = new THREE.MeshBasicMaterial({ color: 0xddeedd });
 const exitSignMat  = new THREE.MeshBasicMaterial({ color: 0xff2200 });
-const ceilLightMat = new THREE.MeshBasicMaterial({ color: 0x2a3322 });
+const paperMat     = new THREE.MeshBasicMaterial({ color: 0x6e6a5e });
 const bookMats     = [0x6b1a1a, 0x1a3a5b, 0x1a5b2a, 0x5b4a1a, 0x3a1a5b]
   .map(c => new THREE.MeshBasicMaterial({ color: c }));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  GEOMETRY BATCH SYSTEM — merge all static geometry by material
-//  → ~300 draw calls collapse to ~15 total
 // ═══════════════════════════════════════════════════════════════════════════════
 const _batch = new Map();
 const _v1 = new THREE.Vector3(1, 1, 1);
-const _euler = new THREE.Euler();
+// YXZ so a room's frame yaw composes correctly with per-prop pitch (floor/notes)
+const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const _quat  = new THREE.Quaternion();
 const _pos   = new THREE.Vector3();
 const _mtx   = new THREE.Matrix4();
@@ -155,171 +268,287 @@ const bx  = (w,h,d,x,y,z,mat)        => _push(_bxGeo(w,h,d), mat, x, y, z);
 const bxr = (w,h,d,x,y,z,rx,ry,mat)  => _push(_bxGeo(w,h,d), mat, x, y, z, rx, ry);
 const pl  = (w,h,x,y,z,rx,ry,mat)    => _push(_plGeo(w,h),   mat, x, y, z, rx, ry);
 
+// Floor plane with size-proportional UVs so tiles stay square on the long
+// corridor instead of stretching. ~3 world units per texture image, matching
+// the room floors' density (which use the default 0..1 UV × repeat(4,4)).
+const _floorTiled = (w, h, x, y, z, rx, ry, mat) => {
+  const g = new THREE.PlaneGeometry(w, h);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 12, uv.getY(i) * h / 12);
+  _push(g, mat, x, y, z, rx, ry);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
-//  HALLWAY
+//  CORRIDORS — two legs + corner, walls segmented around door openings
 // ═══════════════════════════════════════════════════════════════════════════════
-function buildHallway() {
-  const hw = HALF_W, hh = hallH, hl = hallL;
+const _collision = [];
+const _addBox = (minX, maxX, minZ, maxZ, extra) =>
+  _collision.push({ minX, maxX, minZ, maxZ, ...extra });
 
-  pl(hl, hw*2,  0,  0,  hl/2, -Math.PI/2, 0, floorMat);
-  pl(hl, hw*2,  0, hh,  hl/2,  Math.PI/2, 0, ceilMat);
-
-  // Left wall — segments around the vacant-room door openings
-  let lz = 0;
-  VACANT_ROOMS.forEach(({ dzS, dzE }) => {
-    if (lz < dzS) { const l = dzS - lz; pl(l, hh, -hw, hh/2, lz+l/2, 0, Math.PI/2, wallMat); }
-    const topH = hh - VACANT_DOOR_H;
-    if (topH > 0.05) { const l = dzE - dzS; pl(l, topH, -hw, hh-topH/2, (dzS+dzE)/2, 0, Math.PI/2, wallMat); }
-    lz = dzE;
+// A corridor wall with door gaps. runAxis 'z': plane x=at spanning z from..to.
+// runAxis 'x': plane z=at spanning x from..to. Also emits collision boxes.
+function segmentedWall(runAxis, at, from, to, gaps, ry, collide = true) {
+  const T = 0.3;
+  const seg = (a, b) => {
+    if (b - a < 0.01) return;
+    const len = b - a, mid = (a + b) / 2;
+    if (runAxis === 'z') {
+      pl(len, hallH, at, hallH/2, mid, 0, ry, wallMat);
+      if (collide) _addBox(at < 0 ? at - T : at, at < 0 ? at : at + T, a, b);
+    } else {
+      pl(len, hallH, mid, hallH/2, at, 0, ry, wallMat);
+      if (collide) _addBox(a, b, at < leg2Z0 + 0.1 ? at - T : at, at < leg2Z0 + 0.1 ? at : at + T);
+    }
+  };
+  let p = from;
+  [...gaps].sort((a, b) => a.a0 - b.a0).forEach(g => {
+    seg(p, g.a0);
+    const topH = hallH - g.h;
+    if (topH > 0.05) {
+      const mid = (g.a0 + g.a1) / 2, len = g.a1 - g.a0;
+      if (runAxis === 'z') pl(len, topH, at, hallH - topH/2, mid, 0, ry, wallMat);
+      else                 pl(len, topH, mid, hallH - topH/2, at, 0, ry, wallMat);
+    }
+    p = g.a1;
   });
-  if (lz < hl) { const l = hl - lz; pl(l, hh, -hw, hh/2, lz+l/2, 0, Math.PI/2, wallMat); }
+  seg(p, to);
+}
 
-  // Right wall — segments around door openings
-  let pz = 0;
-  rooms.forEach(([,,dzS,dzE]) => {
-    if (pz < dzS) { const l=dzS-pz; pl(l, hh, hw, hh/2, pz+l/2, 0, -Math.PI/2, wallMat); }
-    const topH = hh - doorH;
-    if (topH > 0.05) { const l=dzE-dzS; pl(l, topH, hw, hh-topH/2, (dzS+dzE)/2, 0, -Math.PI/2, wallMat); }
-    pz = dzE;
-  });
-  if (pz < hl) { const l=hl-pz; pl(l, hh, hw, hh/2, pz+l/2, 0, -Math.PI/2, wallMat); }
+function doorGapsFor(orient) {
+  const all = [
+    ...classrooms.filter(c => c.orient === orient).map(c => ({ a0: c.door[0], a1: c.door[1], h: doorH })),
+    ...vacants.filter(v => v.orient === orient).map(v => ({ a0: v.door[0], a1: v.door[1], h: VACANT_DOOR_H })),
+  ];
+  return all;
+}
 
-  pl(hw*2, hh, 0, hh/2, 0, 0, 0, wallMat);   // back wall (z = 0)
-  const exDW = 2.4, sideW = (hallW - exDW) / 2;
-  pl(sideW, hh, -hw+sideW/2, hh/2, hl, 0, Math.PI, wallMat);
-  pl(sideW, hh,  hw-sideW/2, hh/2, hl, 0, Math.PI, wallMat);
-  const exTopH = hh - doorH;
-  if (exTopH > 0) pl(exDW, exTopH, 0, hh-exTopH/2, hl, 0, Math.PI, wallMat);
+function buildCorridors() {
+  // Floors + ceilings (leg 1 owns the corner square)
+  _floorTiled(hallW, leg1Len, 0, 0, leg1Len/2, -Math.PI/2, 0, floorMat);
+  pl(hallW, leg1Len, 0, hallH, leg1Len/2, Math.PI/2, 0, ceilMat);
+  const leg2Len = leg2EndX - HALF_W;
+  _floorTiled(leg2Len, hallW, HALF_W + leg2Len/2, 0, (leg2Z0+leg2Z1)/2, -Math.PI/2, 0, floorMat);
+  pl(leg2Len, hallW, HALF_W + leg2Len/2, hallH, (leg2Z0+leg2Z1)/2, Math.PI/2, 0, ceilMat);
 
-  // Lockers → all merged into ONE draw call (gaps at vacant-room doorways)
-  const lW = 0.9, lH = 2.5, lD = 0.35;
-  for (let z = 0.5; z < hl - 1; z += lW + 0.05) {
-    const blocksDoor = VACANT_ROOMS.some(v => z + lW > v.dzS - 0.15 && z < v.dzE + 0.15);
-    if (blocksDoor) continue;
-    bx(lW, lH, lD, -hw+lD/2, lH/2, z+lW/2, lockerMat);
+  // Walls (visual + collision), segmented around the door openings
+  segmentedWall('z', -HALF_W, 0, leg1Len, doorGapsFor('W'),  Math.PI/2);          // leg1 west
+  segmentedWall('z',  HALF_W, 0, leg2Z0,  doorGapsFor('E'), -Math.PI/2);          // leg1 east (open past corner)
+  segmentedWall('x',  leg2Z1, -HALF_W, leg2EndX, doorGapsFor('N'), Math.PI);      // north wall (leg1 end + leg2)
+  segmentedWall('x',  leg2Z0,  HALF_W, leg2EndX, doorGapsFor('S'), 0);            // leg2 south
+  pl(hallW, hallH, 0, hallH/2, 0, 0, 0, wallMat);                                 // spawn back wall
+  _addBox(-HALF_W, HALF_W, -0.3, 0);
+
+  // Lockers — leg1 west wall + leg2 south wall, gaps at doorways.
+  // Box depth goes INTO the wall so the wide textured door faces the corridor.
+  const lW = 0.9, lH = 2.5, lD = 0.35, lGap = 0.04;   // lGap keeps the locker
+  const wGaps = doorGapsFor('W'), sGaps = doorGapsFor('S');   // back off the wall
+  for (let z = 0.5; z < leg1Len - 1; z += lW + 0.05) {         // plane (no z-fight,
+    if (wGaps.some(g => z + lW > g.a0 - 0.15 && z < g.a1 + 0.15)) continue;   // no bleed-through)
+    bx(lD, lH, lW, -HALF_W + lGap + lD/2, lH/2, z + lW/2, lockerMat);
   }
+  for (let x = HALF_W + 1; x < leg2EndX - 1; x += lW + 0.05) {
+    if (sGaps.some(g => x + lW > g.a0 - 0.15 && x < g.a1 + 0.15)) continue;
+    bxr(lD, lH, lW, x + lW/2, lH/2, leg2Z0 + lGap + lD/2, 0, Math.PI/2, lockerMat);
+  }
+  // Locker protrusion collision strips
+  let p = 0;
+  wGaps.sort((a,b)=>a.a0-b.a0).forEach(g => { _addBox(-HALF_W-0.3, -HALF_W+0.5, p, g.a0-0.15); p = g.a1+0.15; });
+  _addBox(-HALF_W-0.3, -HALF_W+0.5, p, leg1Len);
+  p = HALF_W;
+  sGaps.sort((a,b)=>a.a0-b.a0).forEach(g => { _addBox(p, g.a0-0.15, leg2Z0-0.3, leg2Z0+0.5); p = g.a1+0.15; });
+  _addBox(p, leg2EndX, leg2Z0-0.3, leg2Z0+0.5);
 
-  // Fluorescent fixtures are loaded as GLTF in addLights().
+  // Litter — a few loose papers drifted across the corridor floors. Random flat
+  // rotations, tiny y-stagger so overlapping sheets don't z-fight. Kept clear of
+  // the locker strips so nothing pokes through a wall.
+  const paper = (x, z, i) =>
+    pl(0.24, 0.32, x, 0.012 + i * 0.002, z, -Math.PI/2, Math.random() * Math.PI, paperMat);
+  for (let i = 0; i < 11; i++) paper((Math.random() - 0.5) * 4.4, 1.5 + Math.random() * (leg1Len - 3), i);
+  for (let i = 0; i < 7; i++)  paper(HALF_W + 1.5 + Math.random() * (leg2EndX - HALF_W - 3), leg2Z0 + 0.7 + Math.random() * (hallW - 1.6), i);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  ROOMS
+//  CLASSROOMS — real levels AND decoys share this builder. Decoys get a lying
+//  chalkboard label, desks turned to face the back wall, a faint scrawl, and
+//  no notes. Everything is built in the room's local frame.
 // ═══════════════════════════════════════════════════════════════════════════════
-function buildRoom(scene, roomIndex, interactiveObjects) {
-  const [zS, zE, dzS, dzE] = rooms[roomIndex];
-  const rW = roomW, rH = roomH, rL = zE - zS;
-  const cx = HALF_W + rW / 2, cz = (zS + zE) / 2;
+function buildClassroom(scene, def, interactiveObjects) {
+  const { f, W, P, dLoc, rect, BX, PL } = frameHelpers(def);
+  const D = roomW, rH = roomH;
+  const isDecoy = def.idx === null;
 
-  pl(rW, rL, cx, 0,  cz, -Math.PI/2, 0, floorMat);
-  pl(rW, rL, cx, rH, cz,  Math.PI/2, 0, ceilMat);
-  pl(rL, rH, HALF_W+rW, rH/2, cz,  0, -Math.PI/2, wallMat);
-  pl(rW, rH, cx, rH/2, zS,   0,         0, wallMat);
-  pl(rW, rH, cx, rH/2, zE,   0, Math.PI, wallMat);
+  PL(D, W, D/2, 0,  W/2, -Math.PI/2, 0, floorMat);
+  PL(D, W, D/2, rH, W/2,  Math.PI/2, 0, ceilMat);
+  PL(W, rH, D, rH/2, W/2, 0, -Math.PI/2, wallMat);   // far wall
+  PL(D, rH, D/2, rH/2, 0, 0, 0,        wallMat);     // v=0 side wall
+  PL(D, rH, D/2, rH/2, W, 0, Math.PI,  wallMat);     // v=W side wall
 
-  const preDoor = dzS-zS, postDoor = zE-dzE, topH = rH-doorH, dCx = (dzS+dzE)/2;
-  if (preDoor  > 0) pl(preDoor,  rH, HALF_W, rH/2, zS+preDoor/2,   0, Math.PI/2, wallMat);
-  if (postDoor > 0) pl(postDoor, rH, HALF_W, rH/2, dzE+postDoor/2, 0, Math.PI/2, wallMat);
-  if (topH > 0.05)  pl(doorW, topH,  HALF_W, rH-topH/2, dCx,       0, Math.PI/2, wallMat);
+  const preDoor = dLoc[0], postDoor = W - dLoc[1], topH = rH - doorH, dCv = (dLoc[0]+dLoc[1])/2;
+  if (preDoor  > 0) PL(preDoor,  rH, 0, rH/2, preDoor/2,          0, Math.PI/2, wallMat);
+  if (postDoor > 0) PL(postDoor, rH, 0, rH/2, dLoc[1]+postDoor/2, 0, Math.PI/2, wallMat);
+  if (topH > 0.05)  PL(doorW, topH,  0, rH-topH/2, dCv,           0, Math.PI/2, wallMat);
 
-  const fT = 0.12;
-  bx(fT, doorH, fT, HALF_W-fT/2, doorH/2, dzS, doorFrameMat);
-  bx(fT, doorH, fT, HALF_W-fT/2, doorH/2, dzE, doorFrameMat);
-  bx(doorW, fT, fT, HALF_W-fT/2, doorH+fT/2, dCx, doorFrameMat);
+  // Door frame: jambs through the wall + a header SPANNING the opening
+  // (the old header was a beam poking into the room), plus a threshold strip.
+  const fT = 0.14;
+  BX(0.34, doorH + 0.04, fT, 0, (doorH + 0.04)/2, dLoc[0] - fT/2, doorTrimMat);
+  BX(0.34, doorH + 0.04, fT, 0, (doorH + 0.04)/2, dLoc[1] + fT/2, doorTrimMat);
+  BX(0.34, 0.2, doorW + 2*fT, 0, doorH + 0.12, dCv, doorTrimMat);
+  BX(0.36, 0.03, doorW, 0, 0.015, dCv, doorTrimMat);
 
-  // Chalkboard — unique texture per room, added directly
+  // Room shell collision (side + far walls; door wall handled by corridor)
+  const r1 = rect(0, D + 0.3, -0.3, 0);   _addBox(r1.minX, r1.maxX, r1.minZ, r1.maxZ);
+  const r2 = rect(0, D + 0.3, W, W + 0.3); _addBox(r2.minX, r2.maxX, r2.minZ, r2.maxZ);
+  const r3 = rect(D, D + 0.3, 0, W);       _addBox(r3.minX, r3.maxX, r3.minZ, r3.maxZ);
+
+  // Chalkboard — blank in every classroom (owner request 2026-07-19): no room
+  // labels means real rooms and decoys are indistinguishable at a glance.
   const cbW = 4.5, cbH = 2.0;
+  const cbPos = P(D - 0.12, W/2);
   const cbMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(cbW, cbH),
-    new THREE.MeshBasicMaterial({ map: chalkboardTex(['ROOM '+(roomIndex+1), 'SOLVE TO ESCAPE']) })
+    new THREE.MeshBasicMaterial({ map: chalkboardTex([]) })
   );
-  cbMesh.position.set(HALF_W+rW-0.05, cbH/2+0.9, cz);
-  cbMesh.rotation.y = -Math.PI/2;
+  cbMesh.position.set(cbPos.x, cbH/2 + 0.9, cbPos.z);
+  cbMesh.rotation.order = 'YXZ';
+  cbMesh.rotation.set(0, -Math.PI/2 + f.theta, 0);
   scene.add(cbMesh);
-  bx(0.06, cbH+0.12, cbW+0.12, HALF_W+rW-0.06, cbH/2+0.9, cz, doorFrameMat);
+  BX(0.06, cbH + 0.12, cbW + 0.12, D - 0.06, cbH/2 + 0.9, W/2, doorFrameMat);
 
-  // Teacher's desk
-  const tdx = HALF_W+rW-1.5, tdz = cz+1;
-  bx(1.8, 0.08, 0.9, tdx, 0.78, tdz, deskMat);
-  bx(0.08, 0.78, 0.9, tdx-0.8, 0.39, tdz, deskMat);
-  bx(0.08, 0.78, 0.9, tdx+0.8, 0.39, tdz, deskMat);
+  // Chalk tray under the board
+  BX(0.12, 0.05, 3.2, D - 0.14, 0.84, W/2, doorFrameMat);
 
-  // 6 student desks + chairs
-  [[cx-2.5,zS+2],[cx,zS+2],[cx+2.5,zS+2],[cx-2.5,zS+4.5],[cx,zS+4.5],[cx+2.5,zS+4.5]]
-  .forEach(([dx,dz]) => {
-    bx(0.9, 0.06, 0.65, dx, 0.72, dz, deskMat);
-    bx(0.05,0.72,0.05,dx-0.4,0.36,dz-0.28,darkMat); bx(0.05,0.72,0.05,dx+0.4,0.36,dz-0.28,darkMat);
-    bx(0.05,0.72,0.05,dx-0.4,0.36,dz+0.28,darkMat); bx(0.05,0.72,0.05,dx+0.4,0.36,dz+0.28,darkMat);
-    bx(0.7, 0.05, 0.6, dx, 0.48, dz+0.6, deskMat);
-    bx(0.05,0.48,0.05,dx-0.3,0.24,dz+0.35,darkMat); bx(0.05,0.48,0.05,dx+0.3,0.24,dz+0.35,darkMat);
-    bx(0.05,0.48,0.05,dx-0.3,0.24,dz+0.85,darkMat); bx(0.05,0.48,0.05,dx+0.3,0.24,dz+0.85,darkMat);
+  // Teacher's desk — front-center under the chalkboard, facing the class (-u)
+  const tdu = D - 1.7, tdv = W/2;
+  BX(0.9, 0.08, 1.8, tdu, 0.78, tdv, deskMat);
+  BX(0.9, 0.78, 0.08, tdu, 0.39, tdv - 0.8, deskMat);
+  BX(0.9, 0.78, 0.08, tdu, 0.39, tdv + 0.8, deskMat);
+  const tdr = rect(tdu - 0.55, tdu + 0.55, tdv - 0.95, tdv + 0.95);
+  _addBox(tdr.minX, tdr.maxX, tdr.minZ, tdr.maxZ);
+
+  // 6 student desks in 2 rows × 3 columns, all FACING the chalkboard (+u),
+  // chairs tucked behind each desk. Same layout in real and decoy rooms.
+  const chairU = -0.75;
+  const backU  = -1.04;
+  [[4.2, 2.4], [4.2, 6], [4.2, 9.6], [6.8, 2.4], [6.8, 6], [6.8, 9.6]].forEach(([du, dv]) => {
+    BX(0.65, 0.06, 0.9, du, 0.72, dv, deskMat);                    // desk top
+    [[-0.26, -0.4], [0.26, -0.4], [-0.26, 0.4], [0.26, 0.4]].forEach(([lu, lv]) =>
+      BX(0.05, 0.72, 0.05, du + lu, 0.36, dv + lv, darkMat));
+    BX(0.6, 0.05, 0.7, du + chairU, 0.48, dv, deskMat);            // chair seat
+    [[-0.22, -0.3], [0.22, -0.3], [-0.22, 0.3], [0.22, 0.3]].forEach(([lu, lv]) =>
+      BX(0.05, 0.48, 0.05, du + chairU + lu, 0.24, dv + lv, darkMat));
+    BX(0.05, 0.6, 0.7, du + backU, 0.79, dv, deskMat);             // backrest
+    const dr = rect(du - 0.4, du + 0.4, dv - 0.53, dv + 0.53);
+    _addBox(dr.minX, dr.maxX, dr.minZ, dr.maxZ);
+    const cr = rect(du + chairU - 0.35, du + chairU + 0.35, dv - 0.42, dv + 0.42);
+    _addBox(cr.minX, cr.maxX, cr.minZ, cr.maxZ);
   });
 
   // Bookshelf
-  const bsx = HALF_W+0.5, bsz = zS+1.5;
-  bx(0.25,2.2,1.4,bsx,1.1,bsz,deskMat);
-  [0.2,0.8,1.4,2.0].forEach(sy => bx(0.22,0.04,1.4,bsx+0.01,sy,bsz,darkMat));
-  bookMats.forEach((bm,i) => bx(0.04,0.24,0.18,bsx+0.1,0.3+i*0.02,bsz-0.6+i*0.22,bm));
+  const bsu = 0.5, bsv = 1.5;
+  BX(0.25, 2.2, 1.4, bsu, 1.1, bsv, deskMat);
+  [0.2, 0.8, 1.4, 2.0].forEach(sy => BX(0.22, 0.04, 1.4, bsu + 0.01, sy, bsv, darkMat));
+  bookMats.forEach((bm, i) => BX(0.04, 0.24, 0.18, bsu + 0.1, 0.3 + i*0.02, bsv - 0.6 + i*0.22, bm));
+  const bsr = rect(bsu - 0.35, bsu + 0.35, bsv - 0.85, bsv + 0.85);
+  _addBox(bsr.minX, bsr.maxX, bsr.minZ, bsr.maxZ);
 
-  // Candle
-  bx(0.06,0.18,0.06,tdx-0.5,0.87,tdz-0.2,candleMat);
+  // Candle on the teacher's desk
+  BX(0.06, 0.18, 0.06, tdu - 0.2, 0.91, tdv - 0.65, candleMat);
 
-  // Exit sign
-  bx(0.7,0.25,0.05,HALF_W+rW-0.8,rH-0.2,zE-0.1,exitSignMat);
+  // Exit sign on the v=W side wall
+  BX(0.7, 0.25, 0.05, D - 0.8, rH - 0.2, W - 0.1, exitSignMat);
 
-  // Interactive notes — one per question, scattered around the room so the
-  // player hunts for the next problem after solving each (spec req 4 & 5).
-  // Order: teacher's desk → front student desk → back student desk →
-  // bookshelf side → back wall by the exit sign.
+  if (isDecoy) {
+    // A faint scrawl gives the lie away — once you're already inside.
+    const sPos = P(D - 0.03, W/2 - 1);
+    const scrawl = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 1.1),
+      new THREE.MeshBasicMaterial({ map: scrawlTex(['IT LIED']), transparent: true, opacity: 0.4 })
+    );
+    scrawl.position.set(sPos.x, 1.05, sPos.z);
+    scrawl.rotation.order = 'YXZ';
+    scrawl.rotation.set(0, -Math.PI/2 + f.theta, 0);
+    scene.add(scrawl);
+    return null;
+  }
+
+  // Interactive notes — one per question, scattered around the room (real only)
   const noteSpots = [
-    { x: tdx,     y: 0.84, z: tdz+0.1,  rx: -Math.PI/2, ry: 0 },          // teacher's desk
-    { x: cx-2.5,  y: 0.78, z: zS+2,     rx: -Math.PI/2, ry: 0 },          // front-left student desk
-    { x: cx+2.5,  y: 0.78, z: zS+4.5,   rx: -Math.PI/2, ry: 0 },          // back-right student desk
-    { x: bsx+0.14, y: 1.3, z: bsz,      rx: 0,          ry: Math.PI/2 },  // bookshelf side
-    { x: cx+2,    y: 1.4,  z: zE-0.02,  rx: 0,          ry: Math.PI },    // back wall near exit sign
+    { u: tdu,        y: 0.87, v: tdv + 0.4, rx: -Math.PI/2, ry: 0 },          // teacher's desk
+    { u: 4.2,        y: 0.78, v: 2.4,       rx: -Math.PI/2, ry: 0 },          // front-left student desk
+    { u: 6.8,        y: 0.78, v: 9.6,       rx: -Math.PI/2, ry: 0 },          // back-right student desk
+    { u: bsu + 0.14, y: 1.3,  v: bsv,       rx: 0,          ry: Math.PI/2 },  // bookshelf side
+    { u: 8,          y: 1.4,  v: W - 0.02,  rx: 0,          ry: Math.PI },    // back wall near exit sign
   ];
-  const roomNoteMeshes = noteSpots.map((s, noteIndex) => {
+  return noteSpots.map((s, noteIndex) => {
     const noteMesh = new THREE.Mesh(
       new THREE.PlaneGeometry(0.35, 0.45),
       new THREE.MeshBasicMaterial({ color: 0xffffaa })
     );
-    noteMesh.position.set(s.x, s.y, s.z);
-    noteMesh.rotation.set(s.rx, s.ry, 0);
+    const np = P(s.u, s.v);
+    noteMesh.position.set(np.x, s.y, np.z);
+    noteMesh.rotation.order = 'YXZ';
+    noteMesh.rotation.set(s.rx, s.ry + f.theta, 0);
     noteMesh.userData.isInteractive = true;
-    noteMesh.userData.roomIndex = roomIndex;
+    noteMesh.userData.roomIndex = def.idx;
     noteMesh.userData.noteIndex = noteIndex;
     scene.add(noteMesh);
     interactiveObjects.push(noteMesh);
     return noteMesh;
   });
-  return roomNoteMeshes;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  VACANT ROOMS — abandoned classrooms for creepy aesthetics (spec 1.3).
-//  Dark open doorways off the left side of the hallway; overturned desks,
-//  scattered school work, chalk scrawls. No lights — ambient only.
+//  ROOM DOORS — every classroom (real + decoy) gets a wooden door. Real rooms
+//  2/3 stay locked until the previous level is done; decoys are unlocked and
+//  open on interact. main.js drives rotation.y between baseTheta and
+//  baseTheta + DOOR_OPEN_ANGLE.
 // ═══════════════════════════════════════════════════════════════════════════════
-const paperMat = new THREE.MeshBasicMaterial({ color: 0x6e6a5e });
-const _vacantPropBoxes = [];
+export const DOOR_OPEN_ANGLE = 1.92;   // ~110°, swings into the room
 
-function scrawlTex(lines) {
-  const cv = document.createElement('canvas');
-  cv.width = 512; cv.height = 256;
-  const ctx = cv.getContext('2d');
-  ctx.clearRect(0, 0, 512, 256);
-  ctx.fillStyle = 'rgba(170,150,140,0.85)';
-  ctx.font = 'bold 40px Georgia';
-  ctx.textAlign = 'center';
-  lines.forEach((l, i) => {
-    ctx.save();
-    ctx.translate(256 + (Math.random()-0.5)*30, 100 + i * 62);
-    ctx.rotate((Math.random()-0.5)*0.09);
-    ctx.fillText(l, 0, 0);
-    ctx.restore();
+function buildDoor(scene, def, doorIndex, interactiveObjects) {
+  const { f, P, dLoc, rect } = frameHelpers(def);
+  const w = dLoc[1] - dLoc[0];
+
+  const group = new THREE.Group();
+  const hp = P(0, dLoc[0]);
+  group.position.set(hp.x, 0, hp.z);
+  group.rotation.y = f.theta;
+
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.09, doorH - 0.05, w - 0.06),
+    doorPanelMat
+  );
+  panel.position.set(0, (doorH - 0.05) / 2, (w - 0.06) / 2 + 0.03);
+  panel.userData.isDoor    = true;
+  panel.userData.doorIndex = doorIndex;
+  panel.userData.locked    = false;   // main.js sets real lock state
+  group.add(panel);
+  interactiveObjects.push(panel);
+
+  // Round knob + backplate on both faces, latch side
+  const knobMat  = new THREE.MeshLambertMaterial({ color: 0x8a7a55, emissive: 0x2a2418, emissiveIntensity: 0.5 });
+  const plateGeo = new THREE.BoxGeometry(0.015, 0.24, 0.08);
+  const knobGeo  = new THREE.SphereGeometry(0.045, 10, 8);
+  [-1, 1].forEach(side => {
+    const plate = new THREE.Mesh(plateGeo, darkMat);
+    plate.position.set(side * 0.052, 1.05, w - 0.32);
+    group.add(plate);
+    const knob = new THREE.Mesh(knobGeo, knobMat);
+    knob.position.set(side * 0.1, 1.05, w - 0.32);
+    knob.scale.set(1, 1, 1.25);
+    group.add(knob);
   });
-  return new THREE.CanvasTexture(cv);
+
+  scene.add(group);
+  const dr = rect(-0.15, 0.15, dLoc[0], dLoc[1]);
+  _addBox(dr.minX, dr.maxX, dr.minZ, dr.maxZ, { doorIndex });
+  return { group, panel, baseTheta: f.theta, realIdx: def.idx, key: def.key };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VACANT ROOMS — abandoned, open dark doorways (spec 1.3)
+// ═══════════════════════════════════════════════════════════════════════════════
 const VACANT_SCRAWLS = [
   ['HELP US'],
   ['IT COUNTS', 'THE OUTCOMES'],
@@ -328,121 +557,91 @@ const VACANT_SCRAWLS = [
   ['NOTHING IS', 'CERTAIN HERE'],
 ];
 
-function buildVacantRoom(scene, i) {
-  const { zS, zE, dzS, dzE } = VACANT_ROOMS[i];
-  const d = VACANT_DEPTH, rH = roomH, rL = zE - zS;
-  const cx = -HALF_W - d / 2, cz = (zS + zE) / 2;
+function buildVacantRoom(scene, def, i) {
+  const { f, W, P, dLoc, rect, BX, PL } = frameHelpers(def);
+  const D = vacantDepth, rH = roomH;
 
-  pl(d, rL, cx, 0,  cz, -Math.PI/2, 0, floorMat);
-  pl(d, rL, cx, rH, cz,  Math.PI/2, 0, ceilMat);
-  pl(rL, rH, -HALF_W-d, rH/2, cz, 0,  Math.PI/2, wallMat);  // far wall
-  pl(d,  rH, cx, rH/2, zS, 0, 0,        wallMat);
-  pl(d,  rH, cx, rH/2, zE, 0, Math.PI,  wallMat);
+  PL(D, W, D/2, 0,  W/2, -Math.PI/2, 0, floorMat);
+  PL(D, W, D/2, rH, W/2,  Math.PI/2, 0, ceilMat);
+  PL(W, rH, D, rH/2, W/2, 0, -Math.PI/2, wallMat);
+  PL(D, rH, D/2, rH/2, 0, 0, 0,       wallMat);
+  PL(D, rH, D/2, rH/2, W, 0, Math.PI, wallMat);
 
-  // Inner wall (room side of the hallway wall), segmented around the doorway
-  const preDoor = dzS - zS, postDoor = zE - dzE, topH = rH - VACANT_DOOR_H;
-  if (preDoor  > 0) pl(preDoor,  rH, -HALF_W, rH/2, zS+preDoor/2,   0, -Math.PI/2, wallMat);
-  if (postDoor > 0) pl(postDoor, rH, -HALF_W, rH/2, dzE+postDoor/2, 0, -Math.PI/2, wallMat);
-  if (topH > 0.05)  pl(dzE-dzS, topH, -HALF_W, rH-topH/2, (dzS+dzE)/2, 0, -Math.PI/2, wallMat);
+  const preDoor = dLoc[0], postDoor = W - dLoc[1], topH = rH - VACANT_DOOR_H;
+  if (preDoor  > 0) PL(preDoor,  rH, 0, rH/2, preDoor/2,          0, Math.PI/2, wallMat);
+  if (postDoor > 0) PL(postDoor, rH, 0, rH/2, dLoc[1]+postDoor/2, 0, Math.PI/2, wallMat);
+  if (topH > 0.05)  PL(dLoc[1]-dLoc[0], topH, 0, rH-topH/2, (dLoc[0]+dLoc[1])/2, 0, Math.PI/2, wallMat);
 
-  // Dark door frame
-  const fT = 0.1;
-  bx(fT, VACANT_DOOR_H, fT, -HALF_W+fT/2, VACANT_DOOR_H/2, dzS, doorFrameMat);
-  bx(fT, VACANT_DOOR_H, fT, -HALF_W+fT/2, VACANT_DOOR_H/2, dzE, doorFrameMat);
-  bx(fT, fT, dzE-dzS,   -HALF_W+fT/2, VACANT_DOOR_H+fT/2, (dzS+dzE)/2, doorFrameMat);
+  // Doorway trim: jambs through the wall + header spanning the opening
+  const vfT = 0.12, vdCv = (dLoc[0] + dLoc[1]) / 2;
+  BX(0.32, VACANT_DOOR_H + 0.04, vfT, 0, (VACANT_DOOR_H + 0.04)/2, dLoc[0] - vfT/2, doorTrimMat);
+  BX(0.32, VACANT_DOOR_H + 0.04, vfT, 0, (VACANT_DOOR_H + 0.04)/2, dLoc[1] + vfT/2, doorTrimMat);
+  BX(0.32, 0.16, (dLoc[1] - dLoc[0]) + 2*vfT, 0, VACANT_DOOR_H + 0.1, vdCv, doorTrimMat);
 
-  // Overturned / abandoned desks
+  // Shell collision
+  const r1 = rect(0, D + 0.3, -0.3, 0);    _addBox(r1.minX, r1.maxX, r1.minZ, r1.maxZ);
+  const r2 = rect(0, D + 0.3, W, W + 0.3); _addBox(r2.minX, r2.maxX, r2.minZ, r2.maxZ);
+  const r3 = rect(D, D + 0.3, 0, W);       _addBox(r3.minX, r3.maxX, r3.minZ, r3.maxZ);
+
+  // Abandoned props
   const tip = 1.25 + Math.random() * 0.35;
-  bxr(0.9, 0.06, 0.65, cx - 1 + Math.random(), 0.38, zS + 2 + Math.random() * 2, tip, Math.random() * Math.PI, deskMat);
-  bxr(0.9, 0.06, 0.65, cx + 0.5, 0.72, zE - 2.5, 0, 0.4 + Math.random() * 0.5, deskMat); // askew but upright
-  bx(0.05, 0.72, 0.05, cx + 0.15, 0.36, zE - 2.7, darkMat);
-  bx(0.05, 0.72, 0.05, cx + 0.85, 0.36, zE - 2.3, darkMat);
-  // Broken chair on its side
-  bxr(0.7, 0.05, 0.6, cx - 2, 0.3, cz + 0.5, Math.PI / 2 - 0.25, 1.1, deskMat);
+  BX(0.9, 0.06, 0.65, 2 + Math.random(), 0.38, 1.5 + Math.random()*2, deskMat, tip, Math.random()*Math.PI);
+  BX(0.9, 0.06, 0.65, 3, 0.72, W - 2.5, deskMat, 0, 0.4 + Math.random()*0.5);
+  BX(0.05, 0.72, 0.05, 2.65, 0.36, W - 2.7, darkMat);
+  BX(0.05, 0.72, 0.05, 3.35, 0.36, W - 2.3, darkMat);
+  BX(0.7, 0.05, 0.6, 1.5, 0.3, W/2 + 0.5, deskMat, Math.PI/2 - 0.25, 1.1);
+  const dr = rect(2.4, 3.6, W - 3.1, W - 1.9);
+  _addBox(dr.minX, dr.maxX, dr.minZ, dr.maxZ);
 
-  // Scattered school work
   for (let p = 0; p < 6; p++) {
-    pl(0.25, 0.33,
-      cx + (Math.random() - 0.5) * (d - 1.5),
-      0.012 + p * 0.002,
-      zS + 1 + Math.random() * (rL - 2),
-      -Math.PI / 2, Math.random() * Math.PI, paperMat);
+    PL(0.25, 0.33, 0.8 + Math.random()*(D - 1.6), 0.012 + p*0.002, 1 + Math.random()*(W - 2),
+      -Math.PI/2, Math.random()*Math.PI, paperMat);
   }
 
-  // Chalk scrawl on the far wall
+  const sPos = P(D - 0.03, W/2 + (Math.random()-0.5)*2);
   const scrawl = new THREE.Mesh(
     new THREE.PlaneGeometry(2.6, 1.3),
-    new THREE.MeshBasicMaterial({ map: scrawlTex(VACANT_SCRAWLS[i]), transparent: true, opacity: 0.5 })
+    new THREE.MeshBasicMaterial({ map: scrawlTex(VACANT_SCRAWLS[i % VACANT_SCRAWLS.length]), transparent: true, opacity: 0.5 })
   );
-  scrawl.position.set(-HALF_W - d + 0.03, 1.7, cz + (Math.random() - 0.5) * 2);
-  scrawl.rotation.y = Math.PI / 2;
+  scrawl.position.set(sPos.x, 1.7, sPos.z);
+  scrawl.rotation.order = 'YXZ';
+  scrawl.rotation.set(0, -Math.PI/2 + f.theta, 0);
   scene.add(scrawl);
-
-  // Rough collision for the upright desk (tipped props stay walkable)
-  _vacantPropBoxes.push({ minX: cx - 0.1, maxX: cx + 1.1, minZ: zE - 3.1, maxZ: zE - 1.9 });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  ROOM DOORS — rooms 2 and 3 stay locked until the previous room is cleared
-//  (spec 1.4). The hinge group sits at the doorway's near edge; main.js swings
-//  rotation.y open once the gate condition is met.
-// ═══════════════════════════════════════════════════════════════════════════════
-export const DOOR_OPEN_ANGLE = 1.92;   // ~110°, swings into the room past the bookshelf
-
-function buildDoor(scene, roomIndex, interactiveObjects) {
-  const [, , dzS, dzE] = rooms[roomIndex];
-  const w = dzE - dzS;
-
-  const group = new THREE.Group();
-  group.position.set(HALF_W, 0, dzS);
-
-  // Panel is a child offset from the hinge, so the group's rotation swings it
-  // and getWorldPosition() (used by the interact check) tracks the door centre.
-  const panel = new THREE.Mesh(
-    new THREE.BoxGeometry(0.09, doorH - 0.05, w - 0.06),
-    doorPanelMat
-  );
-  panel.position.set(0, (doorH - 0.05) / 2, (w - 0.06) / 2 + 0.03);
-  panel.userData.isDoor    = true;
-  panel.userData.doorIndex = roomIndex;
-  panel.userData.locked    = roomIndex > 0;
-  group.add(panel);
-  interactiveObjects.push(panel);
-
-  // Handle plates on both faces, latch side
-  const handleGeo = new THREE.BoxGeometry(0.05, 0.2, 0.06);
-  [-0.08, 0.08].forEach(hx => {
-    const handle = new THREE.Mesh(handleGeo, darkMat);
-    handle.position.set(hx, 1.05, w - 0.35);
-    group.add(handle);
-  });
-
-  scene.add(group);
-  return { group, panel };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  EXIT DOOR
+//  EXIT DOOR — end wall of leg 2 (x = leg2EndX), keypad beside it
 // ═══════════════════════════════════════════════════════════════════════════════
 function buildExitDoor(scene, interactiveObjects) {
-  const hl = hallL, hh = hallH;
+  const cz = (leg2Z0 + leg2Z1) / 2;      // 49
+  const exDW = 2.4;
+  const d0 = cz - exDW/2, d1 = cz + exDW/2;
 
-  bx(0.15,doorH,0.15,-1.3,doorH/2,hl,doorFrameMat);
-  bx(0.15,doorH,0.15, 1.3,doorH/2,hl,doorFrameMat);
-  bx(2.8, 0.15, 0.15,   0,doorH+0.08,hl,doorFrameMat);
+  // End wall segments around the opening
+  pl(d0 - leg2Z0, hallH, leg2EndX, hallH/2, (leg2Z0 + d0)/2, 0, -Math.PI/2, wallMat);
+  pl(leg2Z1 - d1, hallH, leg2EndX, hallH/2, (d1 + leg2Z1)/2, 0, -Math.PI/2, wallMat);
+  const exTopH = hallH - doorH;
+  if (exTopH > 0) pl(exDW, exTopH, leg2EndX, hallH - exTopH/2, cz, 0, -Math.PI/2, wallMat);
+  _addBox(leg2EndX, leg2EndX + 0.3, leg2Z0, leg2Z1);   // whole end wall blocks (door never opens)
+
+  bxr(0.15, doorH, 0.15, leg2EndX, doorH/2, d0 - 0.1, 0, 0, doorFrameMat);
+  bxr(0.15, doorH, 0.15, leg2EndX, doorH/2, d1 + 0.1, 0, 0, doorFrameMat);
+  bxr(exDW + 0.4, 0.15, 0.15, leg2EndX, doorH + 0.08, cz, 0, Math.PI/2, doorFrameMat);
 
   const doorFill = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, doorH),
+    new THREE.PlaneGeometry(exDW, doorH),
     new THREE.MeshBasicMaterial({ color: 0x050510, transparent: true, opacity: 0.92 })
   );
-  doorFill.position.set(0, doorH/2, hl-0.01);
+  doorFill.position.set(leg2EndX - 0.01, doorH/2, cz);
+  doorFill.rotation.y = -Math.PI/2;
   scene.add(doorFill);
 
   const keypad = new THREE.Mesh(
     new THREE.BoxGeometry(0.3, 0.4, 0.08),
     new THREE.MeshBasicMaterial({ color: 0x003322 })
   );
-  keypad.position.set(1.55, 1.4, hl-0.15);
+  keypad.position.set(leg2EndX - 0.15, 1.4, d1 + 0.65);
+  keypad.rotation.y = Math.PI/2;
   keypad.userData.isKeypad = true;
   scene.add(keypad);
   interactiveObjects.push(keypad);
@@ -451,16 +650,15 @@ function buildExitDoor(scene, interactiveObjects) {
     new THREE.PlaneGeometry(0.22, 0.14),
     new THREE.MeshBasicMaterial({ color: 0x00ff88 })
   );
-  screen.position.set(1.55, 1.55, hl-0.1);
+  screen.position.set(leg2EndX - 0.1, 1.55, d1 + 0.65);
+  screen.rotation.y = -Math.PI/2;
   scene.add(screen);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  LIGHTS — restored for atmosphere
-//  Large surface Lambert materials respond to these lights, creating dark corners,
-//  warm candle glow, and the flickering broken-fluorescent hallway effect.
+//  LIGHTS
 // ═══════════════════════════════════════════════════════════════════════════════
-export const flickerLights = [];   // populated below; main.js updates intensity each frame
+export const flickerLights = [];
 
 let fluorescentTemplate = null;
 let fluorescentLoading = false;
@@ -486,14 +684,15 @@ function collectEmissiveMaterials(root) {
   return materials;
 }
 
-function addFluorescentFixture(scene, z, syncTarget) {
+function addFluorescentFixture(scene, x, z, rotY, syncTarget) {
   if (!fluorescentTemplate) {
-    pendingFluorescentFixtures.push({ scene, z, syncTarget });
+    pendingFluorescentFixtures.push({ scene, x, z, rotY, syncTarget });
     if (!fluorescentLoading) {
       fluorescentLoading = true;
       makeGLTFLoader().load(FLUORESCENT_MODEL_PATH, gltf => {
         fluorescentTemplate = gltf.scene;
-        pendingFluorescentFixtures.splice(0).forEach(item => addFluorescentFixture(item.scene, item.z, item.syncTarget));
+        pendingFluorescentFixtures.splice(0).forEach(item =>
+          addFluorescentFixture(item.scene, item.x, item.z, item.rotY, item.syncTarget));
       }, undefined, err => console.warn('Fluorescent light asset failed to load.', err));
     }
     return;
@@ -509,142 +708,114 @@ function addFluorescentFixture(scene, z, syncTarget) {
   fixture.position.sub(center);
 
   const group = new THREE.Group();
-  group.position.set(0, hallH - 0.14, z);
+  group.position.set(x, hallH - 0.14, z);
+  group.rotation.y = rotY;
   group.add(fixture);
   scene.add(group);
 
   syncTarget.emissiveMaterials.push(...emissiveMaterials);
 }
 
-function addLights(scene) {
-  // Very dim cool ambient — keeps absolute-black areas just barely visible
-  scene.add(new THREE.AmbientLight(0x242a38, 3.25));
+function addCorridorLight(scene, x, z, rotY) {
+  const l = new THREE.PointLight(0xa8b9d8, 5.4, 24);
+  l.position.set(x, hallH - 0.3, z);
+  scene.add(l);
+  const syncTarget = {
+    light: l,
+    base: 2.75,
+    speed: 6 + Math.random()*3,
+    amp: 0.7,
+    type: 'hall',
+    cutTimer: 0,
+    emissiveMaterials: [],
+    glowMaterials: [],
+    emissiveBase: 0.62,
+  };
+  flickerLights.push(syncTarget);
 
-  // Hallway fluorescents — cool blue-white, occasional sudden dim (broken tubes)
-  HALL_LIGHT_ZS.forEach(z => {
-    const l = new THREE.PointLight(0xa8b9d8, 5.4, 24);
-    l.position.set(0, hallH - 0.3, z);
-    scene.add(l);
-    const syncTarget = {
-      light: l,
-      base: 2.75,
-      speed: 6 + Math.random()*3,
-      amp: 0.7,
-      type: 'hall',
-      cutTimer: 0,
-      emissiveMaterials: [],
-      glowMaterials: [],
-      emissiveBase: 0.62,
-    };
-    flickerLights.push(syncTarget);
-
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: 0xcde9ff,
-      transparent: true,
-      opacity: 0.32,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.5), glowMat);
-    glow.position.set(0, hallH - 0.22, z);
-    glow.rotation.x = Math.PI / 2;
-    scene.add(glow);
-    syncTarget.glowMaterials.push(glowMat);
-
-    addFluorescentFixture(scene, z, syncTarget);
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: 0xcde9ff,
+    transparent: true,
+    opacity: 0.32,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
   });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.5), glowMat);
+  glow.position.set(x, hallH - 0.22, z);
+  glow.rotation.order = 'YXZ';
+  glow.rotation.set(Math.PI/2, rotY, 0);
+  scene.add(glow);
+  syncTarget.glowMaterials.push(glowMat);
 
-  // Candle per room — warm orange, gentle organic flicker
-  rooms.forEach(([zS, zE]) => {
-    const tdx = HALF_W + roomW - 1.5;
-    const tdz = (zS + zE) / 2 + 1;
-    const c = new THREE.PointLight(0xff7722, 5.8, 15);
-    c.position.set(tdx - 0.5, 1.1, tdz - 0.2);
-    scene.add(c);
-    flickerLights.push({ light: c, base: 5.8, speed: 3 + Math.random(), amp: 1.5, type: 'candle' });
-  });
+  addFluorescentFixture(scene, x, z, rotY, syncTarget);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-//  COLLISION
-// ═══════════════════════════════════════════════════════════════════════════════
-function buildCollision() {
-  const hl = hallL, hw = HALF_W;
-  const boxes = [];
-  const add = (minX,maxX,minZ,maxZ) => boxes.push({minX,maxX,minZ,maxZ});
-  const addBox = (x, z, w, d, pad = 0.08) =>
-    add(x - w / 2 - pad, x + w / 2 + pad, z - d / 2 - pad, z + d / 2 + pad);
+function addLights(scene) {
+  scene.add(new THREE.AmbientLight(0x242a38, 3.25));
 
-  // Left hallway wall — segmented around vacant-room doorways
-  let lz = 0;
-  VACANT_ROOMS.forEach(({ dzS, dzE }) => { add(-hw-0.3,-hw, lz, dzS); lz = dzE; });
-  add(-hw-0.3,-hw, lz, hl);
-  add(-hw, hw, -0.3, 0);
+  LEG1_LIGHT_ZS.forEach(z => addCorridorLight(scene, 0, z, 0));
+  LEG2_LIGHT_XS.forEach(x => addCorridorLight(scene, x, (leg2Z0+leg2Z1)/2, Math.PI/2));
 
-  // Vacant room shells + props
-  VACANT_ROOMS.forEach(({ zS, zE }) => {
-    add(-hw-VACANT_DEPTH-0.3, -hw-VACANT_DEPTH, zS, zE);   // far wall
-    add(-hw-VACANT_DEPTH, -hw, zS-0.3, zS);                // near-side wall
-    add(-hw-VACANT_DEPTH, -hw, zE, zE+0.3);                // far-side wall
+  // Candle + room light per classroom (decoys get a dimmer, colder light)
+  classrooms.forEach(def => {
+    const { P } = frameHelpers(def);
+    const cp = P(roomW - 1.9, roomW/2 - 0.65);   // over the teacher's desk candle
+    const c = new THREE.PointLight(0xff7722, 5.8, 15);
+    c.position.set(cp.x, 1.15, cp.z);
+    scene.add(c);
+    flickerLights.push({ light: c, base: 5.8, speed: 3 + Math.random(), amp: 1.5, type: 'candle' });
+
+    const center = P(roomW/2, roomW/2);
+    const isDecoy = def.idx === null;
+    const light = new THREE.PointLight(
+      isDecoy ? 0x8899bb : ROOM_LIGHT_COLORS[def.idx],
+      isDecoy ? 0.8 : 1.15, 12, 2);
+    light.position.set(center.x, 2.0, center.z);
+    scene.add(light);
   });
-  boxes.push(..._vacantPropBoxes);
-  let pz = 0;
-  rooms.forEach(([,,dzS,dzE]) => { add(hw,hw+0.3,pz,dzS); pz=dzE; });
-  add(hw,hw+0.3,pz,hl);
-  add(-hw,-1.3,hl,hl+0.3);
-  add( 1.3, hw,hl,hl+0.3);
-  rooms.forEach(([zS,zE]) => {
-    add(hw,hw+roomW+0.3,zS-0.3,zS);
-    add(hw,hw+roomW+0.3,zE,zE+0.3);
-    add(hw+roomW,hw+roomW+0.3,zS,zE);
-  });
-  // Hall lockers protrude into the walking lane slightly (gap at vacant doors).
-  lz = 0;
-  VACANT_ROOMS.forEach(({ dzS, dzE }) => { add(-hw-0.3,-hw+0.5, lz, dzS-0.15); lz = dzE+0.15; });
-  add(-hw-0.3,-hw+0.5, lz, hl);
-
-  // Room doors — main.js skips these boxes once the door is open.
-  rooms.forEach(([,,dzS,dzE], i) =>
-    boxes.push({ minX: hw-0.15, maxX: hw+0.15, minZ: dzS, maxZ: dzE, doorIndex: i }));
-
-  rooms.forEach(([zS, zE]) => {
-    const cx = HALF_W + roomW / 2;
-    const cz = (zS + zE) / 2;
-
-    // Teacher's desk / table.
-    addBox(HALF_W + roomW - 1.5, cz + 1, 1.9, 1.0, 0.1);
-
-    // Student desks and chairs.
-    [[cx-2.5,zS+2],[cx,zS+2],[cx+2.5,zS+2],[cx-2.5,zS+4.5],[cx,zS+4.5],[cx+2.5,zS+4.5]]
-      .forEach(([dx, dz]) => {
-        addBox(dx, dz, 1.0, 0.75, 0.08);
-        addBox(dx, dz + 0.6, 0.8, 0.7, 0.08);
-      });
-
-    // Bookshelf / side table area.
-    addBox(HALF_W + 0.5, zS + 1.5, 0.5, 1.55, 0.08);
-  });
-
-  return boxes;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
 export function buildWorld(scene) {
-  buildHallway();
   const interactiveObjects = [];
-  const roomNotes = rooms.map((_, i) => buildRoom(scene, i, interactiveObjects));
-  const roomDoors = rooms.map((_, i) => buildDoor(scene, i, interactiveObjects));
-  VACANT_ROOMS.forEach((_, i) => buildVacantRoom(scene, i));
-  rooms.forEach(([zS, zE], i) => {
-    const light = new THREE.PointLight(ROOM_LIGHT_COLORS[i], 1.15, 12, 2);
-    light.position.set(HALF_W + roomW / 2, 2.0, (zS + zE) / 2);
-    scene.add(light);
+  _collision.length = 0;
+
+  buildCorridors();
+
+  const roomNotes = [null, null, null];
+  classrooms.forEach(def => {
+    const notes = buildClassroom(scene, def, interactiveObjects);
+    if (def.idx !== null) roomNotes[def.idx] = notes;
   });
+  const roomDoors = classrooms.map((def, i) => buildDoor(scene, def, i, interactiveObjects));
+  vacants.forEach((def, i) => buildVacantRoom(scene, def, i));
   buildExitDoor(scene, interactiveObjects);
   addLights(scene);
-  _flush(scene);   // merge all batched geometry → ~15 draw calls total
-  return { wallBoxes: buildCollision(), interactiveObjects, roomNotes, roomDoors, exitZ };
+  _flush(scene);
+
+  const realRoomRects = [null, null, null];
+  const decoyRects = [];
+  classrooms.forEach(def => {
+    const { rect } = frameHelpers(def);
+    const r = rect(0, roomW, 0, def.v1 - def.v0);
+    if (def.idx !== null) realRoomRects[def.idx] = r;
+    else decoyRects.push(r);
+  });
+  const vacantRects = vacants.map(def => {
+    const { rect } = frameHelpers(def);
+    return rect(0, vacantDepth, 0, def.v1 - def.v0);
+  });
+
+  return {
+    wallBoxes: _collision,
+    interactiveObjects,
+    roomNotes,
+    roomDoors,
+    realRoomRects,
+    decoyRects,
+    vacantRects,
+  };
 }

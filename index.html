@@ -279,6 +279,25 @@
       border-color:rgba(255,236,190,0.58);
       transition:none;
     }
+    #mobile-jump {
+      position:absolute;
+      right:22px;
+      bottom:52px;
+      width:72px;
+      height:72px;
+      border-radius:50%;
+      border:1px solid rgba(255,236,190,0.28);
+      background:radial-gradient(circle at 35% 30%, rgba(255,245,218,0.14), rgba(40,10,10,0.6) 58%, rgba(0,0,0,0.72));
+      color:rgba(255,236,190,0.85);
+      font-size:1.7rem;
+      line-height:1;
+      pointer-events:auto;
+      touch-action:manipulation;
+      box-shadow:0 6px 20px rgba(0,0,0,0.58), inset 0 0 10px rgba(255,236,190,0.07);
+    }
+    #mobile-jump:active {
+      background:radial-gradient(circle at 35% 30%, rgba(255,245,218,0.22), rgba(80,10,10,0.7) 58%, rgba(0,0,0,0.78));
+    }
     body[data-controls="touch"] #mobile-controls { display:block; }
     body[data-controls="touch"] #interact-prompt { bottom:154px; font-size:1.1rem; padding:10px 24px; }
     body[data-controls="touch"] #hud-player { display:none; }
@@ -391,23 +410,18 @@
       pointer-events:none; opacity:0;
     }
     #jumpscare-face {
-      width:min(72vw,72vh); height:auto;
-      transform-origin:center;
+      width:min(82vw,82vh); height:auto;
+      transform-origin:center center;
     }
+    /* Grow from a tiny point in the dead center out to full size — no drift,
+       no rotation, no chromatic fringe. */
     #jumpscare-overlay.active #jumpscare-face {
-      animation:
-        scare-enter     0.22s cubic-bezier(0.05,0.85,0.1,1.4) both,
-        chromatic-split 0.11s linear 0.22s infinite;
+      animation: scare-enter 0.3s cubic-bezier(0.22,0.68,0.28,1) both;
     }
     @keyframes scare-enter {
-      from { transform:scale(0.04) rotate(-10deg); opacity:0; }
-      to   { transform:scale(1)    rotate(  0deg); opacity:1; }
-    }
-    @keyframes chromatic-split {
-      0%   { filter:drop-shadow(-5px 0   0 rgba(255,0,0,0.88)) drop-shadow( 5px  0   0 rgba(0,210,255,0.88)); }
-      33%  { filter:drop-shadow( 7px 0   0 rgba(255,0,0,0.95)) drop-shadow(-7px  0   0 rgba(0,210,255,0.95)); }
-      67%  { filter:drop-shadow(-4px 2px 0 rgba(255,0,0,0.75)) drop-shadow( 4px -2px 0 rgba(0,210,255,0.75)); }
-      100% { filter:drop-shadow(-5px 0   0 rgba(255,0,0,0.88)) drop-shadow( 5px  0   0 rgba(0,210,255,0.88)); }
+      from { transform:scale(0.06); opacity:0; }
+      45%  { opacity:1; }
+      to   { transform:scale(1);    opacity:1; }
     }
 
     /* ── QUESTION MODAL ──────────────────────────────────────────────────── */
@@ -2060,6 +2074,7 @@
     <div id="mobile-joystick" aria-label="Move" role="application">
       <div id="mobile-joystick-knob"></div>
     </div>
+    <button id="mobile-jump" type="button" aria-label="Jump">⤒</button>
   </div>
 </div>
 <div id="vignette"></div>
@@ -2067,110 +2082,7 @@
 <!-- ══ JUMP SCARE OVERLAY ════════════════════════════════════════════════════ -->
 <div id="room-clear-flash"></div>
 <div id="jumpscare-overlay">
-  <svg id="jumpscare-face" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" aria-hidden="true">
-    <defs>
-      <!-- Face: lit from top-left, deep shadow at edges (corpse pallor) -->
-      <radialGradient id="jg-skin" cx="38%" cy="22%" r="70%">
-        <stop offset="0%"   stop-color="#c4beb4"/>
-        <stop offset="46%"  stop-color="#948e86"/>
-        <stop offset="80%"  stop-color="#545050"/>
-        <stop offset="100%" stop-color="#1a1614"/>
-      </radialGradient>
-      <!-- Eye socket: deep red glow fading to black -->
-      <radialGradient id="jg-eye" cx="50%" cy="55%" r="52%">
-        <stop offset="0%"   stop-color="#bf1200" stop-opacity="0.88"/>
-        <stop offset="40%"  stop-color="#520000" stop-opacity="0.55"/>
-        <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
-      </radialGradient>
-      <!-- Mouth: shallow light fading to void -->
-      <radialGradient id="jg-maw" cx="50%" cy="16%" r="74%">
-        <stop offset="0%"   stop-color="#1a0606"/>
-        <stop offset="100%" stop-color="#000000"/>
-      </radialGradient>
-      <!-- Organic warp — makes geometry look like flesh, not a drawing -->
-      <filter id="jf-warp" x="-6%" y="-6%" width="112%" height="112%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.032 0.048" numOctaves="3" seed="11" result="n"/>
-        <feDisplacementMap in="SourceGraphic" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G"/>
-      </filter>
-      <!-- Eye glow bloom -->
-      <filter id="jf-glow" x="-55%" y="-55%" width="210%" height="210%">
-        <feGaussianBlur stdDeviation="7" result="b"/>
-        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-      </filter>
-    </defs>
-
-    <!-- FACE BASE — elongated skull, slightly lopsided, gradient-shaded -->
-    <path filter="url(#jf-warp)"
-      d="M100,20 C154,18 182,58 181,110 C180,164 170,215 151,244
-         C136,267 116,280 100,280 C84,280 64,267 49,244
-         C30,215 20,164 19,110 C18,58 46,18 100,20Z"
-      fill="url(#jg-skin)"/>
-
-    <!-- Sunken hollow cheeks -->
-    <ellipse cx="50"  cy="182" rx="26" ry="15" fill="#0c0808" opacity="0.42" filter="url(#jf-warp)"/>
-    <ellipse cx="150" cy="185" rx="22" ry="13" fill="#0c0808" opacity="0.36" filter="url(#jf-warp)"/>
-
-    <!-- Brow ridge shadow (left side — the lit side) -->
-    <path d="M42,100 Q66,84 98,88" fill="#18120e" opacity="0.48"/>
-
-    <!-- LEFT EYE — the only exposed eye, hollow and glowing -->
-    <path filter="url(#jf-warp)"
-      d="M44,112 Q50,88 76,84 Q103,83 108,106 Q113,124 101,139
-         Q86,152 62,148 Q40,142 38,124 Q37,116 44,112Z"
-      fill="#040101"/>
-    <ellipse cx="74" cy="115" rx="23" ry="28" fill="url(#jg-eye)" filter="url(#jf-glow)"/>
-    <!-- Single glint — the only sign of something staring back -->
-    <circle cx="65" cy="106" r="3.5" fill="#ff5533" opacity="0.62"/>
-
-    <!-- NOSE — two collapsed dark cavities -->
-    <path d="M88,172 Q95,157 100,154 Q105,157 112,172 Q105,181 100,182 Q95,181 88,172Z"
-      fill="#080202"/>
-
-    <!-- MOUTH — jaw-unhinged screaming maw -->
-    <path filter="url(#jf-warp)"
-      d="M50,194 Q60,175 100,172 Q140,175 150,194
-         Q168,220 160,252 Q143,278 100,278 Q57,278 40,252
-         Q32,220 50,194Z"
-      fill="url(#jg-maw)"/>
-    <!-- Throat void -->
-    <ellipse cx="100" cy="252" rx="28" ry="18" fill="#000"/>
-    <!-- Upper teeth — triangular, irregular, not rects -->
-    <path d="M62,188 L67,212 L75,189"  fill="#d4cec0"/>
-    <path d="M77,183 L83,214 L91,184"  fill="#ddd6c8"/>
-    <path d="M93,181 L100,215 L107,181" fill="#d4cec0"/>
-    <path d="M109,183 L117,214 L122,188" fill="#cec8ba"/>
-    <!-- Lower teeth (barely visible in the dark) -->
-    <path d="M65,255 L72,240 L78,256"  fill="#a8a29c" opacity="0.52"/>
-    <path d="M84,258 L91,242 L97,258"  fill="#b0aaa4" opacity="0.48"/>
-    <path d="M103,258 L109,242 L115,258" fill="#a8a29c" opacity="0.48"/>
-
-    <!-- HAIR — drawn last so it sits on top of everything -->
-    <!-- Dark crown mass -->
-    <path d="M55,20 Q78,2 100,0 Q122,2 148,20 Q128,8 100,10 Q72,8 55,20Z" fill="#060404"/>
-
-    <!-- Left side — sparse strands -->
-    <path d="M40,50 Q16,92  8,152 Q4,192 12,235"
-      stroke="#060404" stroke-width="6" stroke-linecap="round" fill="none"/>
-    <path d="M48,36 Q22,76 14,128 Q8,168 16,208"
-      stroke="#070505" stroke-width="4" stroke-linecap="round" fill="none"/>
-    <path d="M56,26 Q34,62 26,102 Q20,138 28,176"
-      stroke="#060404" stroke-width="3" stroke-linecap="round" fill="none"/>
-
-    <!-- Right side — HEAVY curtain obscuring the right eye entirely -->
-    <path d="M162,44 Q185,86 190,142 Q194,184 186,230"
-      stroke="#050303" stroke-width="11" stroke-linecap="round" fill="none"/>
-    <path d="M153,30 Q178,70 182,122 Q187,166 179,210"
-      stroke="#060404" stroke-width="9"  stroke-linecap="round" fill="none"/>
-    <path d="M143,20 Q166,56 170,106 Q175,152 168,198"
-      stroke="#050303" stroke-width="10" stroke-linecap="round" fill="none"/>
-    <path d="M133,16 Q154,50 158,98 Q163,144 156,190 Q150,222 145,256"
-      stroke="#060404" stroke-width="7"  stroke-linecap="round" fill="none"/>
-    <!-- Strands crossing face center (partial mouth coverage) -->
-    <path d="M120,18 Q126,62 124,110 Q122,152 120,196 Q118,232 116,272"
-      stroke="#050303" stroke-width="3"  stroke-linecap="round" fill="none" opacity="0.68"/>
-    <path d="M112,16 Q115,58 113,102 Q111,144 109,186 Q107,224 105,268"
-      stroke="#060404" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.58"/>
-  </svg>
+  <img id="jumpscare-face" src="/assets/door-jumpscare-face.png" alt="" aria-hidden="true"/>
 </div>
 
 <!-- ══ OPTIONS ════════════════════════════════════════════════════════════════ -->

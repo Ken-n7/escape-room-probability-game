@@ -59,10 +59,12 @@ function _doSpawn(gltf) {
   if (_monster) scene.remove(_monster);
   _monster = gltf.scene;
 
+  // Spawn straight ahead of the player; the ghost is ethereal and closes in
+  // through walls, so no corridor clamp (the old one assumed a single hallway).
   const sinY = Math.sin(look.yaw), cosY = Math.cos(look.yaw);
   const px   = camera.position.x + (-sinY * SPAWN_DIST);
   const pz   = camera.position.z + (-cosY * SPAWN_DIST);
-  _monster.position.set(Math.max(-2.2, Math.min(2.2, px)), 0, pz);
+  _monster.position.set(px, 0, pz);
   _monster.scale.setScalar(MONSTER_SCALE);
 
   const dx = camera.position.x - _monster.position.x;
