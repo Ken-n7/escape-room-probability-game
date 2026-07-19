@@ -27,8 +27,8 @@ import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
 const {
-  wallBoxes, interactiveObjects, roomNotes, roomDoors,
-  realRoomRects, decoyRects, vacantRects,
+  wallBoxes, interactiveObjects, roomNotes, roomDoors, roomContainers,
+  realRoomRects, decoyRects, vacantRects, randomizeNotes,
 } = buildWorld(scene);
 
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
@@ -257,6 +257,8 @@ function resetProgress() {
   shuffleRooms();
   resetAmbientScares();
   cleanupChase();
+  resetContainers();    // shut every cabinet/drawer again
+  randomizeNotes();     // re-roll where the note papers hide this run
   updateNoteVisibility();
   updateDoorLocks({ instant: true });
   _decoyTripped = decoyRects.map(() => false);
@@ -345,13 +347,76 @@ function triggerLockedDoorScare(prevRoomNum) {
 }
 
 // One note per question: only the note matching the room's current progress
-// is visible, so the player hunts for the next problem after solving each.
+// is visible, so the player hunts for the next problem after solving each. A
+// note stashed inside a container stays hidden until that container is opened.
 function updateNoteVisibility() {
   roomNotes.forEach((notes, ri) => {
     notes.forEach((note, ni) => {
-      note.visible = !roomDone[ri] && ni === roomProgress[ri];
+      const c = note.userData.container;
+      // Bag/trash notes are never rendered as a floor paper — a visible paper
+      // would give away the hiding spot. They're "found" by searching (below).
+      if (c && (c.kind === 'bag' || c.kind === 'trash')) { note.visible = false; return; }
+      const gated = c && !c.isOpen;   // cabinet/drawer: hidden inside until opened
+      note.visible = !roomDone[ri] && ni === roomProgress[ri] && !gated;
     });
   });
+}
+
+// ── Containers (openable cabinet / drawer) ────────────────────────────────────
+const CONTAINER_SPEED = 2.4;   // rad/sec for doors; scaled down for the sliding drawer
+function updateContainers(dt) {
+  roomContainers.forEach(c => {
+    c.parts.forEach(pt => {
+      const cur = pt.prop === 'rotY' ? pt.obj.rotation.y : pt.obj.position.z;
+      const tgt = c.isOpen ? pt.open : pt.closed;
+      if (Math.abs(cur - tgt) < 0.001) return;
+      const step = (pt.prop === 'rotY' ? CONTAINER_SPEED : CONTAINER_SPEED * 0.22) * dt;
+      const nv = cur < tgt ? Math.min(tgt, cur + step) : Math.max(tgt, cur - step);
+      if (pt.prop === 'rotY') pt.obj.rotation.y = nv; else pt.obj.position.z = nv;
+    });
+  });
+}
+
+function resetContainers() {
+  roomContainers.forEach(c => {
+    c.isOpen = false;
+    c.searched = false;
+    c.parts.forEach(pt => {
+      if (pt.prop === 'rotY') pt.obj.rotation.y = pt.closed; else pt.obj.position.z = pt.closed;
+    });
+  });
+}
+
+// Deadpan "came up empty" messages, tailored to what you rummaged.
+const EMPTY_SEARCH_MSG = {
+  bag:   ['The pockets are empty.', 'Nothing in the bag.', 'Empty. Just old papers.', 'Zipped up on nothing.'],
+  trash: ['Just garbage.', 'Nothing but trash.', 'Empty wrappers, nothing else.', 'Nothing useful in here.'],
+};
+
+// Rummage a bag / trash can. If it holds this room's CURRENT question, opening
+// it is the "find" — no paper is ever dropped on the floor. If it holds a note
+// that isn't active yet, it reads empty for now but stays searchable. If it
+// holds nothing, it's marked searched so it can't be re-rummaged.
+function searchContainer(rec) {
+  if (rec.searched) return;
+  let heldRoom = -1, heldActive = false;
+  roomNotes.forEach((notes, ri) => {
+    if (!notes || roomDone[ri]) return;
+    notes.forEach((n, ni) => {
+      if (n.userData.container === rec && ni >= roomProgress[ri]) {
+        heldRoom = ri;
+        if (ni === roomProgress[ri]) heldActive = true;
+      }
+    });
+  });
+  if (heldActive) {
+    AudioManager.play('pageTurn');
+    openQuestion(heldRoom);        // found the question while rummaging
+  } else {
+    if (heldRoom < 0) rec.searched = true;   // truly empty — don't prompt again
+    const msgs = EMPTY_SEARCH_MSG[rec.kind] || EMPTY_SEARCH_MSG.trash;
+    setPromptOverride(msgs[Math.floor(Math.random() * msgs.length)], 1600);
+  }
 }
 
 // Transient message shown in the interact prompt (e.g. "LOCKED") that survives
@@ -387,6 +452,8 @@ function findNearObject() {
     if (!obj.visible) return;
     // Doors: interactable when locked (→ scare) or when a closed decoy (→ open)
     if (obj.userData.isDoor && !obj.userData.locked && doorIsOpen[obj.userData.doorIndex]) return;
+    if (obj.userData.isContainer && obj.userData.container.isOpen) return;   // prompt clears once opened
+    if (obj.userData.isSearch && obj.userData.container.searched) return;    // already rummaged
     if (obj.userData.noteIndex !== undefined && !isInsideRoom(obj.userData.roomIndex)) return;
     obj.getWorldPosition(INTERACT_POS);
     INTERACT_TO.subVectors(INTERACT_POS, camera.position);
@@ -408,6 +475,15 @@ function tryInteract() {
     const i = nearObject.userData.doorIndex;
     if (nearObject.userData.locked) triggerLockedDoorScare(roomDoors[i].realIdx);
     else openDecoyDoor(i);
+  } else if (nearObject.userData.isContainer) {
+    const rec = nearObject.userData.container;
+    if (!rec.isOpen) {
+      rec.isOpen = true;
+      AudioManager.play(rec.sound);
+      updateNoteVisibility();   // reveal a note that was stashed inside
+    }
+  } else if (nearObject.userData.isSearch) {
+    searchContainer(nearObject.userData.container);
   } else if (nearObject.userData.roomIndex !== undefined) {
     openQuestion(nearObject.userData.roomIndex);
   }
@@ -1271,6 +1347,7 @@ function animate() {
 
   updateFlickerLights(t, dt);
   updateDoors(dt);
+  updateContainers(dt);
 
   if (updateStartCameraTransition(now)) { renderer.render(scene, camera); return; }
   if (gState.current === S.LOSE) { initLoseCanvas(); updateLoseCanvas(); return; }
@@ -1329,6 +1406,8 @@ function animate() {
       const action = GameDevice.controls === 'touch' ? 'Tap !' : '[ E ]';
       elPrompt.textContent = nearObject.userData.isKeypad ? `${action} Enter Code`
         : nearObject.userData.isDoor ? `${action} Open Door`
+        : nearObject.userData.isContainer ? `${action} Open ${nearObject.userData.container.kind === 'cabinet' ? 'Cabinet' : 'Drawer'}`
+        : nearObject.userData.isSearch ? `${action} Search`
         : `${action} Examine`;
       elPrompt.style.opacity = '1';
     } else {
@@ -1527,6 +1606,14 @@ if (import.meta.env.DEV) {
       camera.rotation.set(look.pitch, look.yaw, 0);
       nearObject = findNearObject(); setCanInteract(Boolean(nearObject));
       return this.getState();
+    },
+    // Dev: nearest geometry hit distance along a ray (null if nothing within maxDist).
+    raycast(origin, dir, maxDist = 5) {
+      const rc = new THREE.Raycaster(
+        new THREE.Vector3(origin.x, origin.y, origin.z),
+        new THREE.Vector3(dir.x, dir.y, dir.z).normalize(), 0, maxDist);
+      const hit = rc.intersectObjects(scene.children, true)[0];
+      return hit ? +hit.distance.toFixed(3) : null;
     },
   };
   const devScareBtn = $('dev-scare-btn');

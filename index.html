@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Escape Room Game</title>
   <style>
+    /* ── Fonts ───────────────────────────────────────────────────────────── */
+    /* Scratchy horror font — used for the wall scrawls in the vacant/decoy rooms
+       (drawn onto canvas textures; see scrawlTex in world.js). */
+    @font-face {
+      font-family:'HorrorScratch';
+      src:url('/assets/fonts/HorrorGameWallScratches-Regular.ttf') format('truetype');
+      font-display:swap;
+    }
+
     /* ── Reset ───────────────────────────────────────────────────────────── */
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:#000; overflow:hidden; font-family:'Georgia',serif; }
