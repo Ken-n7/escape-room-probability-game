@@ -170,12 +170,15 @@ function resetFear() {
 }
 
 let _wrongFeedbackTimer = null;
-function flashWrongVignette(fearLevel) {
+// Flash a vignette in from the edges, then settle back to the ambient fear
+// vignette. `edgeColor`/`flashOpacity` let callers pick the tint (red for wrong
+// answers, black for the locked-door scare).
+function flashVignette(fearLevel, edgeColor = 'rgba(84,0,0,0.72)', flashOpacity = 0.58) {
   const stage = fearStage(fearLevel);
   if (_wrongFeedbackTimer) { clearTimeout(_wrongFeedbackTimer); _wrongFeedbackTimer = null; }
   elVignette.style.transition = 'none';
-  elVignette.style.background = 'radial-gradient(ellipse at center, transparent 18%, rgba(84,0,0,0.72) 100%)';
-  elVignette.style.opacity    = '0.58';
+  elVignette.style.background = `radial-gradient(ellipse at center, transparent 18%, ${edgeColor} 100%)`;
+  elVignette.style.opacity    = String(flashOpacity);
   _wrongFeedbackTimer = setTimeout(() => {
     elVignette.style.transition = 'opacity 0.6s, background 0.6s';
     elVignette.style.background = stage.vigBg;
@@ -183,6 +186,8 @@ function flashWrongVignette(fearLevel) {
     _wrongFeedbackTimer = null;
   }, 350);
 }
+
+function flashWrongVignette(fearLevel) { flashVignette(fearLevel); }
 
 // ── HUD helpers ───────────────────────────────────────────────────────────────
 function updateHUD() {
@@ -304,28 +309,39 @@ function updateDoors(dt) {
 }
 
 let _doorScareUntil = 0;
+// Shown when the door is tried again while the scare is on cooldown — a plain
+// "it's locked" nudge instead of re-triggering the jumpscare.
+const LOCKED_NUDGES = [
+  "🔒 Locked. It won't budge.",
+  "🔒 The handle won't turn.",
+  '🔒 Still sealed shut.',
+  '🔒 Locked tight.',
+];
 function triggerLockedDoorScare(prevRoomNum) {
-  setPromptOverride(`🔒 LOCKED — clear Room ${prevRoomNum} first`, 2200);
   const now = performance.now();
-  if (now < _doorScareUntil) return;
-  _doorScareUntil = now + 4000;
+  if (now < _doorScareUntil) {
+    // On cooldown: no jumpscare, just a fitting locked message so it can't be spammed.
+    setPromptOverride(LOCKED_NUDGES[Math.floor(Math.random() * LOCKED_NUDGES.length)], 1600);
+    return;
+  }
+  // Random cooldown so repeatedly hammering the door doesn't repeat the scare.
+  _doorScareUntil = now + 9000 + Math.random() * 8000;   // 9–17s
+  setPromptOverride(`🔒 LOCKED — clear Room ${prevRoomNum} first`, 2200);
 
   const overlay = $('jumpscare-overlay');
   overlay.classList.add('active');
   overlay.style.opacity = '1';
-  document.body.classList.add('screenshake');
   AudioManager.play('jumpscare');
-  flashWrongVignette(0);
+  flashVignette(0, 'rgba(0,0,0,0.94)', 0.72);   // black vignette closes in on the face
   setTimeout(() => {
-    document.body.classList.remove('screenshake');
     overlay.style.transition = 'opacity 0.6s';
     overlay.style.opacity = '0';
-  }, 420);
+  }, 700);   // grow (0.3s) + hold at full size before fading out
   setTimeout(() => {
     overlay.classList.remove('active');
     overlay.style.transition = '';
     overlay.style.opacity = '';
-  }, 1150);
+  }, 1400);
 }
 
 // One note per question: only the note matching the room's current progress
@@ -839,7 +855,6 @@ function triggerJumpScare() {
     overlay.classList.add('active');
     overlay.style.opacity = '1';
 
-    document.body.classList.add('screenshake');
     renderer.domElement.style.filter = 'blur(2px) saturate(2.5) brightness(1.4)';
 
     elVignette.style.transition = 'none';
@@ -850,7 +865,6 @@ function triggerJumpScare() {
     AudioManager.playScream();
 
     setTimeout(() => {
-      document.body.classList.remove('screenshake');
       renderer.domElement.style.filter = '';
       elVignette.style.transition = 'background 0.35s, opacity 0.35s';
       elVignette.style.background = 'rgba(4,0,0,1)';
@@ -1298,8 +1312,10 @@ function animate() {
     footstepTimer = 0;
   }
 
-  updateJump(dt);
-  camera.position.y = CFG.player.eyeH + _jumpY;
+  // Jumping disabled — kept the code below in case we bring it back.
+  // updateJump(dt);
+  // camera.position.y = CFG.player.eyeH + _jumpY;
+  camera.position.y = CFG.player.eyeH;
 
   // ── Interaction prompt ────────────────────────────────────────────────────
   nearObject = findNearObject();
@@ -1407,7 +1423,8 @@ $('btn-reset-progress').onclick = () => {
   setTimeout(() => { $('settings-saved').textContent = ''; }, 2000);
 };
 elSensitivity?.addEventListener('input', e => {
-  setLookSensitivity(normalizeSensitivity(Number(e.target.value)));
+  // Slider value is a percent (45–180); convert to the 0.45–1.8 multiplier.
+  setLookSensitivity(normalizeSensitivity(Number(e.target.value) / 100));
   updateSensitivityUI();
   persistSave();
 });
@@ -1443,10 +1460,12 @@ screens.pause.addEventListener('click', () => {
   if (gState.current === S.PAUSED) { showHUD(); gState.current = S.PLAYING; lockPointer(); }
 });
 
-$('mobile-jump')?.addEventListener('pointerdown', e => {
-  e.preventDefault();
-  _jumpQueued = true;
-});
+// Jumping disabled — button hidden and its handler left commented out.
+$('mobile-jump')?.style.setProperty('display', 'none');
+// $('mobile-jump')?.addEventListener('pointerdown', e => {
+//   e.preventDefault();
+//   _jumpQueued = true;
+// });
 
 // ── Input callbacks ───────────────────────────────────────────────────────────
 initInput({
