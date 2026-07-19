@@ -211,60 +211,6 @@ const bxr = (w,h,d,x,y,z,rx,ry,mat)  => _push(_bxGeo(w,h,d), mat, x, y, z, rx, r
 const pl  = (w,h,x,y,z,rx,ry,mat)    => _push(_plGeo(w,h),   mat, x, y, z, rx, ry);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  KENNEY FURNITURE (CC0, kenney.nl Furniture Kit) — loaded async and placed at
-//  queued spots. Materials are flattened + darkened to sit in the horror light.
-//  Per-model yaw offsets align each model's "front" with our local frames.
-// ═══════════════════════════════════════════════════════════════════════════════
-const FURNITURE_DIR = '/assets/3D/furniture/';
-const FURNITURE_FILES = ['table', 'chair', 'desk', 'bookcaseOpen', 'books', 'trashcan'];
-const _furnTemplates = {};
-const _furnQueue = [];
-let _furnLoading = false;
-
-function _tuneFurnitureMaterials(root) {
-  root.traverse(o => {
-    if (!o.isMesh || !o.material) return;
-    const mats = Array.isArray(o.material) ? o.material : [o.material];
-    o.material = (Array.isArray(o.material) ? mats : mats[0]);
-    mats.forEach(m => {
-      if ('roughness' in m) m.roughness = 1;
-      if ('metalness' in m) m.metalness = 0;
-      m.color?.multiplyScalar(0.55);
-    });
-  });
-}
-
-function _placeFurniture(item) {
-  const tpl = _furnTemplates[item.name];
-  const clone = tpl.scene.clone(true);
-  const s = item.targetH / tpl.size.y;
-  clone.scale.setScalar(s);
-  clone.position.set(item.x, (item.y || 0) - tpl.min.y * s, item.z);
-  clone.rotation.y = item.ry || 0;
-  item.parent.add(clone);
-}
-
-function _requestFurniture(item) {
-  if (_furnTemplates[item.name]) { _placeFurniture(item); return; }
-  _furnQueue.push(item);
-  if (_furnLoading) return;
-  _furnLoading = true;
-  const loader = makeGLTFLoader();
-  FURNITURE_FILES.forEach(name => {
-    loader.load(`${FURNITURE_DIR}${name}.glb`, gltf => {
-      _tuneFurnitureMaterials(gltf.scene);
-      const box = new THREE.Box3().setFromObject(gltf.scene);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      _furnTemplates[name] = { scene: gltf.scene, size, min: box.min };
-      for (let i = _furnQueue.length - 1; i >= 0; i--) {
-        if (_furnQueue[i].name === name) _placeFurniture(_furnQueue.splice(i, 1)[0]);
-      }
-    }, undefined, err => console.warn(`Furniture "${name}" failed to load.`, err));
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 //  CORRIDORS — two legs + corner, walls segmented around door openings
 // ═══════════════════════════════════════════════════════════════════════════════
 const _collision = [];
@@ -389,37 +335,36 @@ function buildClassroom(scene, def, interactiveObjects) {
   scene.add(cbMesh);
   BX(0.06, cbH + 0.12, cbW + 0.12, D - 0.06, cbH/2 + 0.9, W/2, doorFrameMat);
 
-  // Teacher's desk (Kenney model — the drawer container slides out of it)
+  // Teacher's desk
   const tdu = D - 1.5, tdv = W/2 + 1;
-  {
-    const p = P(tdu, tdv);
-    _requestFurniture({ name: 'desk', parent: scene, x: p.x, z: p.z, ry: f.theta + Math.PI, targetH: 0.78 });
-  }
+  BX(1.8, 0.08, 0.9, tdu, 0.78, tdv, deskMat);
+  BX(0.08, 0.78, 0.9, tdu - 0.8, 0.39, tdv, deskMat);
+  BX(0.08, 0.78, 0.9, tdu + 0.8, 0.39, tdv, deskMat);
   const tdr = rect(tdu - 1.05, tdu + 1.05, tdv - 0.6, tdv + 0.6);
   _addBox(tdr.minX, tdr.maxX, tdr.minZ, tdr.maxZ);
 
   // 6 student desks + chairs (decoys: chairs flipped — the class faces the wall)
   const chairSide = isDecoy ? -0.6 : 0.6;
-  const chairRy   = f.theta + (isDecoy ? 0 : Math.PI);
   [[3.5, 2], [6, 2], [8.5, 2], [3.5, 4.5], [6, 4.5], [8.5, 4.5]].forEach(([du, dv]) => {
-    const dp = P(du, dv);
-    _requestFurniture({ name: 'table', parent: scene, x: dp.x, z: dp.z, ry: f.theta, targetH: 0.72 });
-    const cp = P(du, dv + chairSide);
-    _requestFurniture({ name: 'chair', parent: scene, x: cp.x, z: cp.z, ry: chairRy, targetH: 0.85 });
+    BX(0.9, 0.06, 0.65, du, 0.72, dv, deskMat);
+    BX(0.05, 0.72, 0.05, du - 0.4, 0.36, dv - 0.28, darkMat);
+    BX(0.05, 0.72, 0.05, du + 0.4, 0.36, dv - 0.28, darkMat);
+    BX(0.05, 0.72, 0.05, du - 0.4, 0.36, dv + 0.28, darkMat);
+    BX(0.05, 0.72, 0.05, du + 0.4, 0.36, dv + 0.28, darkMat);
+    BX(0.7, 0.05, 0.6, du, 0.48, dv + chairSide, deskMat);
+    [[-0.3, -0.25], [0.3, -0.25], [-0.3, 0.25], [0.3, 0.25]].forEach(([cu, cv]) =>
+      BX(0.05, 0.48, 0.05, du + cu, 0.24, dv + chairSide + cv, darkMat));
     const dr = rect(du - 0.58, du + 0.58, dv - 0.46, dv + 0.46);
     _addBox(dr.minX, dr.maxX, dr.minZ, dr.maxZ);
     const cr = rect(du - 0.44, du + 0.44, dv + chairSide - 0.43, dv + chairSide + 0.43);
     _addBox(cr.minX, cr.maxX, cr.minZ, cr.maxZ);
   });
 
-  // Bookshelf (open bookcase against the door-side wall + a row of books)
+  // Bookshelf
   const bsu = 0.5, bsv = 1.5;
-  {
-    const bp = P(bsu, bsv);
-    _requestFurniture({ name: 'bookcaseOpen', parent: scene, x: bp.x, z: bp.z, ry: f.theta + Math.PI/2, targetH: 2.1 });
-    const kp = P(bsu + 0.05, bsv);
-    _requestFurniture({ name: 'books', parent: scene, x: kp.x, y: 0.02, z: kp.z, ry: f.theta + Math.PI/2, targetH: 0.24 });
-  }
+  BX(0.25, 2.2, 1.4, bsu, 1.1, bsv, deskMat);
+  [0.2, 0.8, 1.4, 2.0].forEach(sy => BX(0.22, 0.04, 1.4, bsu + 0.01, sy, bsv, darkMat));
+  bookMats.forEach((bm, i) => BX(0.04, 0.24, 0.18, bsu + 0.1, 0.3 + i*0.02, bsv - 0.6 + i*0.22, bm));
   const bsr = rect(bsu - 0.35, bsu + 0.35, bsv - 0.85, bsv + 0.85);
   _addBox(bsr.minX, bsr.maxX, bsr.minZ, bsr.maxZ);
 
@@ -477,10 +422,10 @@ function buildContainers(scene, def, interactiveObjects) {
 
   // 0 · teacher's desk drawer — slides out toward the class
   {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.18, 0.42), drawerMat);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.22, 0.5), drawerMat);
     reg(m, m,
-      { pos: W3(10.5, 0.5, 7.0),  rot: [0, th, 0] },
-      { pos: W3(10.5, 0.5, 6.55), rot: [0, th, 0] });
+      { pos: W3(10.5, 0.62, 6.8),  rot: [0, th, 0] },
+      { pos: W3(10.5, 0.62, 6.42), rot: [0, th, 0] });
   }
 
   // 1 · storage cabinet in the back corner — door creaks open
@@ -505,21 +450,20 @@ function buildContainers(scene, def, interactiveObjects) {
       { pos: W3(5.25, 0.12, 3.4), rot: [1.35, th + 0.9, 0] });
   }
 
-  // 3 · a red book on the bookcase shelf — pulls out and leans
+  // 3 · a red book on the shelf — pulls out and leans
   {
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.2), bookPullMat);
     reg(m, m,
-      { pos: W3(0.55, 0.85, 1.75), rot: [0, th, 0] },
-      { pos: W3(0.78, 0.8, 1.78),  rot: [0, th, -0.4] });
+      { pos: W3(0.62, 1.53, 1.7), rot: [0, th, 0] },
+      { pos: W3(0.82, 1.5, 1.72), rot: [0, th, -0.4] });
   }
 
-  // 4 · trash bin by the door — knocks over (Kenney trashcan model)
+  // 4 · trash bin by the door — knocks over
   {
-    const g = new THREE.Group();
-    _requestFurniture({ name: 'trashcan', parent: g, x: 0, z: 0, ry: 0, targetH: 0.48 });
-    reg(g, g,
-      { pos: W3(0.7, 0, 6.1),     rot: [0, 0, 0] },
-      { pos: W3(0.88, 0.04, 6.35), rot: [0, th, 1.35] });
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.44, 10), binMat);
+    reg(m, m,
+      { pos: W3(0.7, 0.22, 6.1),  rot: [0, 0, 0] },
+      { pos: W3(0.88, 0.14, 6.35), rot: [0, th, 1.35] });
   }
 
   // 5 · chalkboard tray eraser — shoved aside

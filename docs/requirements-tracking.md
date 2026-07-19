@@ -175,8 +175,3 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
 - 2026-07-19 — Chalkboards are now blank in every classroom (owner request): no
   "ROOM N / SOLVE TO ESCAPE" labels, and the decoys' lying labels are gone with
   them — no room announces whether it's real.
-- 2026-07-19 — Classroom furniture upgraded to Kenney Furniture Kit models (CC0):
-  student tables + chairs, teacher's office desk, open bookcase + books, trashcan.
-  Loaded async, darkened to fit the lighting; collision footprints unchanged.
-  The red-book and drawer containers repositioned to sit inside the new models.
-  Credit added to About.
