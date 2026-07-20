@@ -16,14 +16,24 @@ let _data = null;        // { plays, attempts, events }
 let _tab = 'overview';
 let _onBack = null;
 let _loading = false;
+let _drill = null;       // null | { player } | { player, playId } — drill-down view
 
 // ── small helpers ──────────────────────────────────────────────────────────────
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 const uname = r => r.profiles?.username || '—';
 const fmtTime = s => s == null ? '—' : s < 60 ? Math.round(s) + 's' : Math.floor(s / 60) + 'm ' + String(Math.round(s) % 60).padStart(2, '0') + 's';
+const fmtDateTime = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const accClass = v => v >= 75 ? 'good' : v >= 50 ? 'mid' : 'bad';
 const accPill = v => `<span class="pill ${accClass(v)}">${v}%</span>`;
+const OUTCOME = { won: ['good', 'Escaped'], lost: ['bad', 'Caught'], abandoned: ['mid', 'Quit'], in_progress: ['mid', 'In progress'] };
+const outcomePill = o => { const [c, t] = OUTCOME[o] || ['mid', o]; return `<span class="pill ${c}">${t}</span>`; };
+
+// drill-down data slicing
+const playsForUser   = u => _data.plays.filter(p => uname(p) === u).sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+const findPlay       = id => _data.plays.find(p => p.id === id);
+const attemptsForPlay = id => _data.attempts.filter(a => a.play_id === id).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+const eventsForPlay  = id => _data.events.filter(e => e.play_id === id).sort((a, b) => new Date(a.at) - new Date(b.at));
 
 // ── chart builders (HTML/CSS, no external libs) ─────────────────────────────────
 function barRows(items, { colorByValue = false } = {}) {
@@ -80,9 +90,21 @@ export async function mountDashboard({ onBack } = {}) {
   root.querySelectorAll('.dash-tab').forEach(btn => {
     btn.onclick = () => {
       _tab = btn.dataset.tab;
+      _drill = null;                 // switching tabs leaves any drill-down
       root.querySelectorAll('.dash-tab').forEach(b => b.classList.toggle('active', b === btn));
       render();
     };
+  });
+
+  // Delegated clicks for drill-down (rows + breadcrumbs). #dash-body persists
+  // across renders, so one listener handles every rebuilt view.
+  root.querySelector('#dash-body').addEventListener('click', e => {
+    const back = e.target.closest('[data-back]');
+    if (back) { _drill = back.dataset.back === 'players' ? null : { player: _drill?.player }; render(); return; }
+    const run = e.target.closest('[data-run]');
+    if (run) { _drill = { player: run.dataset.player || _drill?.player, playId: run.dataset.run }; render(); return; }
+    const pl = e.target.closest('[data-player]');
+    if (pl) { _drill = { player: pl.dataset.player }; render(); return; }
   });
 
   if (_data) render(); else await refresh();
@@ -108,6 +130,11 @@ function render() {
   }
   const body = document.getElementById('dash-body');
   if (!body) return;
+
+  // Drill-down views take over the body; a tab click clears _drill.
+  if (_drill?.playId) { body.innerHTML = renderRunDetail(_drill.player, _drill.playId); return; }
+  if (_drill?.player) { body.innerHTML = renderPlayerDetail(_drill.player); return; }
+
   body.innerHTML =
     _tab === 'overview' ? renderOverview()
     : _tab === 'items'  ? renderItems()
@@ -249,8 +276,8 @@ function renderPlayers() {
         <th class="num">Accuracy</th><th class="num">Avg tries→correct</th>
       </tr></thead>
       <tbody>${rows.map(r => `
-        <tr>
-          <td>${esc(r.u)}</td>
+        <tr class="row-link" data-player="${esc(r.u)}">
+          <td>${esc(r.u)} <span class="chev">›</span></td>
           <td class="num">${r.plays}</td>
           <td class="num">${r.wins}</td>
           <td class="num">${r.best == null ? '—' : r.best + '%'}</td>
@@ -259,7 +286,110 @@ function renderPlayers() {
           <td class="num">${r.avgAtt ?? '—'}</td>
         </tr>`).join('')}</tbody>
     </table></div>
-    <div class="card-note">Accuracy = correct answers ÷ all answers. Avg tries→correct shows how many attempts a right answer takes on average.</div></div>`;
+    <div class="card-note">Click a player to see their run history. Accuracy = correct ÷ all answers; avg tries→correct = attempts a right answer takes.</div></div>`;
+}
+
+// ── PLAYER DETAIL (drill-down: one player's run history) ────────────────────────
+function renderPlayerDetail(username) {
+  const plays = playsForUser(username);
+  const atts = _data.attempts.filter(a => uname(a) === username);
+  const wins = plays.filter(p => p.outcome === 'won').length;
+  const losses = plays.filter(p => p.outcome === 'lost').length;
+  const aband = plays.filter(p => p.outcome === 'abandoned').length;
+  const correct = atts.filter(a => a.is_correct).length;
+  const bestScore = plays.reduce((m, p) => Math.max(m, p.total_score ?? -1), -1);
+  const bestTime = plays.filter(p => p.outcome === 'won').reduce((m, p) => m == null || p.best_time < m ? p.best_time : m, null);
+
+  const crumb = `<div class="crumb"><span class="link" data-back="players">Players</span> <span class="crumb-sep">/</span> <b>${esc(username)}</b></div>`;
+  const cards = `
+    <div class="dash-grid">
+      ${statCard(plays.length, 'Runs', `${wins} won · ${losses} caught · ${aband} quit`)}
+      ${statCard(pct(wins, plays.length) + '%', 'Win rate')}
+      ${statCard(bestScore < 0 ? '—' : bestScore + '%', 'Best score', bestTime != null ? 'Best time ' + fmtTime(bestTime) : '')}
+      ${statCard(pct(correct, atts.length) + '%', 'Answer accuracy', `${correct}/${atts.length} correct`)}
+    </div>`;
+
+  const runRows = plays.map(p => {
+    const n = attemptsForPlay(p.id).length;
+    return `
+      <tr class="row-link" data-run="${esc(p.id)}" data-player="${esc(username)}">
+        <td>${fmtDateTime(p.started_at)} <span class="chev">›</span></td>
+        <td>${outcomePill(p.outcome)}</td>
+        <td class="num">${p.rooms_completed}/3</td>
+        <td class="num">${p.total_score == null ? '—' : p.total_score + '%'}</td>
+        <td class="num">${fmtTime(p.duration_sec)}</td>
+        <td class="num">${n}</td>
+        <td>${p.plearn ? '<span class="pill mid">P-Learn</span>' : ''} ${p.device === 'mobile' ? '📱' : '🖥'}</td>
+      </tr>`;
+  }).join('');
+
+  return `${crumb}${cards}
+    <div class="card"><h3>Run history</h3>
+    <div class="dash-table-wrap"><table class="dash-table">
+      <thead><tr><th>When</th><th>Outcome</th><th class="num">Reached</th><th class="num">Score</th><th class="num">Duration</th><th class="num">Answers</th><th>Mode</th></tr></thead>
+      <tbody>${runRows || '<tr><td colspan="7" class="dash-empty">No runs.</td></tr>'}</tbody>
+    </table></div>
+    <div class="card-note">Click a run to see every answer and event from it.</div></div>`;
+}
+
+// ── RUN DETAIL (drill-down: everything from one run) ───────────────────────────
+function renderRunDetail(username, playId) {
+  const play = findPlay(playId);
+  if (!play) return `<div class="crumb"><span class="link" data-back="players">Players</span></div>${emptyCard('Run not found.')}`;
+  const player = uname(play);
+  const atts = attemptsForPlay(playId);
+  const evs = eventsForPlay(playId);
+
+  const crumb = `<div class="crumb">
+    <span class="link" data-back="players">Players</span> <span class="crumb-sep">/</span>
+    <span class="link" data-back="player">${esc(player)}</span> <span class="crumb-sep">/</span>
+    <b>Run · ${fmtDateTime(play.started_at)}</b></div>`;
+
+  const cards = `
+    <div class="dash-grid">
+      ${statCard(outcomePill(play.outcome), 'Outcome')}
+      ${statCard(fmtTime(play.duration_sec), 'Duration')}
+      ${statCard(play.rooms_completed + '/3', 'Rooms cleared')}
+      ${statCard(play.total_score == null ? '—' : play.total_score + '%', 'Score', (play.plearn ? 'P-Learn · ' : '') + (play.device || ''))}
+    </div>`;
+
+  // per-room breakdown
+  const rooms = [1, 2, 3].map(rid => {
+    const ra = atts.filter(a => a.room_id === rid);
+    if (!ra.length) return '';
+    const c = ra.filter(a => a.is_correct).length;
+    const clear = evs.find(e => e.type === 'room_clear' && e.data?.room === rid);
+    return `<div class="bar-row">
+      <div class="bar-label">Room ${rid} · ${esc(ra[0].difficulty)}</div>
+      <div class="bar-track"><div class="bar-fill ${accClass(pct(c, ra.length))}" style="width:${pct(c, ra.length)}%"></div></div>
+      <div class="bar-val">${c}/${ra.length}${clear ? ' · ' + clear.data.score + '%' : ''}</div>
+    </div>`;
+  }).join('');
+
+  const attRows = atts.map((a, i) => `
+    <tr>
+      <td class="num">${i + 1}</td>
+      <td>${a.room_id} · ${esc(a.difficulty || '')}</td>
+      <td class="wide">${esc(a.question_text || a.qid)}</td>
+      <td>${esc(a.selected_text ?? '—')}</td>
+      <td>${a.is_correct ? '<span class="pill good">✓</span>' : '<span class="pill bad">✗</span>'}</td>
+      <td class="num">${a.attempt_no}</td>
+      <td class="num">${a.time_ms == null ? '—' : (a.time_ms / 1000).toFixed(1) + 's'}</td>
+    </tr>`).join('');
+
+  const evRows = evs.map(e => `
+    <div class="evt"><span class="evt-time">${fmtDateTime(e.at)}</span>
+      <span class="evt-type">${esc(e.type)}</span>
+      <span class="evt-data">${esc(JSON.stringify(e.data))}</span></div>`).join('');
+
+  return `${crumb}${cards}
+    <div class="card"><h3>Per-room result</h3>${rooms || '<div class="dash-empty">No rooms reached.</div>'}</div>
+    <div class="card"><h3>Every answer (${atts.length})</h3>
+      <div class="dash-table-wrap"><table class="dash-table">
+        <thead><tr><th class="num">#</th><th>Room</th><th class="wide">Question</th><th>Answered</th><th>Result</th><th class="num">Try</th><th class="num">Time</th></tr></thead>
+        <tbody>${attRows || '<tr><td colspan="7" class="dash-empty">No answers.</td></tr>'}</tbody>
+      </table></div></div>
+    <div class="card"><h3>Event timeline (${evs.length})</h3>${evRows || '<div class="dash-empty">No events.</div>'}</div>`;
 }
 
 // ── BEHAVIOR ─────────────────────────────────────────────────────────────────
