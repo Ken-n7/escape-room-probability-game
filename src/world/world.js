@@ -544,6 +544,38 @@ function globeTex() {
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+// A collectible question note — deliberately made to look like just another
+// scrap of the grey floor debris (same tone + grime as paperMat), so it doesn't
+// stand out. Only very faint ruled lines / scribbles betray it on a close look;
+// the [E] Examine prompt is what actually singles it out.
+function noteTex() {
+  const cv = document.createElement('canvas'); cv.width = 180; cv.height = 230;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#a89f88'; ctx.fillRect(0, 0, 180, 230);          // worn off-white paper (a touch lighter than the grey debris)
+  for (let i = 0; i < 260; i++) {                                    // grunge speckle (like grungeTex)
+    const g = 120 + Math.floor(Math.random() * 30);
+    ctx.fillStyle = `rgba(${g},${g},${g-8},0.45)`;
+    ctx.fillRect(Math.random()*180, Math.random()*230, Math.random()*4+1, Math.random()*3+1);
+  }
+  const grad = ctx.createRadialGradient(90, 115, 30, 90, 115, 150);  // slight edge grime
+  grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(20,18,12,0.45)');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 180, 230);
+  ctx.strokeStyle = 'rgba(40,42,52,0.22)'; ctx.lineWidth = 1;        // very faint ruled lines
+  for (let y = 40; y < 214; y += 22) { ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(164, y); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(30,30,36,0.3)'; ctx.lineWidth = 1.6;       // faint handwriting scribbles
+  for (let y = 34; y < 210; y += 22) {
+    let x = 22; ctx.beginPath(); ctx.moveTo(x, y - 4);
+    const n = 6 + Math.floor(Math.random() * 8);
+    for (let k = 0; k < n; k++) { x += 6 + Math.random() * 10; ctx.lineTo(x, y - 4 - Math.random() * 6); }
+    ctx.stroke();
+  }
+  for (let i = 0; i < 12; i++) {                                     // grime blotches
+    ctx.fillStyle = `rgba(20,18,10,${0.12 + Math.random() * 0.2})`;
+    _blob(ctx, Math.random() * 180, Math.random() * 230, 6 + Math.random() * 16, 0.6);
+  }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MATERIALS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -573,6 +605,9 @@ const _fabricTex   = fabricTex();
 const globeMat     = new THREE.MeshLambertMaterial({ map: globeTex(), emissive: 0x0a0f14, emissiveIntensity: 0.3 });
 const mugMat       = new THREE.MeshLambertMaterial({ color: 0xcfd6cf, emissive: 0x0c0e0c, emissiveIntensity: 0.3 });
 const pageMat      = new THREE.MeshLambertMaterial({ color: 0xd8cfb0, emissive: 0x0e0d0a, emissiveIntensity: 0.3 });  // book page block
+// Collectible question note — lit aged paper with only a faint self-glow, so the
+// flashlight reveals it instead of it beaconing across a dark room.
+const noteMat      = new THREE.MeshLambertMaterial({ map: noteTex(), emissive: 0x1a160e, emissiveIntensity: 0.44, side: THREE.DoubleSide });
 const trashMat     = new THREE.MeshLambertMaterial({ map: _metalTex, color: 0x8890a0, emissive: 0x060708, emissiveIntensity: 0.28 });
 const bagMats      = [0x7a2a2a, 0x243a6a, 0x35521f].map(c =>
   new THREE.MeshLambertMaterial({ map: _fabricTex, color: c, emissive: c, emissiveIntensity: 0.1 }));
@@ -1104,8 +1139,8 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
   const noteMeshes = [];
   for (let i = 0; i < 5; i++) {
     const noteMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.35, 0.45),
-      new THREE.MeshBasicMaterial({ color: 0xffffaa })
+      new THREE.PlaneGeometry(0.32, 0.42),
+      noteMat
     );
     noteMesh.rotation.order = 'YXZ';
     noteMesh.userData.isInteractive = true;
