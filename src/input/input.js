@@ -268,6 +268,10 @@ export function initInput(callbacks = {}) {
   });
 
   document.addEventListener('keydown', e => {
+    // While typing in a text field (login, player name, exit code), let every
+    // key through untouched — otherwise WASD / IJKL / arrows get preventDefault'd
+    // and E/R/P/Escape fire game actions instead of being typed.
+    if (_isEditable(e.target)) return;
     keys[e.code] = true;
     if (MOVE_KEYS.has(e.code) || LOOK_KEYS.has(e.code)) e.preventDefault();
     if (e.code === 'Space' && gState.current === S.PLAYING) e.preventDefault();   // jump — no page scroll

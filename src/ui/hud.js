@@ -7,6 +7,9 @@ const $ = id => document.getElementById(id);
 export const screens = {
   loading:  $('s-loading'),
   title:    $('s-title'),
+  login:       $('s-login'),
+  leaderboard: $('s-leaderboard'),
+  admin:       $('s-admin'),
   menu:     $('s-menu'),
   story:    $('s-story'),
   plearn:   $('s-plearn'),

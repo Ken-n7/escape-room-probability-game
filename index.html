@@ -97,6 +97,9 @@
     }
     .menu-btn:hover { transform:scale(1.04); background:#fff; }
     .menu-btn .icon { font-size:1.5rem; }
+    /* `display:flex` above outranks the UA [hidden] rule, so hidden buttons
+       (e.g. ADMIN for non-admins) would still show without this override. */
+    .menu-btn[hidden] { display:none !important; }
     #menu-player-name {
       position:fixed; top:14px; left:16px; z-index:25;
       color:rgba(255,200,100,0.7); font-family:monospace; font-size:0.8rem;
@@ -639,6 +642,104 @@
       color:#44cc88; font-family:monospace; font-size:0.75rem;
       letter-spacing:1px; min-height:20px; margin-top:6px;
     }
+
+    /* ── ACCOUNTS · LEADERBOARDS · ADMIN ─────────────────────────────────── */
+    #auth-box, #leaderboard-box, #admin-box {
+      position:relative; background:rgba(10,8,5,0.95);
+      border:1px solid #552200; border-radius:14px;
+      padding:34px 40px; width:90%; text-align:center;
+    }
+    #auth-box        { max-width:400px; }
+    #leaderboard-box { max-width:480px; }
+    #admin-box       { max-width:760px; }
+    #auth-box h2, #leaderboard-box h2, #admin-box h2 {
+      color:#cc6622; font-family:monospace; font-size:1.3rem;
+      letter-spacing:4px; margin-bottom:22px; text-shadow:0 0 10px #cc4400;
+    }
+    .auth-row { margin-bottom:16px; text-align:left; }
+    .auth-row label {
+      display:block; color:#aa8866; font-family:monospace;
+      font-size:0.75rem; letter-spacing:2px; margin-bottom:6px;
+    }
+    .auth-row input {
+      width:100%; padding:10px 14px; background:#1a1008;
+      border:1px solid #553322; border-radius:6px;
+      color:#ffcc88; font-family:monospace; font-size:0.95rem;
+      letter-spacing:1px; outline:none; box-sizing:border-box;
+    }
+    .auth-row input:focus { border-color:#cc6622; }
+    .auth-btn {
+      width:100%; margin-top:6px; padding:12px; cursor:pointer;
+      background:#331500; border:1px solid #cc4400; border-radius:6px;
+      color:#ff8844; font-family:monospace; font-size:0.9rem;
+      letter-spacing:2px; transition:background 0.15s;
+    }
+    .auth-btn:hover { background:#4a2200; }
+    .auth-btn.primary { background:#4a2200; }
+    .auth-btn[disabled] { opacity:0.5; cursor:default; }
+    #auth-error {
+      color:#dd4444; font-family:monospace; font-size:0.75rem;
+      letter-spacing:1px; min-height:20px; margin:4px 0 8px; text-align:center;
+    }
+    #auth-toggle-line {
+      margin-top:16px; color:#886644; font-family:monospace; font-size:0.78rem;
+    }
+    #btn-auth-toggle {
+      background:none; border:none; color:#ffaa55; cursor:pointer;
+      font-family:monospace; font-size:0.78rem; text-decoration:underline;
+      letter-spacing:1px; padding:0 4px;
+    }
+    /* Tabs (leaderboard) */
+    #lb-tabs { display:flex; gap:8px; margin-bottom:16px; }
+    .lb-tab {
+      flex:1; padding:9px; cursor:pointer;
+      background:rgba(30,15,5,0.8); border:1px solid #441100; border-radius:6px;
+      color:#886644; font-family:monospace; font-size:0.72rem; letter-spacing:2px;
+      transition:background 0.15s, color 0.15s;
+    }
+    .lb-tab.active { background:#4a2200; color:#ffaa55; border-color:#cc4400; }
+    #lb-list { min-height:120px; margin-bottom:8px; }
+    .lb-row {
+      display:grid; grid-template-columns:34px 1fr auto; gap:10px; align-items:center;
+      padding:9px 12px; margin-bottom:6px; text-align:left;
+      background:rgba(30,15,5,0.6); border:1px solid #331100; border-radius:6px;
+      color:#c9a878; font-family:monospace; font-size:0.85rem;
+    }
+    .lb-row .lb-rank { color:#aa6633; font-weight:bold; }
+    .lb-row .lb-val  { color:#ffaa55; letter-spacing:1px; }
+    .lb-row.me { border-color:#cc6622; background:rgba(70,34,0,0.5); }
+    .lb-row.top1 .lb-rank { color:#ffd24a; text-shadow:0 0 6px #cc9900; }
+    .lb-empty, .admin-empty {
+      color:#886644; font-family:monospace; font-size:0.82rem;
+      padding:26px 0; letter-spacing:1px;
+    }
+    /* Admin table */
+    #admin-controls { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+    #admin-search {
+      flex:1; min-width:140px; padding:8px 12px; background:#1a1008;
+      border:1px solid #553322; border-radius:6px; color:#ffcc88;
+      font-family:monospace; font-size:0.85rem; outline:none;
+    }
+    #admin-controls button {
+      padding:8px 14px; cursor:pointer; background:#331500;
+      border:1px solid #cc4400; border-radius:6px; color:#ff8844;
+      font-family:monospace; font-size:0.8rem; letter-spacing:1px;
+    }
+    #admin-controls button:hover { background:#4a2200; }
+    #admin-table-wrap { max-height:52vh; overflow:auto; margin-bottom:12px; }
+    #admin-table { width:100%; border-collapse:collapse; font-family:monospace; }
+    #admin-table th, #admin-table td {
+      padding:8px 10px; text-align:left; font-size:0.8rem;
+      border-bottom:1px solid #331100; white-space:nowrap;
+    }
+    #admin-table th {
+      position:sticky; top:0; background:#1a0e04; color:#cc8844;
+      letter-spacing:1px; z-index:1;
+    }
+    #admin-table td { color:#c9a878; }
+    #admin-table td .cell-score { color:#ffaa55; }
+    #admin-count { color:#886644; font-family:monospace; font-size:0.75rem; margin-bottom:10px; }
+    #icon-logout { cursor:pointer; }
 
     /* ── ABOUT US ────────────────────────────────────────────────────────── */
     #s-about {
@@ -2014,6 +2115,7 @@
   <div id="menu-icons">
     <span title="Settings" id="icon-settings">⚙</span>
     <span title="About Us" id="icon-about">?</span>
+    <span title="Log out" id="icon-logout">⎋</span>
   </div>
   <div id="menu-player-name"></div>
   <div id="menu-content">
@@ -2023,6 +2125,69 @@
     <button class="menu-btn" id="btn-plearn">
       <span>P-LEARN</span><span class="icon">◆</span>
     </button>
+    <button class="menu-btn" id="btn-leaderboard">
+      <span>LEADERBOARD</span><span class="icon">🏆</span>
+    </button>
+    <button class="menu-btn" id="btn-admin" hidden>
+      <span>ADMIN</span><span class="icon">★</span>
+    </button>
+  </div>
+</div>
+
+<!-- ══ SIGN IN / SIGN UP ═══════════════════════════════════════════════════════ -->
+<div id="s-login" class="screen hidden">
+  <div id="auth-box">
+    <div class="case-stamp">Access</div>
+    <h2 id="auth-title">SIGN IN</h2>
+    <div class="auth-row">
+      <label for="auth-email">EMAIL</label>
+      <input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com"/>
+    </div>
+    <div class="auth-row" id="auth-username-row" hidden>
+      <label for="auth-username">DISPLAY NAME</label>
+      <input id="auth-username" type="text" maxlength="20" placeholder="Shown on the leaderboard"/>
+    </div>
+    <div class="auth-row">
+      <label for="auth-password">PASSWORD</label>
+      <input id="auth-password" type="password" autocomplete="current-password" placeholder="At least 6 characters"/>
+    </div>
+    <div id="auth-error"></div>
+    <button class="auth-btn primary" id="btn-auth-submit" type="button">SIGN IN</button>
+    <div id="auth-toggle-line">
+      <span id="auth-toggle-text">No account yet?</span>
+      <button type="button" id="btn-auth-toggle">Create one</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEADERBOARDS ════════════════════════════════════════════════════════════ -->
+<div id="s-leaderboard" class="screen hidden">
+  <div id="leaderboard-box">
+    <span class="nav-home" onclick="goHome()">⌂</span>
+    <div class="case-stamp">Records</div>
+    <h2>LEADERBOARDS</h2>
+    <div id="lb-tabs">
+      <button class="lb-tab active" data-board="speed" type="button">FASTEST TIME</button>
+      <button class="lb-tab" data-board="accuracy" type="button">TOP ACCURACY</button>
+    </div>
+    <div id="lb-list"></div>
+    <button class="modal-back-btn" id="btn-leaderboard-back">← BACK TO MENU</button>
+  </div>
+</div>
+
+<!-- ══ ADMIN — ALL SCORES ══════════════════════════════════════════════════════ -->
+<div id="s-admin" class="screen hidden">
+  <div id="admin-box">
+    <div class="case-stamp">Instructor</div>
+    <h2>ALL STUDENT SCORES</h2>
+    <div id="admin-controls">
+      <input id="admin-search" type="text" placeholder="Filter by name…"/>
+      <button id="btn-admin-refresh" type="button">↻ Refresh</button>
+      <button id="btn-admin-export" type="button">⬇ Export CSV</button>
+    </div>
+    <div id="admin-count"></div>
+    <div id="admin-table-wrap"><table id="admin-table"></table></div>
+    <button class="modal-back-btn" id="btn-admin-back">← BACK TO MENU</button>
   </div>
 </div>
 
