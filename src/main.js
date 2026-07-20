@@ -27,6 +27,7 @@ import { preloadAssets } from './loaders/preload.js';
 import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut } from './net/auth.js';
 import { submitRun, fetchSpeedLeaderboard, fetchAccuracyLeaderboard, fetchAllRuns } from './net/scores.js';
 import { startPlay, endPlay, hasActivePlay, logAttempt, logEvent } from './net/analytics.js';
+import { mountDashboard } from './ui/dashboard.js';
 
 // Stable per-question id ("roomId.bankIndex", e.g. "1.4") for analytics/item
 // analysis. Bank order is fixed, so this identifies a question across runs.
@@ -1746,6 +1747,8 @@ if (import.meta.env.DEV) {
   window.__scene      = scene;
   window.__devLose    = () => { resetProgress(); startGame(); triggerLose(); };
   window.__devWin     = triggerDevWin;
+  // Render the dashboard regardless of admin role (dev only) for UI testing.
+  window.__openDash   = () => { showScreen('admin'); return mountDashboard({ onBack: () => showScreen('menu') }); };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1932,52 +1935,13 @@ document.querySelectorAll('.lb-tab').forEach(tab => {
   };
 });
 
-// ── Admin (custom in-app dashboard) ───────────────────────────────────────────
-let _adminRuns = [];
-function renderAdmin() {
-  const q = $('admin-search').value.trim().toLowerCase();
-  const rows = _adminRuns.filter(r => !q || (r.profiles?.username || '').toLowerCase().includes(q));
-  $('admin-count').textContent = `${rows.length} run${rows.length === 1 ? '' : 's'}`;
-  const table = $('admin-table');
-  if (!rows.length) { table.innerHTML = '<tr><td class="admin-empty">No scores yet.</td></tr>'; return; }
-  const head = '<tr><th>Student</th><th>R1</th><th>R2</th><th>R3</th><th>Score</th><th>Time</th><th>When</th></tr>';
-  const body = rows.map(r => {
-    const [a, b, c] = r.room_scores || [];
-    return `<tr><td>${escapeHtml(r.profiles?.username || '?')}</td><td>${pc(a)}</td><td>${pc(b)}</td><td>${pc(c)}</td>`
-         + `<td class="cell-score">${r.total_score}%</td><td>${formatTime(Math.round(r.best_time))}</td><td>${fmtDate(r.finished_at)}</td></tr>`;
-  }).join('');
-  table.innerHTML = head + body;
-}
-async function loadAdmin() {
-  $('admin-count').textContent = 'Loading…';
-  $('admin-table').innerHTML = '';
-  _adminRuns = await fetchAllRuns();
-  renderAdmin();
-}
+// ── Admin dashboard (clean analytics UI — see src/ui/dashboard.js) ────────────
 async function openAdmin() {
   if (!isAdmin()) return;
-  $('admin-search').value = '';
   showScreen('admin');
-  await loadAdmin();
+  await mountDashboard({ onBack: () => showScreen('menu') });
 }
-function exportAdminCsv() {
-  const csv = s => `"${String(s).replace(/"/g, '""')}"`;
-  const header = ['Student', 'Room1', 'Room2', 'Room3', 'TotalScore', 'TimeSeconds', 'FinishedAt'];
-  const lines = [header.join(',')].concat(_adminRuns.map(r => {
-    const [a, b, c] = r.room_scores || [];
-    return [csv(r.profiles?.username || ''), a ?? '', b ?? '', c ?? '', r.total_score, Math.round(r.best_time), r.finished_at].join(',');
-  }));
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'escape-room-scores.csv'; a.click();
-  URL.revokeObjectURL(url);
-}
-$('btn-admin').onclick         = openAdmin;
-$('btn-admin-back').onclick    = () => showScreen('menu');
-$('btn-admin-refresh').onclick = loadAdmin;
-$('btn-admin-export').onclick  = exportAdminCsv;
-$('admin-search').addEventListener('input', renderAdmin);
+$('btn-admin').onclick = openAdmin;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 setMenuCamera();

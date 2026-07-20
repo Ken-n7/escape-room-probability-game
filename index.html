@@ -753,6 +753,66 @@
     #admin-count { color:#886644; font-family:monospace; font-size:0.75rem; margin-bottom:10px; }
     #icon-logout { cursor:pointer; }
 
+    /* ── ADMIN DASHBOARD — deliberately a clean, modern data UI (NOT the ──── */
+    /*    horror game theme): light background, cards, sans-serif, blue accent */
+    #s-admin { background:#eef1f6 !important; overflow-y:auto; padding:0; }
+    #s-admin:not(.hidden) { display:block !important; }   /* visible = block; .hidden still wins to hide it */
+    #s-admin::after { display:none !important; }
+    .dash {
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      color:#1f2733; max-width:1120px; margin:0 auto; padding:22px 22px 64px; text-align:left;
+    }
+    .dash * { box-sizing:border-box; }
+    .dash-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+    .dash-title { font-size:1.5rem; font-weight:700; color:#0f172a; }
+    .dash-sub { color:#64748b; font-size:0.84rem; margin-top:3px; }
+    .dash-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .dash-btn { padding:8px 14px; border:1px solid #d0d7e2; background:#fff; color:#334155; border-radius:8px; font-size:0.84rem; cursor:pointer; font-family:inherit; }
+    .dash-btn:hover { background:#f1f5f9; }
+    .dash-btn.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+    .dash-btn.primary:hover { background:#1d4ed8; }
+    .dash-tabs { display:flex; gap:2px; border-bottom:1px solid #e2e8f0; margin-bottom:20px; flex-wrap:wrap; }
+    .dash-tab { padding:10px 16px; border:none; background:none; color:#64748b; font-size:0.9rem; cursor:pointer; border-bottom:2px solid transparent; font-family:inherit; }
+    .dash-tab:hover { color:#0f172a; }
+    .dash-tab.active { color:#2563eb; border-bottom-color:#2563eb; font-weight:600; }
+    .dash-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:13px; margin-bottom:20px; }
+    .stat-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:15px 17px; }
+    .stat-value { font-size:1.85rem; font-weight:700; color:#0f172a; line-height:1.1; }
+    .stat-label { color:#64748b; font-size:0.78rem; margin-top:5px; }
+    .stat-sub { color:#94a3b8; font-size:0.7rem; margin-top:2px; }
+    .card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:17px 20px; margin-bottom:16px; }
+    .card h3 { font-size:0.98rem; font-weight:650; color:#0f172a; margin-bottom:14px; }
+    .card-note { color:#94a3b8; font-size:0.74rem; margin-top:10px; }
+    .dash-table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+    .dash-table th, .dash-table td { padding:9px 10px; text-align:left; border-bottom:1px solid #eef2f7; white-space:nowrap; }
+    .dash-table th { color:#64748b; font-weight:600; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.03em; position:sticky; top:0; background:#fff; }
+    .dash-table td.num, .dash-table th.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .dash-table td.wide, .dash-table th.wide { white-space:normal; min-width:220px; }
+    .dash-table tr:hover td { background:#f8fafc; }
+    .dash-table-wrap { overflow-x:auto; max-height:62vh; overflow-y:auto; }
+    .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:0.72rem; font-weight:600; }
+    .pill.good { background:#dcfce7; color:#166534; }
+    .pill.mid  { background:#fef9c3; color:#854d0e; }
+    .pill.bad  { background:#fee2e2; color:#991b1b; }
+    .bar-row { display:grid; grid-template-columns:150px 1fr 52px; align-items:center; gap:10px; margin-bottom:9px; font-size:0.82rem; }
+    .bar-row .bar-label { color:#475569; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bar-track { background:#eef2f7; border-radius:6px; height:18px; overflow:hidden; }
+    .bar-fill { height:100%; border-radius:6px; background:#2563eb; min-width:2px; }
+    .bar-fill.good { background:#16a34a; } .bar-fill.mid { background:#d97706; } .bar-fill.bad { background:#dc2626; }
+    .bar-row .bar-val { text-align:right; color:#334155; font-variant-numeric:tabular-nums; }
+    .funnel-row { display:grid; grid-template-columns:150px 1fr 92px; align-items:center; gap:10px; margin-bottom:9px; font-size:0.82rem; }
+    .funnel-track { background:#eef2f7; border-radius:6px; height:26px; overflow:hidden; }
+    .funnel-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,#2563eb,#60a5fa); display:flex; align-items:center; padding-left:9px; color:#fff; font-size:0.76rem; font-weight:600; }
+    .spark { display:flex; align-items:flex-end; gap:3px; height:80px; }
+    .spark-bar { flex:1; background:#93c5fd; border-radius:3px 3px 0 0; min-height:2px; position:relative; }
+    .spark-bar:hover { background:#2563eb; }
+    .spark-labels { display:flex; gap:3px; margin-top:6px; }
+    .spark-labels span { flex:1; text-align:center; color:#94a3b8; font-size:0.62rem; }
+    .dash-empty { text-align:center; color:#94a3b8; padding:48px 0; }
+    .dash-loading { text-align:center; color:#64748b; padding:48px 0; }
+    .dash-2col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    @media (max-width:720px){ .dash-2col { grid-template-columns:1fr; } }
+
     /* ── ABOUT US ────────────────────────────────────────────────────────── */
     #s-about {
       background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #0a0e0a;
@@ -2192,20 +2252,9 @@
   </div>
 </div>
 
-<!-- ══ ADMIN — ALL SCORES ══════════════════════════════════════════════════════ -->
+<!-- ══ ADMIN DASHBOARD (clean, non-game theme — built by src/ui/dashboard.js) ══ -->
 <div id="s-admin" class="screen hidden">
-  <div id="admin-box">
-    <div class="case-stamp">Instructor</div>
-    <h2>ALL STUDENT SCORES</h2>
-    <div id="admin-controls">
-      <input id="admin-search" type="text" placeholder="Filter by name…"/>
-      <button id="btn-admin-refresh" type="button">↻ Refresh</button>
-      <button id="btn-admin-export" type="button">⬇ Export CSV</button>
-    </div>
-    <div id="admin-count"></div>
-    <div id="admin-table-wrap"><table id="admin-table"></table></div>
-    <button class="modal-back-btn" id="btn-admin-back">← BACK TO MENU</button>
-  </div>
+  <div id="dash-root" class="dash"></div>
 </div>
 
 <!-- ══ STORY SLIDES ════════════════════════════════════════════════════════════ -->
