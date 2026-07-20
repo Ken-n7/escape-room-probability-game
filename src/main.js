@@ -1163,11 +1163,11 @@ function startGame({ transition = false } = {}) {
 
 // ── Story slides ──────────────────────────────────────────────────────────────
 const STORY_SLIDES = [
-  'A ghost student is trapped in this classroom, condemned to wander until you solve all the problems involving probability. To help you escape, you must first overcome every test and obtain the code needed to unlock the main exit door.',
-  'The room feels colder with every second, as if the air itself is being drained away. Shadows stretch and shift where there should be none, lingering a little too long before disappearing.',
-  'Something unseen lingers here… and it is not alone. Explore the classrooms… but be careful. The longer you stay, the more it feels like the rooms are remembering you.',
-  'Time is limited. The ghost is watching. Solve each challenge correctly, or risk being trapped here forever.',
-  'Because in this place, nothing is certain — except that your escape depends on the choices you make.',
+  'The doors sealed the moment you stepped inside. This school was abandoned years ago — yet something here is still awake, and it has waited a long time for someone like you.',
+  'There is only one way out, and it is locked. The code that opens it lies scattered through these rooms, buried inside problems of chance and probability. Solve them all, or the door never opens.',
+  'Nothing here is left in plain sight. What you need is hidden in the places you would least want to reach — and the halls never quite match the way you remember them.',
+  'Not every room is real. Some only pretend, to keep you wandering in the dark. And the longer you stay, the more it seems that something is counting your every step.',
+  'Answer what the dark asks — and answer it well. It grows stronger each time you fail. In this place nothing is certain… except the choices you make, and how little time remains to make them.',
 ];
 let storyIdx = 0;
 
@@ -1762,18 +1762,24 @@ const fmtDate = iso => { const d = new Date(iso); return `${d.getMonth()+1}/${d.
 // Kick off session restore immediately; the loading screen waits on this.
 const authReady = initAuth().catch(err => { console.warn('[auth] init failed:', err); return null; });
 
-// Decide the first screen once assets + auth are both ready.
+// Always land on the menu (players see the hallway first). The menu shows the
+// full file list when signed in, or just Log In / Sign Up when not.
 async function enterFromAuth() {
   await authReady;
-  if (isLoggedIn()) {
+  applyMenuAuthState();
+  showScreen('menu');
+}
+
+// Toggle the menu between logged-in (Play/etc.) and logged-out (Log In/Sign Up).
+function applyMenuAuthState() {
+  const authed = isLoggedIn();
+  screens.menu.dataset.authed = authed ? 'true' : 'false';
+  if (authed) {
     playerName = displayName();
-    updateMenuName();
     elHudPlayer.textContent = playerName;
     $('btn-admin').hidden = !isAdmin();
-    showScreen('menu');
-  } else {
-    showLogin();
   }
+  updateMenuName();
 }
 
 // ── Sign in / sign up form ────────────────────────────────────────────────────
@@ -1803,8 +1809,10 @@ function showAuthError(msg, fieldId) {
   $('auth-error').textContent = msg;
   if (fieldId) { const el = $(fieldId); el.classList.add('invalid'); el.focus(); }
 }
-function showLogin() {
-  setAuthMode('signin');
+// Open the auth modal in the given mode ('signin' | 'signup'). Called from the
+// menu's Log In / Sign Up buttons — the modal never appears on its own.
+function openAuth(mode = 'signin') {
+  setAuthMode(mode);
   $('auth-email').value = ''; $('auth-password').value = ''; $('auth-username').value = '';
   setPasswordVisible(false);
   showScreen('login');
@@ -1896,15 +1904,23 @@ $('auth-password').addEventListener('blur',    () => { $('auth-capslock').hidden
 });
 $('btn-auth-submit').onclick = submitAuth;
 $('btn-auth-toggle').onclick = () => setAuthMode(authMode === 'signup' ? 'signin' : 'signup');
+$('btn-auth-close').onclick  = () => { applyMenuAuthState(); showScreen('menu'); };
+// Menu's lower-right Log In / Sign Up buttons open the modal in the right mode.
+$('btn-menu-login').onclick  = () => openAuth('signin');
+$('btn-menu-signup').onclick = () => openAuth('signup');
 $('icon-logout').onclick = async () => {
   if (!confirm(`Log out of "${displayName()}"?`)) return;
   await signOut();
   playerName = 'Student';
-  showLogin();
+  applyMenuAuthState();
+  showScreen('menu');
 };
-// If the session ends elsewhere (token expiry / another tab), fall back to login.
+// If the session ends elsewhere (token expiry / another tab), drop back to the
+// logged-out menu (never force the modal open).
 onSignedOut(() => {
-  if (screens.login.classList.contains('hidden')) { playerName = 'Student'; showLogin(); }
+  playerName = 'Student';
+  applyMenuAuthState();
+  if (gState.current === S.MENU) showScreen('menu');
 });
 
 // ── Leaderboards ──────────────────────────────────────────────────────────────
