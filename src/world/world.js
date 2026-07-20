@@ -681,10 +681,10 @@ const bx  = (w,h,d,x,y,z,mat)        => _push(_bxGeo(w,h,d), mat, x, y, z);
 const bxr = (w,h,d,x,y,z,rx,ry,mat)  => _push(_bxGeo(w,h,d), mat, x, y, z, rx, ry);
 const pl  = (w,h,x,y,z,rx,ry,mat)    => _push(_plGeo(w,h),   mat, x, y, z, rx, ry);
 
-// Floor plane with size-proportional UVs so tiles stay square on the long
-// corridor instead of stretching. ~3 world units per texture image, matching
-// the room floors' density (which use the default 0..1 UV × repeat(4,4)).
-const _floorTiled = (w, h, x, y, z, rx, ry, mat) => {
+// Floor/ceiling plane with size-proportional UVs so tiles stay square on the
+// long corridor instead of stretching. Density (÷12) matches the square rooms'
+// default-UV planes, so corridor and room tiling line up.
+const _tiledPlane = (w, h, x, y, z, rx, ry, mat) => {
   const g = new THREE.PlaneGeometry(w, h);
   const uv = g.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 12, uv.getY(i) * h / 12);
@@ -785,12 +785,13 @@ function doorGapsFor(orient) {
 }
 
 function buildCorridors(scene) {
-  // Floors + ceilings (leg 1 owns the corner square)
-  _floorTiled(hallW, leg1Len, 0, 0, leg1Len/2, -Math.PI/2, 0, roomFloorMat);
-  pl(hallW, leg1Len, 0, hallH, leg1Len/2, Math.PI/2, 0, ceilMat);
+  // Floors + ceilings (leg 1 owns the corner square). Both use size-proportional
+  // UVs so the long legs don't stretch the tile texture.
+  _tiledPlane(hallW, leg1Len, 0, 0, leg1Len/2, -Math.PI/2, 0, roomFloorMat);
+  _tiledPlane(hallW, leg1Len, 0, hallH, leg1Len/2, Math.PI/2, 0, ceilMat);
   const leg2Len = leg2EndX - HALF_W;
-  _floorTiled(leg2Len, hallW, HALF_W + leg2Len/2, 0, (leg2Z0+leg2Z1)/2, -Math.PI/2, 0, roomFloorMat);
-  pl(leg2Len, hallW, HALF_W + leg2Len/2, hallH, (leg2Z0+leg2Z1)/2, Math.PI/2, 0, ceilMat);
+  _tiledPlane(leg2Len, hallW, HALF_W + leg2Len/2, 0, (leg2Z0+leg2Z1)/2, -Math.PI/2, 0, roomFloorMat);
+  _tiledPlane(leg2Len, hallW, HALF_W + leg2Len/2, hallH, (leg2Z0+leg2Z1)/2, Math.PI/2, 0, ceilMat);
 
   // Walls (visual + collision), segmented around the door openings
   segmentedWall('z', -HALF_W, 0, leg1Len, doorGapsFor('W'),  Math.PI/2);          // leg1 west

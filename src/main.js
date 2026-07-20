@@ -1584,10 +1584,16 @@ $('btn-win-restart').onclick  = () => { CFG.gameplay.pLearnMode = false; window.
 $('btn-lose-retry').onclick   = () => { gState.current = S.MENU; setMenuCamera(); showScreen('ready'); };
 $('hud-options-btn').onclick  = () => openOptions();
 $('btn-options-resume').onclick = resumeGame;
-$('btn-options-restart').onclick = () =>
-  requestOptionsConfirm('Restart this run? Current room progress will be cleared.', () => startGame());
-$('btn-options-home').onclick = () =>
-  requestOptionsConfirm('Return to the home screen? Current run progress will be cleared.', returnHomeFromOptions);
+$('btn-options-restart').onclick = () => openConfirm({
+  text: 'Restart this run? Current room progress will be cleared.',
+  okLabel: 'Restart',
+  onConfirm: () => startGame(),
+});
+$('btn-options-home').onclick = () => openConfirm({
+  text: 'Return to the home screen? Current run progress will be cleared.',
+  okLabel: 'Home Screen',
+  onConfirm: returnHomeFromOptions,
+});
 $('btn-options-settings').onclick = () => openSettings('options');
 $('btn-options-confirm-no').onclick  = hideOptionsConfirm;
 $('btn-options-confirm-yes').onclick = () => {
