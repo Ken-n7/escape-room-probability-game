@@ -22,9 +22,9 @@ const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { c
 
 // 20 natural-looking display names (≤20 chars, valid charset)
 const NAMES = [
-  'Liam_H', 'Sophia_M', 'MangoTiger', 'j_reyes', 'AcePilot88', 'Nina K', 'ghostbyte',
-  'Marco P', 'Luna_R', 'kev1n', 'Ella-B', 'RyanDelaCruz', 'pixelPasta', 'Tonton23',
-  'Bea_S', 'QuietFox', 'dizzyDuck', 'Sam_09', 'MayaLopez', 'thunderKit',
+  'Diego_R', 'Hannah_T', 'crimsonOwl', 'p_santos', 'NovaByte', 'Grace L', 'shadowMint',
+  'Leo_V', 'Zara-K', 'mikey7', 'Ivy_C', 'AaronMercado', 'cloudRunner', 'Kiko42',
+  'Faye_D', 'SwiftHeron', 'jollyMoose', 'Rae_08', 'CarloReyes', 'emberWolf',
 ];
 
 const DIFF_PENALTY = { EASY: 0.00, MODERATE: 0.14, HARD: 0.24 };
