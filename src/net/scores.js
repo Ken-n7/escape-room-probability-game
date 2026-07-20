@@ -47,7 +47,7 @@ export async function fetchAllRuns(limit = 500) {
 // ── Admin analytics reads (RLS: admins get all rows, students only their own) ──
 export async function fetchAllPlays(limit = 5000) {
   const { data, error } = await supabase.from('plays')
-    .select('outcome, duration_sec, rooms_completed, total_score, best_time, plearn, device, started_at, ended_at, profiles(username)')
+    .select('id, outcome, duration_sec, rooms_completed, total_score, best_time, plearn, device, started_at, ended_at, profiles(username)')
     .order('started_at', { ascending: false }).limit(limit);
   if (error) { console.warn('[scores] plays fetch failed:', error.message); return []; }
   return data ?? [];
@@ -55,7 +55,7 @@ export async function fetchAllPlays(limit = 5000) {
 
 export async function fetchAllAttempts(limit = 10000) {
   const { data, error } = await supabase.from('question_attempts')
-    .select('room_id, difficulty, qid, question_text, is_correct, selected_index, selected_text, attempt_no, time_ms, hint_shown, mode, created_at, profiles(username)')
+    .select('play_id, room_id, difficulty, qid, question_text, is_correct, selected_index, selected_text, attempt_no, time_ms, hint_shown, mode, created_at, profiles(username)')
     .order('created_at', { ascending: false }).limit(limit);
   if (error) { console.warn('[scores] attempts fetch failed:', error.message); return []; }
   return data ?? [];
@@ -63,7 +63,7 @@ export async function fetchAllAttempts(limit = 10000) {
 
 export async function fetchAllEvents(limit = 10000) {
   const { data, error } = await supabase.from('events')
-    .select('type, data, at, profiles(username)')
+    .select('play_id, type, data, at, profiles(username)')
     .order('at', { ascending: false }).limit(limit);
   if (error) { console.warn('[scores] events fetch failed:', error.message); return []; }
   return data ?? [];

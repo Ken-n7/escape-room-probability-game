@@ -150,7 +150,7 @@ async function seedPlayer(name, i) {
     const sim = simulatePlay(clamp(skill + rand(-0.06, 0.06), 0.3, 0.97), randomStart());
     plays.push({ ...sim.play, user_id: userId });
     sim.attempts.forEach(a => { delete a.id; attempts.push({ ...a, user_id: userId }); });
-    sim.events.forEach(e => { delete e.id; events.push({ ...e, user_id: userId }); });
+    sim.events.forEach(e => { delete e.id; events.push({ ...e, play_id: sim.play.id, user_id: userId }); });
   }
 
   const e1 = (await sb.from('plays').insert(plays)).error;

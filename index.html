@@ -812,6 +812,18 @@
     .dash-loading { text-align:center; color:#64748b; padding:48px 0; }
     .dash-2col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     @media (max-width:720px){ .dash-2col { grid-template-columns:1fr; } }
+    /* drill-down: clickable rows, breadcrumb, event timeline */
+    .row-link { cursor:pointer; }
+    .row-link:hover td { background:#eff4ff !important; }
+    .chev { color:#cbd5e1; font-weight:700; }
+    .crumb { font-size:0.92rem; color:#334155; margin-bottom:16px; }
+    .crumb .link { color:#2563eb; cursor:pointer; }
+    .crumb .link:hover { text-decoration:underline; }
+    .crumb-sep { color:#cbd5e1; margin:0 5px; }
+    .evt { display:grid; grid-template-columns:78px 140px 1fr; gap:10px; align-items:baseline; padding:6px 2px; border-bottom:1px solid #f1f5f9; font-size:0.8rem; }
+    .evt-time { color:#94a3b8; }
+    .evt-type { color:#0f172a; font-weight:600; }
+    .evt-data { color:#64748b; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.74rem; overflow-x:auto; white-space:nowrap; }
 
     /* ── ABOUT US ────────────────────────────────────────────────────────── */
     #s-about {
