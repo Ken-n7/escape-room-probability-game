@@ -7,6 +7,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.7",
     "three": "^0.170.0"
   },
   "devDependencies": {

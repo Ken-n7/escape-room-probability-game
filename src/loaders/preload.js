@@ -25,7 +25,7 @@ const FLAVOR_TEXTS = [
   'Do not make a sound.',
 ];
 
-export async function preloadAssets() {
+export async function preloadAssets(onReady) {
   const screen  = document.getElementById('s-loading');
   const bar     = document.getElementById('loading-bar');
   const status  = document.getElementById('loading-status');
@@ -78,6 +78,11 @@ export async function preloadAssets() {
   screen.style.opacity = '0';
   await new Promise(r => setTimeout(r, 580));
   // Don't stomp another screen if the game already moved on (e.g. dev helpers).
-  if (gState.current === S.MENU) showScreen('menu');
-  else screen.classList.add('hidden');
+  if (gState.current === S.MENU) {
+    // Hand off to the caller (auth gate → menu or login); fall back to menu.
+    if (onReady) await onReady();
+    else showScreen('menu');
+  } else {
+    screen.classList.add('hidden');
+  }
 }

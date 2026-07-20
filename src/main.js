@@ -24,6 +24,8 @@ import { updateAmbientScares, resetAmbientScares, clearScareSprite, triggerBlack
 import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
+import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName } from './net/auth.js';
+import { submitRun, fetchSpeedLeaderboard, fetchAccuracyLeaderboard, fetchAllRuns } from './net/scores.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
 const {
@@ -1048,6 +1050,10 @@ function triggerWin({ recordRun = true } = {}) {
     if (isNewBest) { bestTime = elapsed; persistSave(); }
     const bestLabel  = bestTime !== null ? '  Best: ' + formatTime(bestTime) + (isNewBest ? ' (new!)' : '') : '';
     $('win-time').textContent = 'Time: ' + formatTime(elapsed) + bestLabel;
+    // Post the finished run to the leaderboard (fire-and-forget; safe offline).
+    const rooms = bestScores.map(v => v || 0);
+    const total = Math.round(rooms.reduce((s, v) => s + v, 0) / rooms.length);
+    submitRun({ roomScores: rooms, totalScore: total, bestTime: elapsed });
   } else {
     $('win-time').textContent = 'Time: Test run';
   }
@@ -1503,7 +1509,7 @@ document.addEventListener('keydown',     primeAudio, { once: true });
 window.AudioManager = AudioManager;
 
 // ── Pre-game UI click sound ───────────────────────────────────────────────────
-const PRE_GAME_SCREENS   = ['title', 'menu', 'story', 'plearn', 'ready', 'settings', 'about'];
+const PRE_GAME_SCREENS   = ['title', 'menu', 'story', 'plearn', 'ready', 'settings', 'about', 'login', 'leaderboard', 'admin'];
 const PRE_GAME_CONTROLS  = ['button','.nav-back','.nav-fwd','.nav-home','#title-arrow','#icon-settings','#icon-about'].join(',');
 
 document.addEventListener('click', e => {
@@ -1688,6 +1694,167 @@ if (import.meta.env.DEV) {
   window.__devWin     = triggerDevWin;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  ACCOUNTS · LEADERBOARDS · ADMIN
+// ══════════════════════════════════════════════════════════════════════════════
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pc = v => (v === null || v === undefined ? '—' : v + '%');
+const fmtDate = iso => { const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+
+// Kick off session restore immediately; the loading screen waits on this.
+const authReady = initAuth().catch(err => { console.warn('[auth] init failed:', err); return null; });
+
+// Decide the first screen once assets + auth are both ready.
+async function enterFromAuth() {
+  await authReady;
+  if (isLoggedIn()) {
+    playerName = displayName();
+    updateMenuName();
+    elHudPlayer.textContent = playerName;
+    $('btn-admin').hidden = !isAdmin();
+    showScreen('menu');
+  } else {
+    showLogin();
+  }
+}
+
+// ── Sign in / sign up form ────────────────────────────────────────────────────
+let authMode = 'signin';
+function setAuthMode(mode) {
+  authMode = mode;
+  const signup = mode === 'signup';
+  $('auth-title').textContent          = signup ? 'CREATE ACCOUNT' : 'SIGN IN';
+  $('auth-username-row').hidden         = !signup;
+  $('btn-auth-submit').textContent      = signup ? 'CREATE ACCOUNT' : 'SIGN IN';
+  $('auth-toggle-text').textContent     = signup ? 'Already have an account?' : 'No account yet?';
+  $('btn-auth-toggle').textContent      = signup ? 'Sign in' : 'Create one';
+  $('auth-password').setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+  $('auth-error').textContent = '';
+}
+function showLogin() {
+  setAuthMode('signin');
+  $('auth-email').value = ''; $('auth-password').value = ''; $('auth-username').value = '';
+  showScreen('login');
+}
+function friendlyAuthError(e) {
+  const m = (e?.message || '').toLowerCase();
+  if (m.includes('invalid login')) return 'Wrong email or password.';
+  if (m.includes('already registered')) return 'That email already has an account. Sign in instead.';
+  if (m.includes('confirmation')) return e.message;   // our own hint about email-confirm
+  if (m.includes('taken')) return 'That name is already taken.';
+  if (m.includes('valid email')) return 'Enter a valid email address.';
+  return e?.message || 'Something went wrong. Try again.';
+}
+async function submitAuth() {
+  const email    = $('auth-email').value.trim();
+  const password = $('auth-password').value;
+  const username = $('auth-username').value.trim();
+  const err = $('auth-error');
+  err.textContent = '';
+  if (!email || !password)                    { err.textContent = 'Enter your email and password.'; return; }
+  if (authMode === 'signup' && !username)     { err.textContent = 'Choose a display name.'; return; }
+  if (password.length < 6)                    { err.textContent = 'Password must be at least 6 characters.'; return; }
+
+  const btn = $('btn-auth-submit');
+  btn.disabled = true; btn.textContent = 'Please wait…';
+  try {
+    if (authMode === 'signup') await signUp({ email, password, username });
+    else                       await signIn({ email, password });
+    AudioManager.play('uiClick');
+    await enterFromAuth();
+  } catch (e) {
+    err.textContent = friendlyAuthError(e);
+  } finally {
+    btn.disabled = false;
+    setAuthMode(authMode);   // restores the button label
+  }
+}
+$('btn-auth-submit').onclick = submitAuth;
+$('btn-auth-toggle').onclick = () => setAuthMode(authMode === 'signup' ? 'signin' : 'signup');
+$('auth-password').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
+$('auth-email').addEventListener('keydown',    e => { if (e.key === 'Enter') submitAuth(); });
+$('icon-logout').onclick = async () => {
+  await signOut();
+  playerName = 'Student';
+  showLogin();
+};
+
+// ── Leaderboards ──────────────────────────────────────────────────────────────
+let lbBoard = 'speed';
+function lbRowHtml(i, name, val, me) {
+  const cls = 'lb-row' + (i === 0 ? ' top1' : '') + (name === me ? ' me' : '');
+  return `<div class="${cls}"><span class="lb-rank">${i + 1}</span><span class="lb-name">${escapeHtml(name)}</span><span class="lb-val">${val}</span></div>`;
+}
+async function renderLeaderboard() {
+  const list = $('lb-list');
+  list.innerHTML = '<div class="lb-empty">Loading…</div>';
+  const me = displayName();
+  const rows = lbBoard === 'speed' ? await fetchSpeedLeaderboard() : await fetchAccuracyLeaderboard();
+  if (!rows.length) { list.innerHTML = '<div class="lb-empty">No scores yet. Be the first!</div>'; return; }
+  list.innerHTML = rows.map((r, i) => lbBoard === 'speed'
+    ? lbRowHtml(i, r.username, formatTime(Math.round(r.best_time)), me)
+    : lbRowHtml(i, r.username, r.top_score + '%', me)
+  ).join('');
+}
+function openLeaderboard() { showScreen('leaderboard'); renderLeaderboard(); }
+$('btn-leaderboard').onclick = openLeaderboard;
+$('btn-leaderboard-back').onclick = () => showScreen('menu');
+document.querySelectorAll('.lb-tab').forEach(tab => {
+  tab.onclick = () => {
+    lbBoard = tab.dataset.board;
+    document.querySelectorAll('.lb-tab').forEach(t => t.classList.toggle('active', t === tab));
+    renderLeaderboard();
+  };
+});
+
+// ── Admin (custom in-app dashboard) ───────────────────────────────────────────
+let _adminRuns = [];
+function renderAdmin() {
+  const q = $('admin-search').value.trim().toLowerCase();
+  const rows = _adminRuns.filter(r => !q || (r.profiles?.username || '').toLowerCase().includes(q));
+  $('admin-count').textContent = `${rows.length} run${rows.length === 1 ? '' : 's'}`;
+  const table = $('admin-table');
+  if (!rows.length) { table.innerHTML = '<tr><td class="admin-empty">No scores yet.</td></tr>'; return; }
+  const head = '<tr><th>Student</th><th>R1</th><th>R2</th><th>R3</th><th>Score</th><th>Time</th><th>When</th></tr>';
+  const body = rows.map(r => {
+    const [a, b, c] = r.room_scores || [];
+    return `<tr><td>${escapeHtml(r.profiles?.username || '?')}</td><td>${pc(a)}</td><td>${pc(b)}</td><td>${pc(c)}</td>`
+         + `<td class="cell-score">${r.total_score}%</td><td>${formatTime(Math.round(r.best_time))}</td><td>${fmtDate(r.finished_at)}</td></tr>`;
+  }).join('');
+  table.innerHTML = head + body;
+}
+async function loadAdmin() {
+  $('admin-count').textContent = 'Loading…';
+  $('admin-table').innerHTML = '';
+  _adminRuns = await fetchAllRuns();
+  renderAdmin();
+}
+async function openAdmin() {
+  if (!isAdmin()) return;
+  $('admin-search').value = '';
+  showScreen('admin');
+  await loadAdmin();
+}
+function exportAdminCsv() {
+  const csv = s => `"${String(s).replace(/"/g, '""')}"`;
+  const header = ['Student', 'Room1', 'Room2', 'Room3', 'TotalScore', 'TimeSeconds', 'FinishedAt'];
+  const lines = [header.join(',')].concat(_adminRuns.map(r => {
+    const [a, b, c] = r.room_scores || [];
+    return [csv(r.profiles?.username || ''), a ?? '', b ?? '', c ?? '', r.total_score, Math.round(r.best_time), r.finished_at].join(',');
+  }));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'escape-room-scores.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+$('btn-admin').onclick         = openAdmin;
+$('btn-admin-back').onclick    = () => showScreen('menu');
+$('btn-admin-refresh').onclick = loadAdmin;
+$('btn-admin-export').onclick  = exportAdminCsv;
+$('admin-search').addEventListener('input', renderAdmin);
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 setMenuCamera();
 applyDeviceProfile();
@@ -1696,4 +1863,4 @@ updateFullscreenLabel();
 updateNoteVisibility();
 updateDoorLocks({ instant: true });
 animate();
-preloadAssets();
+preloadAssets(enterFromAuth);
