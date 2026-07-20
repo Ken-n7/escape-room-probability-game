@@ -28,7 +28,7 @@ import { preloadAssets } from './loaders/preload.js';
 // ── World ─────────────────────────────────────────────────────────────────────
 const {
   wallBoxes, interactiveObjects, roomNotes, roomDoors, roomContainers,
-  realRoomRects, decoyRects, vacantRects, randomizeNotes,
+  realRoomRects, decoyRects, vacantRects, randomizeNotes, relocateNote,
 } = buildWorld(scene);
 
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
@@ -483,11 +483,20 @@ function tryInteract() {
   }
 }
 
-// ── Collision ─────────────────────────────────────────────────────────────────
-function resolveCollision(pos) {
+// ── Collision (height-aware) ──────────────────────────────────────────────────
+// STEP_HEIGHT = tallest obstacle the player can walk straight over/onto. Desks
+// (~0.73) sit above it and block, so they must be jumped; crates/chairs/debris
+// sit below it and are walked over (the player steps up onto them).
+const STEP_HEIGHT = 0.55;
+
+// Horizontal collision: only obstacles taller than the player's feet + a step
+// block them. Once a jump lifts the feet above a desk, it stops blocking.
+function resolveCollision(pos, feetY = 0) {
   const R = CFG.player.radius;
+  const reach = feetY + STEP_HEIGHT;
   for (const b of wallBoxes) {
     if (b.doorIndex !== undefined && doorIsOpen[b.doorIndex]) continue;
+    if (b.top <= reach) continue;   // low enough to step/clear — no block
     const x0=b.minX-R, x1=b.maxX+R, z0=b.minZ-R, z1=b.maxZ+R;
     if (pos.x>x0 && pos.x<x1 && pos.z>z0 && pos.z<z1) {
       const d0=x1-pos.x, d1=pos.x-x0, d2=z1-pos.z, d3=pos.z-z0;
@@ -498,6 +507,20 @@ function resolveCollision(pos) {
       else             pos.z=z0;
     }
   }
+}
+
+// Support height under the player: the highest reachable obstacle-top the player
+// is standing over (or floor 0). Reachable = within a step of the current feet,
+// so you can't be "supported" by a desk you haven't jumped up to yet.
+function groundHeightAt(x, z, feetY) {
+  const reach = feetY + STEP_HEIGHT;
+  let g = 0;
+  for (const b of wallBoxes) {
+    if (b.doorIndex !== undefined && doorIsOpen[b.doorIndex]) continue;
+    if (b.top > reach || b.top <= g) continue;
+    if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ) g = b.top;
+  }
+  return g;
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
@@ -845,7 +868,10 @@ function advanceAfterCorrect() {
       if (gState.current === S.QUESTION && activeRoomIdx === answeredRoomIdx) closeQuestion();
     }, 900);
   } else {
-    // Next question lives on another note — send the player hunting (req 5).
+    // Next question lives on another note — move it well away from where the
+    // player is standing so it never pops up right next to them, then send them
+    // hunting for it.
+    relocateNote(answeredRoomIdx, activeQIdx, camera.position.x, camera.position.z);
     updateNoteVisibility();
     const fb = $('question-wrong-count');
     fb.style.color = '#7fae7f';
@@ -1303,26 +1329,35 @@ let prevTime = performance.now();
 let footstepTimer = 0;
 const STEP_INTERVAL = 0.42;
 
-// ── Jump (Space / mobile button) ──────────────────────────────────────────────
-const JUMP_VELOCITY = 4.6;   // ≈0.48u hop
+// ── Jump + vertical physics (Space / mobile button) ───────────────────────────
+// _jumpY is the player's foot height above the floor; camera.y = eyeH + _jumpY.
+// Enough to clear a desk (~0.73): peak = v²/2g = 5.2²/44 ≈ 0.61 > 0.73−STEP.
+const JUMP_VELOCITY = 5.2;
 const GRAVITY       = 22;
 let _jumpY = 0, _jumpVy = 0, _jumpQueued = false;
 
-function tryJump() {
-  if (gState.current !== S.PLAYING) return;
-  if (_jumpY === 0 && _jumpVy === 0) _jumpVy = JUMP_VELOCITY;
-}
+// Called every frame AFTER horizontal movement, so the ground under the player's
+// new position is current. Handles jumping, step-up onto low props, standing on
+// jumped-onto surfaces, and falling/stepping back down.
+function updateVertical(dt) {
+  const groundY = groundHeightAt(camera.position.x, camera.position.z, _jumpY);
+  const grounded = _jumpVy <= 0 && _jumpY <= groundY + 0.02;
 
-function updateJump(dt) {
-  if (_jumpQueued) { tryJump(); _jumpQueued = false; }
-  if (keys['Space']) tryJump();
-  if (_jumpVy !== 0 || _jumpY > 0) {
+  if (grounded) {
+    _jumpY = groundY;                 // snap to the surface (incl. stepping up onto a low prop)
+    _jumpVy = 0;
+    if (_jumpQueued || keys['Space']) { _jumpVy = JUMP_VELOCITY; }   // launch
+  }
+  _jumpQueued = false;
+
+  if (_jumpVy !== 0 || _jumpY > groundY + 0.001) {   // airborne — integrate gravity
     _jumpVy -= GRAVITY * dt;
     _jumpY  += _jumpVy * dt;
-    if (_jumpY <= 0) {
-      _jumpY = 0;
+    if (_jumpY <= groundY) {                          // landed
+      const hard = _jumpVy < -1.5;
+      _jumpY = groundY;
       _jumpVy = 0;
-      AudioManager.play('footstep');   // landing thud
+      if (hard) AudioManager.play('footstep');
     }
   }
 }
@@ -1375,18 +1410,16 @@ function animate() {
   if (fwd || rgt) {
     const sinY = Math.sin(look.yaw), cosY = Math.cos(look.yaw);
     const spd  = CFG.player.speed * dt;
-    if (fwd) { camera.position.x -= sinY*fwd*spd; camera.position.z -= cosY*fwd*spd; resolveCollision(camera.position); }
-    if (rgt) { camera.position.x += cosY*rgt*spd; camera.position.z -= sinY*rgt*spd; resolveCollision(camera.position); }
+    if (fwd) { camera.position.x -= sinY*fwd*spd; camera.position.z -= cosY*fwd*spd; resolveCollision(camera.position, _jumpY); }
+    if (rgt) { camera.position.x += cosY*rgt*spd; camera.position.z -= sinY*rgt*spd; resolveCollision(camera.position, _jumpY); }
     footstepTimer -= dt;
-    if (footstepTimer <= 0 && _jumpY === 0) { AudioManager.play('footstep'); footstepTimer = STEP_INTERVAL; }
+    if (footstepTimer <= 0 && _jumpVy === 0) { AudioManager.play('footstep'); footstepTimer = STEP_INTERVAL; }
   } else {
     footstepTimer = 0;
   }
 
-  // Jumping disabled — kept the code below in case we bring it back.
-  // updateJump(dt);
-  // camera.position.y = CFG.player.eyeH + _jumpY;
-  camera.position.y = CFG.player.eyeH;
+  updateVertical(dt);
+  camera.position.y = CFG.player.eyeH + _jumpY;
 
   // ── Interaction prompt ────────────────────────────────────────────────────
   nearObject = findNearObject();
@@ -1533,12 +1566,11 @@ screens.pause.addEventListener('click', () => {
   if (gState.current === S.PAUSED) { showHUD(); gState.current = S.PLAYING; lockPointer(); }
 });
 
-// Jumping disabled — button hidden and its handler left commented out.
-$('mobile-jump')?.style.setProperty('display', 'none');
-// $('mobile-jump')?.addEventListener('pointerdown', e => {
-//   e.preventDefault();
-//   _jumpQueued = true;
-// });
+// Mobile jump button
+$('mobile-jump')?.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  if (gState.current === S.PLAYING) _jumpQueued = true;
+});
 
 // ── Input callbacks ───────────────────────────────────────────────────────────
 initInput({
