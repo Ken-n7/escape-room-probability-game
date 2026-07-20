@@ -1874,7 +1874,9 @@ async function submitAuth() {
   } finally {
     authBusy = false;
     btn.disabled = false;
-    setAuthMode(authMode);   // restores the button label
+    // Restore just the button label — NOT setAuthMode(), which would clearAuthError()
+    // and wipe the message we just showed.
+    btn.textContent = authMode === 'signup' ? 'CREATE ACCOUNT' : 'SIGN IN';
   }
 }
 
