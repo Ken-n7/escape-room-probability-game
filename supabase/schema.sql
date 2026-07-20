@@ -1,16 +1,16 @@
 -- ═══════════════════════════════════════════════════════════════════════════
---  Escape Room — accounts, runs, leaderboards, admin
+--  Escape Room — accounts, runs, leaderboards, admin  (production schema)
 --
 --  HOW TO RUN:
 --    Supabase dashboard → SQL Editor → New query → paste this whole file → Run.
---    Safe to re-run (drops/creates are guarded).
+--    Idempotent: safe to re-run any time (this is also the upgrade path).
 --
 --  AFTER RUNNING, to make yourself an admin:
---    1. Sign up in the game with your email.
---    2. Dashboard → Table editor → profiles → find your row → set role = 'admin'.
---    (Or run:  update profiles set role='admin' where username='YOUR_NAME';)
+--    1. Sign up in the game.
+--    2. Table editor → profiles → your row → set role = 'admin'.
+--       (Or:  update public.profiles set role='admin' where username='YOUR_NAME';)
 --
---  RECOMMENDED SETTINGS (dashboard → Authentication → Providers → Email):
+--  RECOMMENDED (dashboard → Authentication → Providers → Email):
 --    Turn OFF "Confirm email" so students can log in without a real inbox.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -22,19 +22,76 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- Username rules enforced by the DB (not just the UI): 3–20 chars, letters/
+-- digits/space/underscore/hyphen only. Guarded so re-running is safe.
+alter table public.profiles drop constraint if exists username_format;
+alter table public.profiles add  constraint username_format
+  check ( char_length(username) between 3 and 20
+          and username ~ '^[A-Za-z0-9 _-]+$' );
+
+-- Case-insensitive uniqueness so "Ken" and "ken" can't both exist.
+drop index if exists public.profiles_username_lower_idx;
+create unique index profiles_username_lower_idx on public.profiles (lower(username));
+
+-- Roles are locked down: role may only ever be 'student' or 'admin'.
+alter table public.profiles drop constraint if exists role_valid;
+alter table public.profiles add  constraint role_valid check ( role in ('student','admin') );
+
 -- ── runs: one row per finished playthrough ──────────────────────────────────
 create table if not exists public.runs (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references public.profiles(id) on delete cascade,
-  room_scores int[]   not null,            -- [room1%, room2%, room3%]
-  total_score int     not null,            -- 0..100 (average accuracy)
-  best_time   numeric not null,            -- completion time, seconds
+  room_scores int[]   not null,
+  total_score int     not null check ( total_score between 0 and 100 ),
+  best_time   numeric not null check ( best_time >= 0 ),
   finished_at timestamptz not null default now()
 );
 create index if not exists runs_user_idx on public.runs (user_id);
 
+-- ── handle_new_user(): create the profile automatically on signup ───────────
+-- Runs inside the signup transaction, so an auth user can NEVER exist without
+-- its profile (no orphans, no fragile client insert). Username comes from the
+-- signUp metadata; role is forced to 'student' here so it can't be spoofed.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, username, role)
+  values (
+    new.id,
+    coalesce(nullif(trim(new.raw_user_meta_data->>'username'), ''),
+             'player_' || substr(new.id::text, 1, 8)),
+    'student'
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ── username_available(): lets the signup form pre-check a name ─────────────
+-- SECURITY DEFINER so a not-yet-signed-in user can call it; only returns a
+-- boolean, never any profile data.
+create or replace function public.username_available(name text)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select not exists (
+    select 1 from public.profiles where lower(username) = lower(trim(name))
+  );
+$$;
+grant execute on function public.username_available(text) to anon, authenticated;
+
 -- ── is_admin(): true when the caller's profile is an admin ──────────────────
--- SECURITY DEFINER so it can read profiles without tripping RLS recursion.
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -43,8 +100,7 @@ stable
 set search_path = public
 as $$
   select exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'admin'
+    select 1 from public.profiles where id = auth.uid() and role = 'admin'
   );
 $$;
 
@@ -52,21 +108,15 @@ $$;
 alter table public.profiles enable row level security;
 alter table public.runs     enable row level security;
 
--- profiles: anyone signed in can read their own; admins read all.
+-- profiles: read your own; admins read all. (Inserts happen via the trigger,
+-- which is SECURITY DEFINER and bypasses RLS — clients never insert directly,
+-- so there is intentionally no insert/update/delete policy.)
+drop policy if exists "profiles_insert" on public.profiles;   -- removed: trigger handles it
 drop policy if exists "profiles_select" on public.profiles;
 create policy "profiles_select" on public.profiles
   for select using ( id = auth.uid() or public.is_admin() );
 
--- profiles: you may create ONLY your own row, and only as a 'student'
--- (prevents self-promotion to admin at signup).
-drop policy if exists "profiles_insert" on public.profiles;
-create policy "profiles_insert" on public.profiles
-  for insert with check ( id = auth.uid() and role = 'student' );
-
--- (No UPDATE/DELETE policy → clients can't change roles. Admins are set in the
---  dashboard, which uses the service role and bypasses RLS.)
-
--- runs: you may insert only your own; you read your own, admins read all.
+-- runs: insert only your own; read your own, admins read all.
 drop policy if exists "runs_insert" on public.runs;
 create policy "runs_insert" on public.runs
   for insert with check ( user_id = auth.uid() );
@@ -76,8 +126,8 @@ create policy "runs_select" on public.runs
   for select using ( user_id = auth.uid() or public.is_admin() );
 
 -- ── Leaderboard views ───────────────────────────────────────────────────────
--- Owner-permission views: they aggregate across ALL players but expose only a
--- username + one best metric, so they're safe to read by any signed-in player
+-- Owner-permission views: aggregate across ALL players but expose only a
+-- username + one best metric, so they're safe for any signed-in player to read
 -- even though individual runs stay private.
 create or replace view public.speed_leaderboard as
   select p.username, min(r.best_time) as best_time, count(*) as runs
@@ -93,3 +143,87 @@ create or replace view public.accuracy_leaderboard as
 
 grant select on public.speed_leaderboard    to authenticated;
 grant select on public.accuracy_leaderboard  to authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  ANALYTICS — powers the admin dashboard (charts, item analysis, funnel)
+--
+--  Three tables, hybrid design:
+--    plays              — one row per game start→end (engagement, funnel, W/L)
+--    question_attempts  — one row per answer (item analysis, mastery, misconc.)
+--    events             — flexible jsonb log (future charts, no schema change)
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ── plays: one game start to finish (created at start, updated at end) ───────
+create table if not exists public.plays (
+  id              uuid primary key,                       -- client-generated
+  user_id         uuid not null references public.profiles(id) on delete cascade,
+  started_at      timestamptz not null default now(),
+  ended_at        timestamptz,
+  outcome         text not null default 'in_progress'
+                    check ( outcome in ('in_progress','won','lost','abandoned') ),
+  duration_sec    int,
+  rooms_completed int  not null default 0,
+  total_score     int,
+  best_time       numeric,
+  plearn          boolean not null default false,         -- P-Learn (untimed) run?
+  device          text                                    -- 'desktop' | 'mobile'
+);
+create index if not exists plays_user_idx    on public.plays (user_id);
+create index if not exists plays_outcome_idx on public.plays (outcome);
+
+-- ── question_attempts: one row per answer (right OR wrong) ───────────────────
+create table if not exists public.question_attempts (
+  id             bigint generated always as identity primary key,
+  play_id        uuid references public.plays(id) on delete cascade,
+  user_id        uuid not null references public.profiles(id) on delete cascade,
+  room_id        int  not null,
+  difficulty     text,
+  qid            text not null,                 -- stable 'room.bankIndex', e.g. '1.4'
+  question_text  text,
+  is_correct     boolean not null,
+  selected_index int,                           -- MCQ distractor (null for scaffold)
+  selected_text  text,
+  attempt_no     int  not null default 1,       -- 1 = first try on this question
+  time_ms        int,                           -- time from prompt to this answer
+  hint_shown     boolean not null default false,
+  mode           text not null default 'play',  -- 'play' | 'plearn'
+  created_at     timestamptz not null default now()
+);
+create index if not exists qa_user_idx on public.question_attempts (user_id);
+create index if not exists qa_qid_idx  on public.question_attempts (qid);
+create index if not exists qa_play_idx on public.question_attempts (play_id);
+
+-- ── events: flexible log for anything else worth charting later ──────────────
+create table if not exists public.events (
+  id      bigint generated always as identity primary key,
+  play_id uuid references public.plays(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  type    text not null,                        -- 'room_clear','question_timeout',…
+  data    jsonb not null default '{}'::jsonb,
+  at      timestamptz not null default now()
+);
+create index if not exists events_user_idx on public.events (user_id);
+create index if not exists events_type_idx on public.events (type);
+create index if not exists events_play_idx on public.events (play_id);
+
+-- ── RLS: a player writes/reads only their own rows; admins read everything ───
+alter table public.plays             enable row level security;
+alter table public.question_attempts enable row level security;
+alter table public.events            enable row level security;
+
+drop policy if exists "plays_insert" on public.plays;
+create policy "plays_insert" on public.plays for insert with check ( user_id = auth.uid() );
+drop policy if exists "plays_update" on public.plays;
+create policy "plays_update" on public.plays for update using ( user_id = auth.uid() ) with check ( user_id = auth.uid() );
+drop policy if exists "plays_select" on public.plays;
+create policy "plays_select" on public.plays for select using ( user_id = auth.uid() or public.is_admin() );
+
+drop policy if exists "qa_insert" on public.question_attempts;
+create policy "qa_insert" on public.question_attempts for insert with check ( user_id = auth.uid() );
+drop policy if exists "qa_select" on public.question_attempts;
+create policy "qa_select" on public.question_attempts for select using ( user_id = auth.uid() or public.is_admin() );
+
+drop policy if exists "events_insert" on public.events;
+create policy "events_insert" on public.events for insert with check ( user_id = auth.uid() );
+drop policy if exists "events_select" on public.events;
+create policy "events_select" on public.events for select using ( user_id = auth.uid() or public.is_admin() );
