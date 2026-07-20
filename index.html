@@ -2171,30 +2171,44 @@
     /* Login screen floats over the hallway: translucent veil, no opaque bg. */
     #s-login { background:rgba(3,4,6,0.66) !important; }
     #s-login::after { opacity:0.5 !important; }
+    /* Everything scales to the screen (clamp: min / preferred-vh / desktop max)
+       so the whole modal always fits — no inner scrollbar. */
     #auth-box {
       background:var(--panel-strong, rgba(8,10,12,0.94));
       border:1px solid var(--line, rgba(209,183,126,0.28));
       border-radius:10px;
-      width:min(390px, 92vw);            /* never wider than the screen */
-      max-height:calc(100svh - 24px);    /* never taller than the screen… */
-      overflow-y:auto;                   /* …scroll inside if it must */
-      padding:30px 34px 26px;
+      width:min(390px, 92vw);
+      padding:clamp(15px, 3.2vh, 30px) clamp(20px, 5vw, 34px);
       box-shadow:0 24px 70px rgba(0,0,0,0.7), inset 0 0 46px rgba(0,0,0,0.55);
       backdrop-filter:blur(3px);
     }
-    @media (max-width:480px), (max-height:560px) {
-      #auth-box { padding:22px 20px 18px; }
-      #auth-title { font-size:1.55rem; }
-      #auth-subtitle { margin-bottom:16px; }
-      .auth-row { margin-bottom:12px; }
-    }
-    #auth-box .case-stamp { color:var(--muted); border-color:var(--line); }
     #auth-title {
       font-family:'HorrorScratch', Impact, 'Arial Black', sans-serif;
-      color:var(--amber); font-size:2rem; letter-spacing:3px; margin-bottom:4px;
+      color:var(--amber); font-size:clamp(1.35rem, 4.6vh, 2rem);
+      letter-spacing:3px; margin-bottom:clamp(2px, 0.6vh, 6px);
       text-shadow:0 0 20px rgba(212,155,69,0.35);
     }
-    #auth-subtitle { color:var(--muted); font-family:Georgia,serif; font-style:italic; font-size:0.82rem; margin-bottom:22px; }
+    #auth-subtitle { color:var(--muted); font-family:Georgia,serif; font-style:italic; font-size:clamp(0.7rem, 1.7vh, 0.82rem); margin-bottom:clamp(10px, 2.6vh, 22px); }
+    .auth-row { margin-bottom:clamp(8px, 2.2vh, 16px); }
+    .auth-row label { margin-bottom:clamp(3px, 0.8vh, 6px); font-size:clamp(0.68rem, 1.6vh, 0.75rem); }
+    .auth-row input { padding:clamp(7px, 1.5vh, 10px) 14px; font-size:clamp(0.86rem, 1.9vh, 0.95rem); }
+    .auth-hint, .auth-warn { font-size:clamp(0.62rem, 1.5vh, 0.7rem); margin-top:clamp(3px, 0.8vh, 6px); }
+    #auth-error { min-height:clamp(14px, 2vh, 20px); margin:clamp(2px, 0.6vh, 8px) 0; }
+    .auth-btn { min-height:clamp(38px, 5.4vh, 46px); font-size:clamp(0.8rem, 1.9vh, 0.9rem); }
+    #auth-toggle-line { margin-top:clamp(8px, 2vh, 16px); font-size:clamp(0.72rem, 1.7vh, 0.78rem); }
+    /* Short (landscape phone) screens: switch to a compact layout so the whole
+       form fits without scrolling — shed the flavour line + hints, tighten. */
+    @media (max-height:470px) {
+      #auth-subtitle, .auth-hint { display:none; }
+      #auth-box { padding:12px 22px; }
+      #auth-title { font-size:1.2rem; margin-bottom:2px; }
+      .auth-row { margin-bottom:7px; }
+      .auth-row label { margin-bottom:2px; }
+      .auth-row input { padding:6px 12px; font-size:0.88rem; }
+      .auth-btn { min-height:34px; }
+      #auth-error { min-height:10px; margin:2px 0; }
+      #auth-toggle-line { margin-top:7px; }
+    }
     .auth-close {
       position:absolute; top:10px; right:12px; width:30px; height:30px;
       background:none; border:none; color:var(--muted); font-size:1rem; cursor:pointer; border-radius:6px;
