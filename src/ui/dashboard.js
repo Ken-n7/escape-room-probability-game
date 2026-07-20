@@ -8,7 +8,7 @@ import { fetchAllPlays, fetchAllAttempts, fetchAllEvents } from '../net/scores.j
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'items',    label: 'Item analysis' },
-  { id: 'students', label: 'Students' },
+  { id: 'players',  label: 'Players' },
   { id: 'behavior', label: 'Behavior' },
 ];
 
@@ -111,7 +111,7 @@ function render() {
   body.innerHTML =
     _tab === 'overview' ? renderOverview()
     : _tab === 'items'  ? renderItems()
-    : _tab === 'students' ? renderStudents()
+    : _tab === 'players' ? renderPlayers()
     : renderBehavior();
 }
 
@@ -215,8 +215,8 @@ function renderItems() {
       <div class="card-note">The "most-picked wrong answer" column reveals the common misconception per item.</div></div>`;
 }
 
-// ── STUDENTS ─────────────────────────────────────────────────────────────────
-function studentStats() {
+// ── PLAYERS ──────────────────────────────────────────────────────────────────
+function playerStats() {
   const byU = new Map();
   const get = u => { if (!byU.has(u)) byU.set(u, { u, plays: 0, wins: 0, best: null, bestTime: null, correct: 0, total: 0, atToCorrect: [] }); return byU.get(u); };
   for (const p of _data.plays) {
@@ -237,14 +237,14 @@ function studentStats() {
   })).sort((a, b) => b.wins - a.wins || (b.best ?? -1) - (a.best ?? -1));
 }
 
-function renderStudents() {
-  if (!_data.plays.length) return emptyCard('No students have played yet.');
-  const rows = studentStats();
+function renderPlayers() {
+  if (!_data.plays.length) return emptyCard('No players have played yet.');
+  const rows = playerStats();
   return `
-    <div class="card"><h3>Per-student report card</h3>
+    <div class="card"><h3>Per-player report card</h3>
     <div class="dash-table-wrap"><table class="dash-table">
       <thead><tr>
-        <th>Student</th><th class="num">Plays</th><th class="num">Wins</th>
+        <th>Player</th><th class="num">Plays</th><th class="num">Wins</th>
         <th class="num">Best score</th><th class="num">Best time</th>
         <th class="num">Accuracy</th><th class="num">Avg tries→correct</th>
       </tr></thead>
@@ -294,7 +294,7 @@ function renderBehavior() {
     <div class="dash-2col">
       <div class="card"><h3>First-try accuracy by difficulty</h3>${barRows(accByDiff, { colorByValue: true })}</div>
       <div class="card"><h3>Avg attempts to get it right</h3>${barRows(triesByDiff)}
-        <div class="card-note">Higher = students needed more tries before answering correctly.</div></div>
+        <div class="card-note">Higher = players needed more tries before answering correctly.</div></div>
     </div>`;
 }
 
@@ -302,7 +302,7 @@ function renderBehavior() {
 function exportCsv() {
   if (!_data?.attempts?.length) return;
   const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
-  const header = ['Student', 'Room', 'Difficulty', 'QID', 'Question', 'Correct', 'SelectedText', 'AttemptNo', 'TimeMs', 'HintShown', 'Mode', 'When'];
+  const header = ['Player', 'Room', 'Difficulty', 'QID', 'Question', 'Correct', 'SelectedText', 'AttemptNo', 'TimeMs', 'HintShown', 'Mode', 'When'];
   const lines = [header.join(',')].concat(_data.attempts.map(a => [
     q(uname(a)), a.room_id, q(a.difficulty), q(a.qid), q(a.question_text),
     a.is_correct, q(a.selected_text), a.attempt_no, a.time_ms ?? '', a.hint_shown, q(a.mode), a.created_at,
