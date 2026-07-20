@@ -705,8 +705,12 @@ const _wallTiled = (w, h, x, y, z, rx, ry, mat) => {
 //  CORRIDORS — two legs + corner, walls segmented around door openings
 // ═══════════════════════════════════════════════════════════════════════════════
 const _collision = [];
+// Collision boxes now carry a `top` (obstacle top height) so the player can
+// step/jump over low things and only tall things block. Walls default to a big
+// top (always block); furniture passes its real height via extra.top.
+const WALL_TOP = 5;
 const _addBox = (minX, maxX, minZ, maxZ, extra) =>
-  _collision.push({ minX, maxX, minZ, maxZ, ...extra });
+  _collision.push({ minX, maxX, minZ, maxZ, top: WALL_TOP, ...extra });
 
 // ── Furniture (world-space) — upright and toppled-on-side desks/chairs, shared
 // by classrooms and corridors. (x,z) = position, yaw = spin about vertical.
@@ -717,14 +721,14 @@ function deskUprightW(x, z, yaw) {
   [[-0.25,-0.37],[0.25,-0.37],[-0.25,0.37],[0.25,0.37]].forEach(([lx,lz]) => {
     const [ox,oz] = _wrot(lx, lz, yaw); bxr(0.05, 0.68, 0.05, x+ox, 0.34, z+oz, 0, yaw, darkMat);
   });
-  _addBox(x-0.5, x+0.5, z-0.55, z+0.55);
+  _addBox(x-0.5, x+0.5, z-0.55, z+0.55, { top: 0.73 });
 }
 function deskTippedW(x, z, yaw) {                                          // knocked onto its side
   bxr(0.9, 0.66, 0.06, x, 0.33, z, 0, yaw, deskMat);                      // desktop standing on its long edge
   [[-0.4,0.13],[0.4,0.13],[-0.4,0.55],[0.4,0.55]].forEach(([dx,dy]) => {
     const [ox,oz] = _wrot(dx, 0.33, yaw); bxr(0.05, 0.05, 0.62, x+ox, dy, z+oz, 0, yaw, darkMat);   // legs jutting out
   });
-  _addBox(x-0.55, x+0.55, z-0.55, z+0.55);
+  _addBox(x-0.55, x+0.55, z-0.55, z+0.55, { top: 0.63 });
 }
 function chairUprightW(x, z, yaw) {
   bxr(0.5, 0.05, 0.5, x, 0.46, z, 0, yaw, deskMat);                       // seat
@@ -732,7 +736,7 @@ function chairUprightW(x, z, yaw) {
     const [ox,oz] = _wrot(lx, lz, yaw); bxr(0.05, 0.46, 0.05, x+ox, 0.23, z+oz, 0, yaw, darkMat);
   });
   const [bx1,bz1] = _wrot(0, -0.22, yaw); bxr(0.48, 0.5, 0.05, x+bx1, 0.7, z+bz1, 0, yaw, deskMat);  // backrest
-  _addBox(x-0.3, x+0.3, z-0.3, z+0.3);
+  _addBox(x-0.3, x+0.3, z-0.3, z+0.3, { top: 0.5 });
 }
 function chairTippedW(x, z, yaw) {                                         // knocked over
   bxr(0.5, 0.5, 0.05, x, 0.24, z, 0, yaw, deskMat);                       // seat on edge
@@ -740,7 +744,7 @@ function chairTippedW(x, z, yaw) {                                         // kn
   [[-0.2],[0.2]].forEach(([dx]) => {
     const [ox,oz] = _wrot(dx, -0.22, yaw); bxr(0.05, 0.05, 0.42, x+ox, 0.1, z+oz, 0, yaw, darkMat);  // legs out
   });
-  _addBox(x-0.35, x+0.35, z-0.35, z+0.35);
+  _addBox(x-0.35, x+0.35, z-0.35, z+0.35, { top: 0.5 });
 }
 
 // A corridor wall with door gaps. runAxis 'z': plane x=at spanning z from..to.
@@ -926,7 +930,7 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
   const deskAt = (u, v, yaw) => {
     legged(u, v, yaw, 0.33, 0.45, 0.7, 0.06, 0.68, deskMat);
     BX(0.58, 0.03, 0.72, u, 0.5, v, deskMat, 0, yaw);   // under-desk book cubby shelf
-    const r = rect(u - 0.5, u + 0.5, v - 0.55, v + 0.55); _addBox(r.minX, r.maxX, r.minZ, r.maxZ);
+    const r = rect(u - 0.5, u + 0.5, v - 0.55, v + 0.55); _addBox(r.minX, r.maxX, r.minZ, r.maxZ, { top: 0.73 });
   };
 
   // A proper chair: seat + 4 legs + backrest, tossed to a random angle.
@@ -934,13 +938,13 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
     legged(u, v, yaw, 0.24, 0.24, 0.46, 0.05, 0.44, deskMat);
     const [bu, bv] = rot(0, -0.22, yaw);                        // backrest along the rear edge
     BX(0.48, 0.5, 0.05, u + bu, 0.72, v + bv, deskMat, 0, yaw);
-    const r = rect(u - 0.3, u + 0.3, v - 0.3, v + 0.3); _addBox(r.minX, r.maxX, r.minZ, r.maxZ);
+    const r = rect(u - 0.3, u + 0.3, v - 0.3, v + 0.3); _addBox(r.minX, r.maxX, r.minZ, r.maxZ, { top: 0.5 });
   };
 
   // A tipped crate / storage box.
   const crateAt = (u, v, s, yaw) => {
     BX(s, s * 0.8, s, u, s * 0.4, v, deskMat, 0, yaw);
-    const r = rect(u - s/2, u + s/2, v - s/2, v + s/2); _addBox(r.minX, r.maxX, r.minZ, r.maxZ);
+    const r = rect(u - s/2, u + s/2, v - s/2, v + s/2); _addBox(r.minX, r.maxX, r.minZ, r.maxZ, { top: s * 0.8 });
   };
 
   // A book: coloured cover boards with a cream page block peeking out along the
@@ -958,43 +962,51 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
     BX(0.06, 0.72, 0.06, tdu + ou, 0.39, tdv + ov, deskMat, 0, tdYaw);
   });
   const tdr = rect(tdu - 0.7, tdu + 0.7, tdv - 1.0, tdv + 1.0);
-  _addBox(tdr.minX, tdr.maxX, tdr.minZ, tdr.maxZ);
+  _addBox(tdr.minX, tdr.maxX, tdr.minZ, tdr.maxZ, { top: 0.82 });
   BX(0.06, 0.18, 0.06, tdu - 0.3, 0.91, tdv - 0.7, candleMat);   // candle survives on it
 
   // Toppled variants (world-space helpers) placed in the room's local frame.
   const tipDesk  = (u, v, yw) => { const p = P(u, v); deskTippedW(p.x, p.z, yw + f.theta); };
   const tipChair = (u, v, yw) => { const p = P(u, v); chairTippedW(p.x, p.z, yw + f.theta); };
 
-  // 6 student desks — most shoved askew, a couple knocked onto their sides
-  deskAt(3.5, 2.0,  0.6);
-  deskAt(2.6, 5.4, -0.4);
-  tipDesk(4.2, 8.6,  1.1);
-  deskAt(6.4, 3.2,  0.3);
-  tipDesk(7.2, 7.2, -0.8);
-  deskAt(5.6, 10.4, 0.5);
+  // ── PER-ROOM SCATTER ────────────────────────────────────────────────────────
+  // Desks/chairs/crates AND the small clutter (bags/books/trash) are scattered
+  // at random each build, so every room (real AND decoy) is a different wreck.
+  // An occupancy list keeps every piece from overlapping any other piece — each
+  // reserves a radius and new pieces retry until they find a clear spot (or are
+  // skipped). Positions stay clear of the door, board and wall units; collision
+  // is added per-piece so moving them can't break anything.
+  const ryaw = () => (Math.random() - 0.5) * 2.6;
+  const IU0 = 1.7, IU1 = D - 3.0, IV0 = 1.5, IV1 = W - 1.5;   // interior clutter range
+  const placed = [{ u: tdu, v: tdv, r: 1.1 }];               // teacher desk reserved
+  const tryPlace = (r, u0 = IU0, u1 = IU1, v0 = IV0, v1 = IV1, tries = 40) => {
+    for (let t = 0; t < tries; t++) {
+      const u = u0 + Math.random() * (u1 - u0), v = v0 + Math.random() * (v1 - v0);
+      if (placed.every(o => Math.hypot(o.u - u, o.v - v) >= o.r + r)) { placed.push({ u, v, r }); return [u, v]; }
+    }
+    return null;
+  };
 
-  // Chairs — some tossed upright-askew, some knocked over
-  chairAt(3.1, 3.4,  1.0);
-  tipChair(4.8, 6.2, -0.5);
-  chairAt(6.9, 5.1,  0.4);
-  tipChair(2.3, 9.6,  0.9);
-  chairAt(8.0, 9.2, -1.1);
+  const nDesks = 4 + Math.floor(Math.random() * 4);         // 4–7
+  for (let k = 0; k < nDesks; k++)  { const s = tryPlace(0.72); if (s) (Math.random() < 0.4  ? tipDesk  : deskAt)(s[0], s[1], ryaw()); }
+  const nChairs = 3 + Math.floor(Math.random() * 4);        // 3–6
+  for (let k = 0; k < nChairs; k++) { const s = tryPlace(0.45); if (s) (Math.random() < 0.45 ? tipChair : chairAt)(s[0], s[1], ryaw()); }
+  const nCrates = 1 + Math.floor(Math.random() * 3);        // 1–3
+  for (let k = 0; k < nCrates; k++) { const s = tryPlace(0.45); if (s) crateAt(s[0], s[1], 0.45 + Math.random() * 0.22, ryaw()); }
 
-  // Tipped crates
-  crateAt(2.0, 2.2, 0.6,  0.4);
-  crateAt(8.6, 2.5, 0.55, -0.3);
-  crateAt(5.0, 4.6, 0.5,  0.7);
-
-  // Toppled bookshelf lying on its side near the v=W wall, books spilled around
-  const shu = 3.0, shv = W - 0.85;
-  BX(1.5, 0.3, 2.4, shu, 0.15, shv, deskMat);
-  [-0.75, -0.25, 0.25, 0.75].forEach(du => BX(0.04, 0.28, 2.3, shu + du, 0.15, shv, darkMat));
-  bookMats.forEach((bm, i) => {
-    const [ou, ov] = rot((Math.random() - 0.5) * 2, -1.4 - Math.random() * 1.0, 0);
-    book(shu + ou, 0.05, shv + ov, Math.random() * Math.PI, bm, 0.22, 0.07, 0.16);
-  });
-  const shr = rect(shu - 0.85, shu + 0.85, shv - 1.3, shv + 1.3);
-  _addBox(shr.minX, shr.maxX, shr.minZ, shr.maxZ);
+  // Toppled bookshelf lying on its side at a random clear interior spot, books spilled
+  const shSpot = tryPlace(1.3, 2.6, D - 2.6, 2.2, W - 2.2);
+  if (shSpot) {
+    const shu = shSpot[0], shv = shSpot[1], shYaw = ryaw();
+    BX(1.5, 0.3, 2.4, shu, 0.15, shv, deskMat, 0, shYaw);
+    [-0.75, -0.25, 0.25, 0.75].forEach(du => { const [ou, ov] = rot(du, 0, shYaw); BX(0.04, 0.28, 2.3, shu + ou, 0.15, shv + ov, darkMat, 0, shYaw); });
+    bookMats.forEach((bm) => {
+      const [ou, ov] = rot((Math.random() - 0.5) * 2, -1.4 - Math.random() * 1.0, shYaw);
+      book(shu + ou, 0.05, shv + ov, Math.random() * Math.PI, bm, 0.22, 0.07, 0.16);
+    });
+    const shr = rect(shu - 1.3, shu + 1.3, shv - 1.3, shv + 1.3);
+    _addBox(shr.minX, shr.maxX, shr.minZ, shr.maxZ, { top: 0.32 });
+  }
 
   // Scattered floor debris (grey paper, non-interactive — distinct from the
   // glowing yellow note papers the player collects)
@@ -1014,11 +1026,24 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
     scene.add(m);
   };
   const FAR = -Math.PI/2, SIDE0 = 0, SIDEW = Math.PI;
-  wallDecor(posterMats[0], 3.5, 1.95, 0.05,     0.9,  1.25, SIDE0,  0.04);  // PROBABILITY chart, left wall
-  wallDecor(posterMats[1], 1.8, 1.85, 0.05,     0.85, 1.15, SIDE0, -0.03);  // CHANCE dice, left wall
-  wallDecor(clockMat,      9.2, 2.55, 0.06,     0.55, 0.55, SIDE0,  0.14);  // cracked clock, askew
-  wallDecor(posterMats[2], 7.5, 1.95, W - 0.05, 0.9,  1.25, SIDEW, -0.05);  // NUMBER LINE, right wall
-  wallDecor(mapMat,        D - 0.05, 1.75, W - 2.4, 1.7, 1.15, FAR,  0);     // pull-down map by the board
+  // Wall decor varies per room: a shuffled subset of posters + a clock, dropped
+  // onto random slots along the two side walls, so no two rooms hang the same.
+  const decorSlots = [
+    [2.0, 0.05, SIDE0], [3.6, 0.05, SIDE0], [5.4, 0.05, SIDE0],
+    [3.0, W - 0.05, SIDEW], [5.2, W - 0.05, SIDEW], [7.4, W - 0.05, SIDEW],
+  ];
+  for (let i = decorSlots.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [decorSlots[i], decorSlots[j]] = [decorSlots[j], decorSlots[i]]; }
+  const posters = posterMats.slice();
+  for (let i = posters.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [posters[i], posters[j]] = [posters[j], posters[i]]; }
+  const nPosters = 2 + Math.floor(Math.random() * 2);   // 2–3 posters this room
+  let slot = 0;
+  for (let i = 0; i < nPosters; i++, slot++) {
+    const [u, v, face] = decorSlots[slot];
+    wallDecor(posters[i % posters.length], u, 1.85 + Math.random() * 0.18, v, 0.9, 1.2, face, (Math.random() - 0.5) * 0.18);
+  }
+  const [cu, cv, cface] = decorSlots[slot];             // clock on the next free slot
+  wallDecor(clockMat, cu, 2.4 + Math.random() * 0.3, cv, 0.55, 0.55, cface, (Math.random() - 0.5) * 0.3);
+  if (Math.random() < 0.8) wallDecor(mapMat, D - 0.05, 1.75, W - 2.4, 1.7, 1.15, FAR, 0);   // pull-down map by the board
 
   // ── BLOOD — decals on the floor and a smear/handprint on a wall. Randomized
   // per room so only some rooms/parts are marked.
@@ -1069,27 +1094,30 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
     BX(0.14, 0.05, 0.05, u, 0.44, v, darkMat, 0, yaw);               // grab handle on top
     addSearchable(u, v, 'bag');
   };
-  bagAt(5.2, 8.4, 0.5, bagMats[0]);
-  bagAt(7.6, 4.0, -0.6, bagMats[1]);
-  bagAt(9.4, 9.2, 0.9, bagMats[2]);
+  const nBags = 2 + Math.floor(Math.random() * 2);     // 2–3 backpacks, random colours/clear spots
+  for (let k = 0; k < nBags; k++) { const s = tryPlace(0.42); if (s) bagAt(s[0], s[1], (Math.random() - 0.5) * 3, bagMats[k % bagMats.length]); }
 
   const bookStackAt = (u, v, n) => {
     for (let i = 0; i < n; i++)
       book(u + (Math.random()-0.5)*0.08, 0.03 + i*0.07, v + (Math.random()-0.5)*0.08,
         Math.random()*0.5, bookMats[(i + (u|0)) % bookMats.length]);
   };
-  bookStackAt(2.6, 7.3, 4);
-  bookStackAt(6.2, 9.0, 3);
+  const nStacks = 1 + Math.floor(Math.random() * 3);   // 1–3 book stacks
+  for (let k = 0; k < nStacks; k++) { const s = tryPlace(0.3); if (s) bookStackAt(s[0], s[1], 2 + Math.floor(Math.random() * 4)); }
 
-  const tcp = P(10.6, 2.4);   // tipped trash can on its side, contents spilled
-  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.5, 12), trashMat);
-  can.position.set(tcp.x, 0.2, tcp.z);
-  can.rotation.set(Math.PI/2, Math.random()*Math.PI, 0);
-  scene.add(can);
-  for (let i = 0; i < 4; i++)
-    PL(0.2, 0.26, 10.6 + (Math.random()-0.2)*1.1, 0.02 + i*0.001, 2.4 + (Math.random()-0.5)*1.1,
-      -Math.PI/2, Math.random()*Math.PI, paperMat);
-  addSearchable(10.6, 2.4, 'trash');
+  const tSpot = tryPlace(0.42);                          // tipped trash can, clear spot
+  if (tSpot) {
+    const tcu = tSpot[0], tcv = tSpot[1];
+    const tcp = P(tcu, tcv);
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.5, 12), trashMat);
+    can.position.set(tcp.x, 0.2, tcp.z);
+    can.rotation.set(Math.PI/2, Math.random()*Math.PI, 0);
+    scene.add(can);
+    for (let i = 0; i < 4; i++)
+      PL(0.2, 0.26, tcu + (Math.random()-0.2)*1.1, 0.02 + i*0.001, tcv + (Math.random()-0.5)*1.1,
+        -Math.PI/2, Math.random()*Math.PI, paperMat);
+    addSearchable(tcu, tcv, 'trash');
+  }
 
   // ── TEACHER-DESK STUFF — knocked-over globe, mug, strewn papers ─────────────
   const gp = P(tdu - 1.3, tdv + 1.1);
@@ -1106,9 +1134,11 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
   // ── OPENABLE CONTAINERS — a rusted supply cabinet against the v=0 wall and a
   // wooden drawer unit against the v=W wall. Built for real AND decoy rooms so
   // opening one is never a tell. A note may be randomized inside (real rooms).
-  const cabP = P(6.8, CAB_D / 2);
+  const cabU = 4.8 + Math.random() * (D - 6.0);         // cabinet somewhere along the v=0 wall
+  const cabP = P(cabU, CAB_D / 2);
   const cabRec = buildCabinet(scene, cabP.x, cabP.z, f.theta, interactiveObjects, containers);
-  const drwP = P(6.0, W - DRW_D / 2);
+  const drwU = 3.0 + Math.random() * (D - 4.5);         // drawer somewhere along the v=W wall
+  const drwP = P(drwU, W - DRW_D / 2);
   const drwRec = buildDrawerUnit(scene, drwP.x, drwP.z, f.theta + Math.PI, interactiveObjects, containers);
 
   if (isDecoy) {
@@ -1120,20 +1150,29 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
   // Interactive notes — 5 per room, placed at run time into 5 of these vetted
   // hiding spots (see randomizeNotes). Spread across the whole room + varied
   // heights so the player has to sweep everywhere. {u, v, y}; papers lie flat.
+  // Floor spots are valid under any arrangement (worst case a note sits beside a
+  // desk — still findable, never floating). Fixed anchors (teacher desk, board
+  // base, cabinet, drawer, bags, trash) follow their objects.
   const notePool = [
-    { u: 1.1,  v: 1.1,       y: 0.03 },   // floor, near-door corner (left)
-    { u: 1.1,  v: W - 1.1,   y: 0.03 },   // floor, near-door corner (right)
-    { u: D-1,  v: 1.3,       y: 0.03 },   // floor, far corner (left)
-    { u: D-1,  v: W - 1.3,   y: 0.03 },   // floor, far corner (right)
-    { u: 6.0,  v: 6.0,       y: 0.03 },   // floor, dead center in the debris
-    { u: tdu,  v: tdv + 0.2, y: 0.86 },   // on the teacher's desk
-    { u: 5.0,  v: 0.6,       y: 0.03 },   // floor, tight against left wall
-    { u: 8.5,  v: W - 0.6,   y: 0.03 },   // floor, tight against right wall
-    { u: 8.6,  v: 2.5,       y: 0.53 },   // resting on the tipped crate
-    { u: D-0.7, v: 6.0,      y: 0.03 },   // floor, base of the chalkboard
-    { u: 3.5,  v: W - 2.3,   y: 0.05 },   // by the toppled bookshelf
-    { u: 6.8,  v: 0.2,       y: CAB_SHELF_Y,       container: cabRec },   // hidden on the cabinet shelf
-    { u: 6.0,  v: W - 0.59,  y: DRW_TRAY_Y + 0.02, container: drwRec },   // hidden in the drawer tray
+    { u: 1.1,   v: 1.1,      y: 0.03 },   // near-door corner (left)
+    { u: 1.1,   v: W - 1.1,  y: 0.03 },   // near-door corner (right)
+    { u: D-1,   v: 1.3,      y: 0.03 },   // far corner (left)
+    { u: D-1,   v: W - 1.3,  y: 0.03 },   // far corner (right)
+    { u: 6.0,   v: 6.0,      y: 0.03 },   // dead centre
+    { u: 3.0,   v: 3.2,      y: 0.03 },
+    { u: 4.6,   v: 8.6,      y: 0.03 },
+    { u: 7.2,   v: 4.4,      y: 0.03 },
+    { u: 2.4,   v: W / 2,    y: 0.03 },
+    { u: 6.6,   v: W - 1.8,  y: 0.03 },
+    { u: 8.0,   v: 7.6,      y: 0.03 },
+    { u: 1.5,   v: 5.4,      y: 0.03 },
+    { u: 5.0,   v: 0.6,      y: 0.03 },   // tight against left wall
+    { u: 8.5,   v: W - 0.6,  y: 0.03 },   // tight against right wall
+    { u: 3.5,   v: W - 2.3,  y: 0.03 },
+    { u: D-0.7, v: 6.0,      y: 0.03 },   // base of the chalkboard
+    { u: tdu,   v: tdv + 0.2, y: 0.86 },  // on the teacher's desk
+    { u: cabU,  v: 0.2,      y: CAB_SHELF_Y,       container: cabRec },   // hidden on the cabinet shelf
+    { u: drwU,  v: W - 0.59, y: DRW_TRAY_Y + 0.02, container: drwRec },   // hidden in the drawer tray
     ...searchNoteSpots,   // stuffed in a bag or the trash can (revealed on search)
   ];
   const noteMeshes = [];
@@ -1150,7 +1189,7 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
     interactiveObjects.push(noteMesh);
     noteMeshes.push(noteMesh);
   }
-  _noteRooms.push({ P, theta: f.theta, pool: notePool, meshes: noteMeshes });
+  _noteRooms.push({ roomIdx: def.idx, P, theta: f.theta, pool: notePool, meshes: noteMeshes });
   return noteMeshes;
 }
 
@@ -1174,6 +1213,24 @@ export function randomizeNotes() {
       m.userData.container = s.container || null;   // gated: hidden until this container is opened
     });
   }
+}
+
+// Move one room's note to a hiding spot far from (px,pz) — used when a question
+// is answered so the NEXT one never pops up right next to the player. Prefers a
+// random spot beyond minDist; falls back to the farthest available.
+export function relocateNote(roomIdx, noteIdx, px, pz, minDist = 4.5) {
+  const rr = _noteRooms.find(r => r.roomIdx === roomIdx);
+  if (!rr || !rr.meshes[noteIdx]) return;
+  const dist = s => { const p = rr.P(s.u, s.v); return Math.hypot(p.x - px, p.z - pz); };
+  const far = rr.pool.filter(s => dist(s) >= minDist);
+  const spot = far.length
+    ? far[Math.floor(Math.random() * far.length)]
+    : rr.pool.reduce((a, b) => (dist(b) > dist(a) ? b : a));
+  const m = rr.meshes[noteIdx];
+  const p = rr.P(spot.u, spot.v);
+  m.position.set(p.x, spot.y, p.z);
+  m.rotation.set(-Math.PI/2, Math.random() * Math.PI + rr.theta, 0);
+  m.userData.container = spot.container || null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1239,9 +1296,9 @@ const _cabBox = (w, h, d, px, py, pz, mat, parent) => {
   const m = new THREE.Mesh(_bxGeo(w, h, d), mat); m.position.set(px, py, pz); parent.add(m); return m;
 };
 // Footprint collision for a wall-flush unit sized W(along wall)×D(into room), spun by yaw.
-function _unitCollision(x, z, yaw, W, D) {
+function _unitCollision(x, z, yaw, W, D, top) {
   const c = Math.abs(Math.cos(yaw)), s = Math.abs(Math.sin(yaw));
-  _addBox(x - (c*W/2 + s*D/2), x + (c*W/2 + s*D/2), z - (s*W/2 + c*D/2), z + (s*W/2 + c*D/2));
+  _addBox(x - (c*W/2 + s*D/2), x + (c*W/2 + s*D/2), z - (s*W/2 + c*D/2), z + (s*W/2 + c*D/2), { top });
 }
 
 // Rusted two-door supply cabinet. (x,z) = floor center; yaw faces the doors into
@@ -1258,7 +1315,7 @@ function buildCabinet(scene, x, z, yaw, io, containers) {
   const doorH = H - 0.06, doorW = W/2 - 0.03;
   const parts = [];
   let target = null;
-  [[-1, 1.5], [1, -1.5]].forEach(([side, openA]) => {
+  [[-1, -1.5], [1, 1.5]].forEach(([side, openA]) => {       // doors swing OUTWARD into the room
     const pivot = new THREE.Group();
     pivot.position.set(side * (W/2 - t), H/2, D/2 - t/2);   // hinge at the outer front edge
     mount.add(pivot);
@@ -1272,7 +1329,7 @@ function buildCabinet(scene, x, z, yaw, io, containers) {
   target.userData.container = record;
   io.push(target);
   containers.push(record);
-  _unitCollision(x, z, yaw, W, D);
+  _unitCollision(x, z, yaw, W, D, H);   // tall — always blocks
   return record;
 }
 
@@ -1300,7 +1357,7 @@ function buildDrawerUnit(scene, x, z, yaw, io, containers) {
   panel.userData.container = record;
   io.push(panel);
   containers.push(record);
-  _unitCollision(x, z, yaw, W, D);
+  _unitCollision(x, z, yaw, W, D, H);   // ~table height — must jump onto it
   return record;
 }
 
@@ -1574,5 +1631,6 @@ export function buildWorld(scene) {
     decoyRects,
     vacantRects,
     randomizeNotes,
+    relocateNote,
   };
 }
