@@ -394,26 +394,21 @@ const EMPTY_SEARCH_MSG = {
 };
 
 // Rummage a bag / trash can. If it holds this room's CURRENT question, opening
-// it is the "find" — no paper is ever dropped on the floor. If it holds a note
-// that isn't active yet, it reads empty for now but stays searchable. If it
-// holds nothing, it's marked searched so it can't be re-rummaged.
+// it is the "find" — no paper is ever dropped on the floor. Otherwise it reads
+// empty. Always re-searchable, so a note that becomes active later (or a
+// mistaken early search) is never stranded in an item that won't reopen.
 function searchContainer(rec) {
-  if (rec.searched) return;
-  let heldRoom = -1, heldActive = false;
+  let heldActiveRoom = -1;
   roomNotes.forEach((notes, ri) => {
     if (!notes || roomDone[ri]) return;
     notes.forEach((n, ni) => {
-      if (n.userData.container === rec && ni >= roomProgress[ri]) {
-        heldRoom = ri;
-        if (ni === roomProgress[ri]) heldActive = true;
-      }
+      if (n.userData.container === rec && ni === roomProgress[ri]) heldActiveRoom = ri;
     });
   });
-  if (heldActive) {
+  if (heldActiveRoom >= 0) {
     AudioManager.play('pageTurn');
-    openQuestion(heldRoom);        // found the question while rummaging
+    openQuestion(heldActiveRoom);   // found the question while rummaging
   } else {
-    if (heldRoom < 0) rec.searched = true;   // truly empty — don't prompt again
     const msgs = EMPTY_SEARCH_MSG[rec.kind] || EMPTY_SEARCH_MSG.trash;
     setPromptOverride(msgs[Math.floor(Math.random() * msgs.length)], 1600);
   }
@@ -453,7 +448,6 @@ function findNearObject() {
     // Doors: interactable when locked (→ scare) or when a closed decoy (→ open)
     if (obj.userData.isDoor && !obj.userData.locked && doorIsOpen[obj.userData.doorIndex]) return;
     if (obj.userData.isContainer && obj.userData.container.isOpen) return;   // prompt clears once opened
-    if (obj.userData.isSearch && obj.userData.container.searched) return;    // already rummaged
     if (obj.userData.noteIndex !== undefined && !isInsideRoom(obj.userData.roomIndex)) return;
     obj.getWorldPosition(INTERACT_POS);
     INTERACT_TO.subVectors(INTERACT_POS, camera.position);
