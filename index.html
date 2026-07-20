@@ -668,6 +668,18 @@
       letter-spacing:1px; outline:none; box-sizing:border-box;
     }
     .auth-row input:focus { border-color:#cc6622; }
+    .auth-row input.invalid { border-color:#aa3333; }
+    .auth-input-wrap { position:relative; }
+    .auth-input-wrap input { padding-right:60px; }
+    .auth-eye {
+      position:absolute; right:6px; top:50%; transform:translateY(-50%);
+      background:none; border:none; color:#aa8866; cursor:pointer;
+      font-family:monospace; font-size:0.72rem; letter-spacing:1px;
+      padding:4px 6px; border-radius:4px;
+    }
+    .auth-eye:hover { color:#ffcc88; }
+    .auth-hint { color:#7a6248; font-family:monospace; font-size:0.68rem; letter-spacing:1px; margin-top:6px; }
+    .auth-warn { color:#dd9944; font-family:monospace; font-size:0.7rem; letter-spacing:1px; margin-top:6px; }
     .auth-btn {
       width:100%; margin-top:6px; padding:12px; cursor:pointer;
       background:#331500; border:1px solid #cc4400; border-radius:6px;
@@ -2146,10 +2158,15 @@
     <div class="auth-row" id="auth-username-row" hidden>
       <label for="auth-username">DISPLAY NAME</label>
       <input id="auth-username" type="text" maxlength="20" placeholder="Shown on the leaderboard"/>
+      <div class="auth-hint">3–20 characters · letters, numbers, spaces, _ or -</div>
     </div>
     <div class="auth-row">
       <label for="auth-password">PASSWORD</label>
-      <input id="auth-password" type="password" autocomplete="current-password" placeholder="At least 6 characters"/>
+      <div class="auth-input-wrap">
+        <input id="auth-password" type="password" autocomplete="current-password" placeholder="At least 8 characters"/>
+        <button type="button" id="btn-auth-showpw" class="auth-eye" aria-pressed="false">Show</button>
+      </div>
+      <div id="auth-capslock" class="auth-warn" hidden>⚠ Caps Lock is on</div>
     </div>
     <div id="auth-error"></div>
     <button class="auth-btn primary" id="btn-auth-submit" type="button">SIGN IN</button>

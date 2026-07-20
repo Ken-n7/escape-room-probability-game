@@ -24,8 +24,13 @@ import { updateAmbientScares, resetAmbientScares, clearScareSprite, triggerBlack
 import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
-import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName } from './net/auth.js';
+import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut } from './net/auth.js';
 import { submitRun, fetchSpeedLeaderboard, fetchAccuracyLeaderboard, fetchAllRuns } from './net/scores.js';
+import { startPlay, endPlay, hasActivePlay, logAttempt, logEvent } from './net/analytics.js';
+
+// Stable per-question id ("roomId.bankIndex", e.g. "1.4") for analytics/item
+// analysis. Bank order is fixed, so this identifies a question across runs.
+ROOMS.forEach(r => r.questions.forEach((q, i) => { if (q.qid == null) q.qid = `${r.id}.${i}`; }));
 
 // ── World ─────────────────────────────────────────────────────────────────────
 const {
@@ -581,6 +586,7 @@ function resumeGame() {
 
 function returnHomeFromOptions() {
   hideOptionsConfirm();
+  abandonPlayIfActive();
   clearMovementInput();
   resetProgress();
   CFG.gameplay.pLearnMode = false;
@@ -597,6 +603,7 @@ function returnHomeFromOptions() {
 let activeRoomIdx         = -1;
 let activeQIdx            = 0;
 let wrongCount            = 0;
+let _attemptStartAt       = 0;   // when the current prompt/retry became answerable (for time_ms)
 let _questionAdvanceTimer = null;
 let _wrongResetTimer      = null;
 let _questionArmTimer     = null;
@@ -642,6 +649,7 @@ function handleQuestionTimeout() {
   if (gState.current !== S.QUESTION) { stopQuestionCountdown(); return; }
   const roomIdx = activeRoomIdx;
   clearQuestionTimers();
+  logEvent('question_timeout', { room: ROOMS[roomIdx].id, difficulty: ROOMS[roomIdx].label, qid: shuffledQuestions[roomIdx][activeQIdx]?.qid });
   shuffledQuestions[roomIdx] = drawQuestionsForRoom(roomIdx);
   roomProgress[roomIdx] = 0;
   activeQIdx    = 0;
@@ -756,11 +764,31 @@ function showQuestionUI() {
 
   showScreen('question');
   startQuestionCountdown();
+  _attemptStartAt = performance.now();
+  logEvent('note_found', { room: room.id, difficulty: room.label, qid: q.qid, q: activeQIdx + 1 });
   _questionArmTimer = setTimeout(() => {
     if (gState.current !== S.QUESTION) return;
     document.querySelectorAll('.choice-btn').forEach(btn => { btn.disabled = false; });
     _questionArmTimer = null;
   }, QUESTION_ARM_MS);
+}
+
+// Build a question_attempts payload from the active question + outcome.
+function recordAttempt(q, { isCorrect, selectedIndex = null, selectedText = null }) {
+  const room = ROOMS[activeRoomIdx];
+  logAttempt({
+    roomId:       room.id,
+    difficulty:   room.label,
+    qid:          q.qid,
+    questionText: q.text,
+    isCorrect,
+    selectedIndex,
+    selectedText,
+    attemptNo:    wrongCount + 1,
+    timeMs:       Math.max(0, Math.round(performance.now() - _attemptStartAt)),
+    hintShown:    Boolean(CFG.gameplay.pLearnMode && q.hint),
+    mode:         CFG.gameplay.pLearnMode ? 'plearn' : 'play',
+  });
 }
 
 // ── Moderate solution scaffold (tap-to-fill, req 3.2) ─────────────────────────
@@ -845,6 +873,7 @@ function handleScaffoldTap(valStr, btn) {
     scaffoldStep++;
     renderScaffoldLine(q);
     if (scaffoldStep >= q.steps.length) {
+      recordAttempt(q, { isCorrect: true, selectedText: valStr });   // full solution built
       advanceAfterCorrect();
     } else {
       AudioManager.play('pickup');
@@ -853,10 +882,12 @@ function handleScaffoldTap(valStr, btn) {
         renderScaffoldOptions(q);
         document.querySelectorAll('#scaffold-options .choice-btn').forEach(b => { b.disabled = false; });
         startQuestionCountdown(); // fresh 15s for the next blank
+        _attemptStartAt = performance.now();
         _questionAdvanceTimer = null;
       }, 500);
     }
   } else {
+    recordAttempt(q, { isCorrect: false, selectedText: valStr });    // wrong fill-in
     btn.classList.add('wrong');
     penalizeWrong();
   }
@@ -868,7 +899,9 @@ function handleAnswer(choiceIdx) {
   clearQuestionTimers();
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
 
-  if (choiceIdx === q.correct) {
+  const correct = choiceIdx === q.correct;
+  recordAttempt(q, { isCorrect: correct, selectedIndex: choiceIdx, selectedText: q.choices[choiceIdx] });
+  if (correct) {
     document.querySelectorAll('#choices-grid .choice-btn')[choiceIdx].classList.add('correct');
     advanceAfterCorrect();
   } else {
@@ -895,6 +928,10 @@ function advanceAfterCorrect() {
       bestScores[answeredRoomIdx] = score;
       persistSave();
     }
+    logEvent('room_clear', {
+      room: ROOMS[answeredRoomIdx].id, difficulty: ROOMS[answeredRoomIdx].label,
+      score, wrong: roomWrong[answeredRoomIdx],
+    });
 
     resetFear();
     updateNoteVisibility();
@@ -948,6 +985,7 @@ function penalizeWrong() {
   _wrongResetTimer = setTimeout(() => {
     if (gState.current === S.QUESTION) {
       document.querySelectorAll('.choice-btn').forEach(b => { b.disabled = false; b.classList.remove('wrong'); });
+      _attemptStartAt = performance.now();
     }
     _wrongResetTimer = null;
   }, 700);
@@ -1054,6 +1092,8 @@ function triggerWin({ recordRun = true } = {}) {
     const rooms = bestScores.map(v => v || 0);
     const total = Math.round(rooms.reduce((s, v) => s + v, 0) / rooms.length);
     submitRun({ roomScores: rooms, totalScore: total, bestTime: elapsed });
+    logEvent('escaped', { time: elapsed, total });
+    endPlay({ outcome: 'won', roomsCompleted: 3, totalScore: total, bestTime: elapsed });
   } else {
     $('win-time').textContent = 'Time: Test run';
   }
@@ -1065,6 +1105,8 @@ function triggerWin({ recordRun = true } = {}) {
 
 function triggerLose() {
   gState.current = S.LOSE;
+  logEvent('caught', { rooms_completed: roomDone.filter(Boolean).length });
+  endPlay({ outcome: 'lost', roomsCompleted: roomDone.filter(Boolean).length });
   elVignette.style.background = 'rgba(14,0,0,0.55)';
   elVignette.style.opacity    = '0.7';
   showScreen('lose');
@@ -1083,10 +1125,18 @@ function finishStartGame() {
   setCameraView(START_CAMERA_VIEW);
   _holdStartViewFrames = 5;
   gState.current = S.PLAYING;
+  startPlay({ plearn: CFG.gameplay.pLearnMode, device: GameDevice.mode });
   AudioManager.init().catch(err => console.warn('Audio init failed.', err));
 }
 
+// End an in-progress run as abandoned (quit to menu / restart). Safe to call
+// anytime — no-op when no run is active.
+function abandonPlayIfActive() {
+  if (hasActivePlay()) endPlay({ outcome: 'abandoned', roomsCompleted: roomDone.filter(Boolean).length });
+}
+
 function startGame({ transition = false } = {}) {
+  abandonPlayIfActive();   // a restart abandons the previous run
   resetProgress();
   scene.fog.density = CFG.fog.density;
   AudioManager.setVolume('enemyNear', 0, 0.1);
@@ -1149,6 +1199,7 @@ window.storySkip = function() {
 };
 
 window.goHome = function() {
+  abandonPlayIfActive();
   storyIdx = 0;
   plearnIdx = 0;
   gState.current = S.MENU;
@@ -1545,7 +1596,10 @@ $('btn-question-exit').onclick = leaveQuestion;
 $('btn-code-submit').onclick   = () => {
   const val = $('code-input').value.trim();
   if (val === EXIT_CODE) triggerWin();
-  else { $('code-error').textContent = '✗ Incorrect code. Try again.'; AudioManager.play('jumpscare'); }
+  else {
+    $('code-error').textContent = '✗ Incorrect code. Try again.'; AudioManager.play('jumpscare');
+    logEvent('code_fail', { entered: val });
+  }
 };
 $('btn-code-cancel').onclick   = () => {
   showHUD();
@@ -1720,65 +1774,135 @@ async function enterFromAuth() {
 }
 
 // ── Sign in / sign up form ────────────────────────────────────────────────────
+const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_RE = /^[A-Za-z0-9 _-]{3,20}$/;
+const MIN_PASSWORD = 8;
 let authMode = 'signin';
+let authBusy = false;
+
 function setAuthMode(mode) {
   authMode = mode;
   const signup = mode === 'signup';
-  $('auth-title').textContent          = signup ? 'CREATE ACCOUNT' : 'SIGN IN';
-  $('auth-username-row').hidden         = !signup;
-  $('btn-auth-submit').textContent      = signup ? 'CREATE ACCOUNT' : 'SIGN IN';
-  $('auth-toggle-text').textContent     = signup ? 'Already have an account?' : 'No account yet?';
-  $('btn-auth-toggle').textContent      = signup ? 'Sign in' : 'Create one';
+  $('auth-title').textContent       = signup ? 'CREATE ACCOUNT' : 'SIGN IN';
+  $('auth-username-row').hidden      = !signup;
+  $('btn-auth-submit').textContent   = signup ? 'CREATE ACCOUNT' : 'SIGN IN';
+  $('auth-toggle-text').textContent  = signup ? 'Already have an account?' : 'No account yet?';
+  $('btn-auth-toggle').textContent   = signup ? 'Sign in' : 'Create one';
   $('auth-password').setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+  $('auth-password').placeholder     = signup ? `At least ${MIN_PASSWORD} characters` : 'Your password';
+  clearAuthError();
+}
+function clearAuthError() {
   $('auth-error').textContent = '';
+  ['auth-email', 'auth-password', 'auth-username'].forEach(id => $(id).classList.remove('invalid'));
+}
+function showAuthError(msg, fieldId) {
+  $('auth-error').textContent = msg;
+  if (fieldId) { const el = $(fieldId); el.classList.add('invalid'); el.focus(); }
 }
 function showLogin() {
   setAuthMode('signin');
   $('auth-email').value = ''; $('auth-password').value = ''; $('auth-username').value = '';
+  setPasswordVisible(false);
   showScreen('login');
+  setTimeout(() => $('auth-email').focus(), 50);
 }
+
+// Map every plausible failure to a clear, specific message.
 function friendlyAuthError(e) {
+  const code = e?.code;
   const m = (e?.message || '').toLowerCase();
-  if (m.includes('invalid login')) return 'Wrong email or password.';
-  if (m.includes('already registered')) return 'That email already has an account. Sign in instead.';
-  if (m.includes('confirmation')) return e.message;   // our own hint about email-confirm
-  if (m.includes('taken')) return 'That name is already taken.';
-  if (m.includes('valid email')) return 'Enter a valid email address.';
-  return e?.message || 'Something went wrong. Try again.';
+  if (code === 'email_confirm_on' || code === 'profile_missing') return e.message;
+  if (e?.name === 'AuthRetryableFetchError' || m.includes('failed to fetch') || m.includes('network'))
+    return 'Can\'t reach the server. Check your connection and try again.';
+  if (m.includes('invalid login') || m.includes('invalid credentials')) return 'Wrong email or password.';
+  if (m.includes('already registered') || m.includes('already been registered'))
+    return 'That email already has an account — sign in instead.';
+  if (m.includes('rate limit') || e?.status === 429)
+    return 'Too many attempts. Wait a minute, then try again.';
+  if (m.includes('password')) return `Password must be at least ${MIN_PASSWORD} characters.`;
+  if (m.includes('valid email') || m.includes('email address') || m.includes('is invalid'))
+    return 'Enter a valid email address.';
+  if (m.includes('database error') || m.includes('duplicate') || m.includes('unique'))
+    return 'That name was just taken — please pick another.';
+  return e?.message || 'Something went wrong. Please try again.';
 }
+
 async function submitAuth() {
+  if (authBusy) return;
   const email    = $('auth-email').value.trim();
   const password = $('auth-password').value;
   const username = $('auth-username').value.trim();
-  const err = $('auth-error');
-  err.textContent = '';
-  if (!email || !password)                    { err.textContent = 'Enter your email and password.'; return; }
-  if (authMode === 'signup' && !username)     { err.textContent = 'Choose a display name.'; return; }
-  if (password.length < 6)                    { err.textContent = 'Password must be at least 6 characters.'; return; }
+  const signup   = authMode === 'signup';
+  clearAuthError();
+
+  // Client-side validation — fail fast with a pointed message before any request.
+  if (!email)                       return showAuthError('Enter your email.', 'auth-email');
+  if (!EMAIL_RE.test(email))        return showAuthError('That doesn\'t look like a valid email.', 'auth-email');
+  if (signup && !USERNAME_RE.test(username))
+    return showAuthError('Display name must be 3–20 characters (letters, numbers, spaces, _ or -).', 'auth-username');
+  if (!password)                    return showAuthError('Enter your password.', 'auth-password');
+  if (signup && password.length < MIN_PASSWORD)
+    return showAuthError(`Password must be at least ${MIN_PASSWORD} characters.`, 'auth-password');
 
   const btn = $('btn-auth-submit');
-  btn.disabled = true; btn.textContent = 'Please wait…';
+  authBusy = true;
+  btn.disabled = true; btn.textContent = signup ? 'Creating…' : 'Signing in…';
   try {
-    if (authMode === 'signup') await signUp({ email, password, username });
-    else                       await signIn({ email, password });
+    if (signup) {
+      if (!(await isUsernameAvailable(username)))
+        return showAuthError('That name is already taken — pick another.', 'auth-username');
+      await signUp({ email, password, username });
+    } else {
+      await signIn({ email, password });
+    }
     AudioManager.play('uiClick');
     await enterFromAuth();
   } catch (e) {
-    err.textContent = friendlyAuthError(e);
+    showAuthError(friendlyAuthError(e));
   } finally {
+    authBusy = false;
     btn.disabled = false;
     setAuthMode(authMode);   // restores the button label
   }
 }
+
+// Show/hide password
+function setPasswordVisible(show) {
+  const input = $('auth-password'), btn = $('btn-auth-showpw');
+  input.type = show ? 'text' : 'password';
+  btn.textContent = show ? 'Hide' : 'Show';
+  btn.setAttribute('aria-pressed', String(show));
+}
+$('btn-auth-showpw').onclick = () => setPasswordVisible($('auth-password').type === 'password');
+
+// Caps-lock warning while entering the password
+function updateCapsLock(e) {
+  const on = e.getModifierState && e.getModifierState('CapsLock');
+  $('auth-capslock').hidden = !on;
+}
+$('auth-password').addEventListener('keydown', updateCapsLock);
+$('auth-password').addEventListener('keyup',   updateCapsLock);
+$('auth-password').addEventListener('blur',    () => { $('auth-capslock').hidden = true; });
+
+// Submit on Enter; clear errors as the user edits
+['auth-email', 'auth-password', 'auth-username'].forEach(id => {
+  const el = $(id);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
+  el.addEventListener('input', clearAuthError);
+});
 $('btn-auth-submit').onclick = submitAuth;
 $('btn-auth-toggle').onclick = () => setAuthMode(authMode === 'signup' ? 'signin' : 'signup');
-$('auth-password').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
-$('auth-email').addEventListener('keydown',    e => { if (e.key === 'Enter') submitAuth(); });
 $('icon-logout').onclick = async () => {
+  if (!confirm(`Log out of "${displayName()}"?`)) return;
   await signOut();
   playerName = 'Student';
   showLogin();
 };
+// If the session ends elsewhere (token expiry / another tab), fall back to login.
+onSignedOut(() => {
+  if (screens.login.classList.contains('hidden')) { playerName = 'Student'; showLogin(); }
+});
 
 // ── Leaderboards ──────────────────────────────────────────────────────────────
 let lbBoard = 'speed';
