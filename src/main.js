@@ -1618,13 +1618,16 @@ $('btn-save-name').onclick     = () => {
     setTimeout(() => { $('settings-saved').textContent = ''; }, 1800);
   }
 };
-$('btn-reset-progress').onclick = () => {
-  if (!confirm('Reset all progress and scores?')) return;
-  bestScores = [null, null, null]; bestTime = null;
-  persistSave(); updateSettingsScores(); resetProgress();
-  $('settings-saved').textContent = '✓ Progress reset';
-  setTimeout(() => { $('settings-saved').textContent = ''; }, 2000);
-};
+$('btn-reset-progress').onclick = () => openConfirm({
+  text: 'Reset all progress and scores? This cannot be undone.',
+  okLabel: 'Reset',
+  onConfirm: () => {
+    bestScores = [null, null, null]; bestTime = null;
+    persistSave(); updateSettingsScores(); resetProgress();
+    $('settings-saved').textContent = '✓ Progress reset';
+    setTimeout(() => { $('settings-saved').textContent = ''; }, 2000);
+  },
+});
 elSensitivity?.addEventListener('input', e => {
   // Slider value is a percent (45–180); convert to the 0.45–1.8 multiplier.
   setLookSensitivity(normalizeSensitivity(Number(e.target.value) / 100));
