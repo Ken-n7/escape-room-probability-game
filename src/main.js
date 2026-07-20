@@ -27,7 +27,7 @@ import { preloadAssets } from './loaders/preload.js';
 
 // ── World ─────────────────────────────────────────────────────────────────────
 const {
-  wallBoxes, interactiveObjects, roomNotes, roomDoors, roomContainers,
+  wallBoxes, interactiveObjects, roomNotes, roomDoors, roomContainers, decoyNotes,
   realRoomRects, decoyRects, vacantRects, randomizeNotes, relocateNote,
 } = buildWorld(scene);
 
@@ -360,6 +360,13 @@ function updateNoteVisibility() {
       note.visible = !roomDone[ri] && ni === roomProgress[ri] && !gated;
     });
   });
+  // Decoy papers have no progression — each is findable unless stashed in a
+  // still-closed container (bag/trash ones are found by searching, never shown).
+  decoyNotes.forEach(note => {
+    const c = note.userData.container;
+    if (c && (c.kind === 'bag' || c.kind === 'trash')) { note.visible = false; return; }
+    note.visible = !c || c.isOpen;
+  });
 }
 
 // ── Containers (openable cabinet / drawer) ────────────────────────────────────
@@ -478,6 +485,8 @@ function tryInteract() {
     }
   } else if (nearObject.userData.isSearch) {
     searchContainer(nearObject.userData.container);
+  } else if (nearObject.userData.isDecoyNote) {
+    openDecoyNote();
   } else if (nearObject.userData.roomIndex !== undefined) {
     openQuestion(nearObject.userData.roomIndex);
   }
@@ -671,6 +680,33 @@ function openQuestion(roomIdx) {
   gState.current = S.QUESTION;
   applyFear(roomWrong[roomIdx]);
   showQuestionUI();
+}
+
+// ── Decoy paper reveal ────────────────────────────────────────────────────────
+// A decoy's paper opens the SAME modal a real question uses, but there's no quiz
+// — just a taunt telling the player they're in the wrong room. No timer, no
+// choices; the × exit hands control back exactly like leaving a question.
+const DECOY_MESSAGES = [
+  "Wrong room. There was never anything here for you.",
+  "This isn't it. It never was — but it saw you look.",
+  "You're in the wrong place. It's enjoying this.",
+  "Nothing to solve here. Only you, and whatever is watching.",
+  "Empty. You wasted your time, and it noticed.",
+];
+function openDecoyNote() {
+  clearScareSprite();
+  clearQuestionTimers();
+  activeRoomIdx = -1;
+  gState.current = S.QUESTION;
+  $('question-room-label').textContent = '? ? ?';
+  $('question-timer').hidden = true;
+  $('question-text').textContent = DECOY_MESSAGES[Math.floor(Math.random() * DECOY_MESSAGES.length)];
+  $('hint-box').style.display = 'none';
+  $('scaffold').hidden = true;
+  $('choices-grid').style.display = 'none';
+  $('question-wrong-count').textContent = '';
+  showScreen('question');
+  AudioManager.play('randomScareWhisper');
 }
 
 function showQuestionUI() {

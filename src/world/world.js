@@ -1141,18 +1141,12 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
   const drwP = P(drwU, W - DRW_D / 2);
   const drwRec = buildDrawerUnit(scene, drwP.x, drwP.z, f.theta + Math.PI, interactiveObjects, containers);
 
-  if (isDecoy) {
-    roomScrawl(scene, { f, P, dLoc, W }, ['IT LIED'], 0.5);   // the tell — read once you're inside
-    return null;
-  }
-  if (Math.random() < 0.55) roomScrawl(scene, { f, P, dLoc, W }, randScrawl(), 0.5);
-
-  // Interactive notes — 5 per room, placed at run time into 5 of these vetted
-  // hiding spots (see randomizeNotes). Spread across the whole room + varied
-  // heights so the player has to sweep everywhere. {u, v, y}; papers lie flat.
-  // Floor spots are valid under any arrangement (worst case a note sits beside a
-  // desk — still findable, never floating). Fixed anchors (teacher desk, board
-  // base, cabinet, drawer, bags, trash) follow their objects.
+  // Interactive papers hide in these vetted spots (see randomizeNotes). Floor
+  // spots are valid under any arrangement (worst case a paper sits beside a desk
+  // — still findable, never floating); fixed anchors (teacher desk, board base,
+  // cabinet, drawer, bags, trash) follow their objects. The SAME pool feeds both
+  // real question notes and decoy "wrong room" papers, so a decoy hides its
+  // papers exactly like a real room hides its questions.
   const notePool = [
     { u: 1.1,   v: 1.1,      y: 0.03 },   // near-door corner (left)
     { u: 1.1,   v: W - 1.1,  y: 0.03 },   // near-door corner (right)
@@ -1175,31 +1169,44 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
     { u: drwU,  v: W - 0.59, y: DRW_TRAY_Y + 0.02, container: drwRec },   // hidden in the drawer tray
     ...searchNoteSpots,   // stuffed in a bag or the trash can (revealed on search)
   ];
-  const noteMeshes = [];
-  for (let i = 0; i < 5; i++) {
-    const noteMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.32, 0.42),
-      noteMat
-    );
-    noteMesh.rotation.order = 'YXZ';
-    noteMesh.userData.isInteractive = true;
-    noteMesh.userData.roomIndex = def.idx;
-    noteMesh.userData.noteIndex = i;
-    scene.add(noteMesh);
-    interactiveObjects.push(noteMesh);
-    noteMeshes.push(noteMesh);
+  const makeNoteMesh = (extra) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.42), noteMat);
+    m.rotation.order = 'YXZ';
+    m.userData.isInteractive = true;
+    Object.assign(m.userData, extra);
+    scene.add(m);
+    interactiveObjects.push(m);
+    return m;
+  };
+
+  if (isDecoy) {
+    roomScrawl(scene, { f, P, dLoc, W }, ['IT LIED'], 0.5);   // extra flavour
+    // Decoy papers — look and hide exactly like real question notes, but
+    // examining one tells the player they're in the wrong room. A few per decoy
+    // so the same search still turns something up.
+    const decoyMeshes = [];
+    for (let i = 0; i < 3; i++) decoyMeshes.push(makeNoteMesh({ isDecoyNote: true }));
+    // Decoy papers hide only in the plain visible spots — never inside a
+    // container/bag/trash — so they're always just papers you find by looking.
+    _decoyRooms.push({ P, theta: f.theta, pool: notePool.filter(s => !s.container), meshes: decoyMeshes });
+    return null;
   }
+  if (Math.random() < 0.55) roomScrawl(scene, { f, P, dLoc, W }, randScrawl(), 0.5);
+
+  const noteMeshes = [];
+  for (let i = 0; i < 5; i++) noteMeshes.push(makeNoteMesh({ roomIndex: def.idx, noteIndex: i }));
   _noteRooms.push({ roomIdx: def.idx, P, theta: f.theta, pool: notePool, meshes: noteMeshes });
   return noteMeshes;
 }
 
 // Per-room note bookkeeping for run-time re-randomization.
 const _noteRooms = [];
+const _decoyRooms = [];
 
 // Re-roll every real room's 5 notes into different pool spots. Called on each
 // game start (resetProgress) so papers hide somewhere new each playthrough.
 export function randomizeNotes() {
-  for (const rr of _noteRooms) {
+  for (const rr of [..._noteRooms, ..._decoyRooms]) {
     const pool = rr.pool.slice();
     for (let i = pool.length - 1; i > 0; i--) {        // Fisher–Yates shuffle
       const j = Math.floor(Math.random() * (i + 1));
@@ -1621,12 +1628,15 @@ export function buildWorld(scene) {
     return rect(0, vacantDepth, 0, def.v1 - def.v0);
   });
 
+  const decoyNotes = _decoyRooms.flatMap(r => r.meshes);
+
   return {
     wallBoxes: _collision,
     interactiveObjects,
     roomNotes,
     roomDoors,
     roomContainers,
+    decoyNotes,
     realRoomRects,
     decoyRects,
     vacantRects,
