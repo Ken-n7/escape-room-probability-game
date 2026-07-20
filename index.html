@@ -2069,10 +2069,11 @@
         min-height:0;
         margin:0;
       }
-      #btn-settings-back {
-        grid-column:1 / -1;
-        position:static;
-        margin-top:0;
+      #btn-settings-back {   /* now the top-right ✕ — keep it out of the grid flow */
+        position:absolute;
+        top:10px;
+        right:12px;
+        margin:0;
       }
       .score-row {
         margin-bottom:5px;
@@ -2259,6 +2260,39 @@
     #s-menu[data-authed="false"] #menu-player-name { display:none !important; }
     #s-menu[data-authed="false"] #menu-auth  { display:flex; }
 
+    /* Top-right close ✕ (settings panel — replaces the bottom back button). */
+    .modal-x {
+      position:absolute; top:12px; right:14px; width:34px; height:34px; z-index:4;
+      display:flex; align-items:center; justify-content:center; line-height:1;
+      background:none; border:1px solid var(--line); border-radius:6px;
+      color:var(--muted); font-size:0.95rem; cursor:pointer;
+    }
+    .modal-x:hover { color:var(--bone); background:rgba(255,255,255,0.06); border-color:var(--amber); }
+
+    /* Reusable themed confirmation dialog (replaces native confirm()). */
+    #confirm-dialog {
+      position:fixed; inset:0; z-index:200; padding:16px;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(3,4,6,0.7); backdrop-filter:blur(2px);
+    }
+    #confirm-dialog.hidden { display:none; }
+    #confirm-box {
+      background:var(--panel-strong, rgba(8,10,12,0.96)); border:1px solid var(--line);
+      border-radius:10px; padding:24px 26px; width:min(360px, 92vw); text-align:center;
+      box-shadow:0 24px 70px rgba(0,0,0,0.72);
+    }
+    #confirm-text { color:var(--bone); font-family:Georgia,serif; font-size:1.02rem; line-height:1.5; margin-bottom:20px; }
+    #confirm-actions { display:flex; gap:10px; }
+    .confirm-btn {
+      flex:1; padding:11px 14px; cursor:pointer; border-radius:8px;
+      font-family:monospace; font-size:0.85rem; letter-spacing:1px;
+      background:rgba(5,7,8,0.72); border:1px solid rgba(231,223,204,0.2); color:var(--bone);
+      transition:background 0.15s;
+    }
+    .confirm-btn:hover { background:rgba(231,223,204,0.1); }
+    .confirm-btn.danger { box-shadow:inset 4px 0 0 var(--blood); }
+    .confirm-btn.danger:hover { background:rgba(181,31,35,0.28); }
+
     /* ── Keyframes ───────────────────────────────────────────────────────── */
     @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:.72} }
   </style>
@@ -2342,6 +2376,17 @@
     <div id="auth-toggle-line">
       <span id="auth-toggle-text">No account yet?</span>
       <button type="button" id="btn-auth-toggle">Create one</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONFIRM DIALOG (themed, reusable — replaces native confirm) ═════════════ -->
+<div id="confirm-dialog" class="hidden">
+  <div id="confirm-box">
+    <p id="confirm-text"></p>
+    <div id="confirm-actions">
+      <button class="confirm-btn" id="confirm-cancel" type="button">Cancel</button>
+      <button class="confirm-btn danger" id="confirm-ok" type="button">Confirm</button>
     </div>
   </div>
 </div>
@@ -2495,6 +2540,7 @@
 <!-- ══ SETTINGS ════════════════════════════════════════════════════════════════ -->
 <div id="s-settings" class="screen hidden">
   <div id="settings-box">
+    <button class="modal-x" id="btn-settings-back" type="button" aria-label="Close settings">✕</button>
     <h2>SETTINGS</h2>
 
     <div class="settings-row">
@@ -2557,7 +2603,6 @@
 
     <button id="btn-reset-progress">RESET ALL PROGRESS</button>
     <div id="settings-saved"></div>
-    <button class="modal-back-btn" id="btn-settings-back">← BACK TO MENU</button>
   </div>
 </div>
 

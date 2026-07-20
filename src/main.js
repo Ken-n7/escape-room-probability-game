@@ -551,7 +551,6 @@ function openSettings(from = 'menu') {
   updateVolumeUI();
   updateFullscreenLabel();
   updateSettingsScores();
-  $('btn-settings-back').textContent = from === 'options' ? '← BACK TO GAME' : '← BACK TO MENU';
   showScreen('settings');
 }
 
@@ -1561,7 +1560,8 @@ document.addEventListener('keydown',     primeAudio, { once: true });
 window.AudioManager = AudioManager;
 
 // ── Pre-game UI click sound ───────────────────────────────────────────────────
-const PRE_GAME_SCREENS   = ['title', 'menu', 'story', 'plearn', 'ready', 'settings', 'about', 'login', 'leaderboard', 'admin'];
+// Note: 'admin' is intentionally excluded — the dashboard is a silent, non-game UI.
+const PRE_GAME_SCREENS   = ['title', 'menu', 'story', 'plearn', 'ready', 'settings', 'about', 'login', 'leaderboard'];
 const PRE_GAME_CONTROLS  = ['button','.nav-back','.nav-fwd','.nav-home','#title-arrow','#icon-settings','#icon-about'].join(',');
 
 document.addEventListener('click', e => {
@@ -1910,13 +1910,33 @@ $('btn-auth-close').onclick  = () => { applyMenuAuthState(); showScreen('menu');
 // Menu's lower-right Log In / Sign Up buttons open the modal in the right mode.
 $('btn-menu-login').onclick  = () => openAuth('signin');
 $('btn-menu-signup').onclick = () => openAuth('signup');
-$('icon-logout').onclick = async () => {
-  if (!confirm(`Log out of "${displayName()}"?`)) return;
-  await signOut();
-  playerName = 'Student';
-  applyMenuAuthState();
-  showScreen('menu');
-};
+$('icon-logout').onclick = () => openConfirm({
+  text: `Log out of "${displayName()}"?`,
+  okLabel: 'Log Out',
+  onConfirm: async () => {
+    await signOut();
+    playerName = 'Student';
+    applyMenuAuthState();
+    showScreen('menu');
+  },
+});
+
+// ── Themed confirmation dialog (reusable overlay) ─────────────────────────────
+let _confirmCb = null;
+function openConfirm({ text, okLabel = 'Confirm', onConfirm }) {
+  $('confirm-text').textContent = text;
+  $('confirm-ok').textContent = okLabel;
+  _confirmCb = onConfirm;
+  $('confirm-dialog').classList.remove('hidden');
+  AudioManager.play('uiClick');
+}
+function closeConfirm() { $('confirm-dialog').classList.add('hidden'); _confirmCb = null; }
+$('confirm-cancel').onclick = closeConfirm;
+$('confirm-ok').onclick = () => { const cb = _confirmCb; closeConfirm(); cb?.(); };
+$('confirm-dialog').addEventListener('click', e => { if (e.target === $('confirm-dialog')) closeConfirm(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('confirm-dialog').classList.contains('hidden')) closeConfirm();
+});
 // If the session ends elsewhere (token expiry / another tab), drop back to the
 // logged-out menu (never force the modal open).
 onSignedOut(() => {
