@@ -1985,8 +1985,15 @@ document.querySelectorAll('.lb-tab').forEach(tab => {
 // ── Admin dashboard (clean analytics UI — see src/ui/dashboard.js) ────────────
 async function openAdmin() {
   if (!isAdmin()) return;
+  // The dashboard is a silent, non-game UI: mute the ambient music loop while
+  // it's open and restore the player's music volume when they head back.
+  const prevMusic = AudioManager.getCategoryVolume('music');
+  AudioManager.setCategoryVolume('music', 0);
   showScreen('admin');
-  await mountDashboard({ onBack: () => showScreen('menu') });
+  await mountDashboard({ onBack: () => {
+    AudioManager.setCategoryVolume('music', prevMusic);
+    showScreen('menu');
+  } });
 }
 $('btn-admin').onclick = openAdmin;
 
