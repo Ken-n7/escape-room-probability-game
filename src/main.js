@@ -25,7 +25,7 @@ import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
 import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut } from './net/auth.js';
-import { submitRun, fetchSpeedLeaderboard, fetchAccuracyLeaderboard, fetchAllRuns } from './net/scores.js';
+import { submitRun, fetchLeaderboard, fetchAllRuns } from './net/scores.js';
 import { startPlay, endPlay, hasActivePlay, logAttempt, logEvent } from './net/analytics.js';
 import { mountDashboard } from './ui/dashboard.js';
 
@@ -1089,9 +1089,10 @@ function triggerWin({ recordRun = true } = {}) {
     const bestLabel  = bestTime !== null ? '  Best: ' + formatTime(bestTime) + (isNewBest ? ' (new!)' : '') : '';
     $('win-time').textContent = 'Time: ' + formatTime(elapsed) + bestLabel;
     // Post the finished run to the leaderboard (fire-and-forget; safe offline).
+    // P-Learn is untimed practice — never submit it to the competitive boards.
     const rooms = bestScores.map(v => v || 0);
     const total = Math.round(rooms.reduce((s, v) => s + v, 0) / rooms.length);
-    submitRun({ roomScores: rooms, totalScore: total, bestTime: elapsed });
+    if (!CFG.gameplay.pLearnMode) submitRun({ roomScores: rooms, totalScore: total, bestTime: elapsed });
     logEvent('escaped', { time: elapsed, total });
     endPlay({ outcome: 'won', roomsCompleted: 3, totalScore: total, bestTime: elapsed });
   } else {
@@ -1955,21 +1956,39 @@ onSignedOut(() => {
 });
 
 // ── Leaderboards ──────────────────────────────────────────────────────────────
-let lbBoard = 'speed';
+// Three boards. Escape Score (headline) blends accuracy + speed; Fastest Time is
+// the pure clock; Top Accuracy is pure knowledge. Each has an all-time / weekly
+// window. `value` formats the metric cell; `sort` ranks the raw rows.
+const LB_LIMIT  = 25;
+const LB_CONFIG = {
+  escape:   { value: r => r.escape_score, sort: (a, b) => b.escape_score - a.escape_score || b.runs - a.runs },
+  speed:    { value: r => formatTime(Math.round(r.best_time)), sort: (a, b) => a.best_time - b.best_time },
+  accuracy: { value: r => r.top_score + '%', sort: (a, b) => b.top_score - a.top_score || b.runs - a.runs },
+};
+let lbBoard  = 'escape';
+let lbWindow = 'all';
+
 function lbRowHtml(i, name, val, me) {
   const cls = 'lb-row' + (i === 0 ? ' top1' : '') + (name === me ? ' me' : '');
   return `<div class="${cls}"><span class="lb-rank">${i + 1}</span><span class="lb-name">${escapeHtml(name)}</span><span class="lb-val">${val}</span></div>`;
 }
 async function renderLeaderboard() {
   const list = $('lb-list');
+  const gen  = `${lbBoard}:${lbWindow}`;
+  list.dataset.gen = gen;                    // token; a newer click overwrites it
   list.innerHTML = '<div class="lb-empty">Loading…</div>';
-  const me = displayName();
-  const rows = lbBoard === 'speed' ? await fetchSpeedLeaderboard() : await fetchAccuracyLeaderboard();
-  if (!rows.length) { list.innerHTML = '<div class="lb-empty">No scores yet. Be the first!</div>'; return; }
-  list.innerHTML = rows.map((r, i) => lbBoard === 'speed'
-    ? lbRowHtml(i, r.username, formatTime(Math.round(r.best_time)), me)
-    : lbRowHtml(i, r.username, r.top_score + '%', me)
-  ).join('');
+  const me  = displayName();
+  const cfg = LB_CONFIG[lbBoard];
+  const rows = (await fetchLeaderboard(lbBoard, lbWindow)).sort(cfg.sort).slice(0, LB_LIMIT);
+  if (list.dataset.gen !== gen) return;      // superseded by a later tab/window click
+  if (!rows.length) {
+    const scope = lbWindow === 'week' ? 'this week' : 'yet';
+    list.innerHTML = `<div class="lb-empty">No scores ${scope}. Be the first!</div>`;
+    return;
+  }
+  list.innerHTML = rows.map((r, i) => lbRowHtml(i, r.username, cfg.value(r), me)).join('');
+  // With a long board, bring the player's own row into view.
+  list.querySelector('.lb-row.me')?.scrollIntoView({ block: 'nearest' });
 }
 function openLeaderboard() { showScreen('leaderboard'); renderLeaderboard(); }
 $('btn-leaderboard').onclick = openLeaderboard;
@@ -1978,6 +1997,13 @@ document.querySelectorAll('.lb-tab').forEach(tab => {
   tab.onclick = () => {
     lbBoard = tab.dataset.board;
     document.querySelectorAll('.lb-tab').forEach(t => t.classList.toggle('active', t === tab));
+    renderLeaderboard();
+  };
+});
+document.querySelectorAll('.lb-win').forEach(btn => {
+  btn.onclick = () => {
+    lbWindow = btn.dataset.window;
+    document.querySelectorAll('.lb-win').forEach(b => b.classList.toggle('active', b === btn));
     renderLeaderboard();
   };
 });

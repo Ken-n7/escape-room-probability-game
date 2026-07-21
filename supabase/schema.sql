@@ -125,24 +125,65 @@ drop policy if exists "runs_select" on public.runs;
 create policy "runs_select" on public.runs
   for select using ( user_id = auth.uid() or public.is_admin() );
 
--- ── Leaderboard views ───────────────────────────────────────────────────────
--- Owner-permission views: aggregate across ALL players but expose only a
--- username + one best metric, so they're safe for any signed-in player to read
--- even though individual runs stay private.
-create or replace view public.speed_leaderboard as
-  select p.username, min(r.best_time) as best_time, count(*) as runs
+-- ── Leaderboards ─────────────────────────────────────────────────────────────
+-- Exposed as SECURITY DEFINER functions (not plain views) so they can:
+--   • aggregate across ALL players while exposing only username + one metric
+--     (individual runs stay private under RLS), and
+--   • take a p_since arg for the weekly board (null = all-time).
+-- Only WON runs ever reach public.runs (submitRun fires solely on escape), and
+-- P-Learn practice runs are never submitted, so no outcome/plearn filter is
+-- needed here — every row in runs is a real, competitive, finished escape.
+--
+-- Escape Score (composite headline board): accuracy blended with a speed bonus
+-- so neither axis can be cheesed. Rushing tanks accuracy; stalling tanks speed.
+--   speed_pts = min(100, round(PAR / best_time * 100))   -- 100 at/under par
+--   escape    = round(0.7 * total_score + 0.3 * speed_pts)
+-- PAR_SECONDS is the reference "good run" time — tune it as real data comes in.
+drop view if exists public.speed_leaderboard;
+drop view if exists public.accuracy_leaderboard;
+
+create or replace function public.lb_speed(p_since timestamptz default null)
+returns table (username text, best_time numeric, runs bigint)
+language sql security definer stable
+set search_path = public
+as $$
+  select p.username, min(r.best_time), count(*)
   from public.runs r
   join public.profiles p on p.id = r.user_id
+  where p_since is null or r.finished_at >= p_since
   group by p.username;
+$$;
 
-create or replace view public.accuracy_leaderboard as
-  select p.username, max(r.total_score) as top_score, count(*) as runs
+create or replace function public.lb_accuracy(p_since timestamptz default null)
+returns table (username text, top_score int, runs bigint)
+language sql security definer stable
+set search_path = public
+as $$
+  select p.username, max(r.total_score), count(*)
   from public.runs r
   join public.profiles p on p.id = r.user_id
+  where p_since is null or r.finished_at >= p_since
   group by p.username;
+$$;
 
-grant select on public.speed_leaderboard    to authenticated;
-grant select on public.accuracy_leaderboard  to authenticated;
+create or replace function public.lb_escape(p_since timestamptz default null)
+returns table (username text, escape_score int, runs bigint)
+language sql security definer stable
+set search_path = public
+as $$
+  select p.username,
+         max( round( 0.7 * r.total_score
+                   + 0.3 * least(100, round(180.0 / greatest(r.best_time, 1) * 100)) )::int ),
+         count(*)
+  from public.runs r
+  join public.profiles p on p.id = r.user_id
+  where p_since is null or r.finished_at >= p_since
+  group by p.username;
+$$;
+
+grant execute on function public.lb_speed(timestamptz)    to authenticated;
+grant execute on function public.lb_accuracy(timestamptz) to authenticated;
+grant execute on function public.lb_escape(timestamptz)   to authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 --  ANALYTICS — powers the admin dashboard (charts, item analysis, funnel)

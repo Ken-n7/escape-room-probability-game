@@ -650,7 +650,11 @@
       padding:34px 40px; width:90%; text-align:center;
     }
     #auth-box        { max-width:400px; }
-    #leaderboard-box { max-width:480px; }
+    #leaderboard-box {
+      max-width:520px; display:flex; flex-direction:column;
+      max-height:88vh; padding:26px 26px 20px;
+    }
+    #leaderboard-box h2 { margin-bottom:16px; }
     #admin-box       { max-width:760px; }
     #auth-box h2, #leaderboard-box h2, #admin-box h2 {
       color:#cc6622; font-family:monospace; font-size:1.3rem;
@@ -702,21 +706,39 @@
       letter-spacing:1px; padding:0 4px;
     }
     /* Tabs (leaderboard) */
-    #lb-tabs { display:flex; gap:8px; margin-bottom:16px; }
+    #lb-tabs { display:flex; gap:8px; margin-bottom:10px; }
     .lb-tab {
-      flex:1; padding:9px; cursor:pointer;
+      flex:1; padding:9px 4px; cursor:pointer; white-space:nowrap;
       background:rgba(30,15,5,0.8); border:1px solid #441100; border-radius:6px;
-      color:#886644; font-family:monospace; font-size:0.72rem; letter-spacing:2px;
+      color:#886644; font-family:monospace; font-size:0.66rem; letter-spacing:1px;
       transition:background 0.15s, color 0.15s;
     }
     .lb-tab.active { background:#4a2200; color:#ffaa55; border-color:#cc4400; }
-    #lb-list { min-height:120px; margin-bottom:8px; }
-    .lb-row {
-      display:grid; grid-template-columns:34px 1fr auto; gap:10px; align-items:center;
-      padding:9px 12px; margin-bottom:6px; text-align:left;
-      background:rgba(30,15,5,0.6); border:1px solid #331100; border-radius:6px;
-      color:#c9a878; font-family:monospace; font-size:0.85rem;
+    /* All-time / weekly window toggle */
+    #lb-window { display:flex; justify-content:center; gap:6px; margin-bottom:16px; }
+    .lb-win {
+      padding:5px 14px; cursor:pointer; border-radius:999px;
+      background:transparent; border:1px solid #441100;
+      color:#7a6248; font-family:monospace; font-size:0.66rem; letter-spacing:1px;
+      transition:background 0.15s, color 0.15s;
     }
+    .lb-win.active { background:#331500; color:#ffaa55; border-color:#aa3300; }
+    /* The list is the only scroll region — the box itself never overflows. */
+    #lb-list {
+      flex:1 1 auto; overflow-y:auto; min-height:100px;
+      margin:0 -6px; padding:0 6px;
+      scrollbar-width:thin; scrollbar-color:#5a2a00 transparent;
+    }
+    #lb-list::-webkit-scrollbar { width:8px; }
+    #lb-list::-webkit-scrollbar-thumb { background:#5a2a00; border-radius:4px; }
+    #lb-list::-webkit-scrollbar-track { background:transparent; }
+    .lb-row {
+      display:grid; grid-template-columns:30px 1fr auto; gap:10px; align-items:center;
+      padding:8px 12px; margin-bottom:5px; text-align:left;
+      background:rgba(30,15,5,0.6); border:1px solid #331100; border-radius:6px;
+      color:#c9a878; font-family:monospace; font-size:0.82rem;
+    }
+    .lb-row .lb-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .lb-row .lb-rank { color:#aa6633; font-weight:bold; }
     .lb-row .lb-val  { color:#ffaa55; letter-spacing:1px; }
     .lb-row.me { border-color:#cc6622; background:rgba(70,34,0,0.5); }
@@ -2439,15 +2461,18 @@
 <!-- ══ LEADERBOARDS ════════════════════════════════════════════════════════════ -->
 <div id="s-leaderboard" class="screen hidden">
   <div id="leaderboard-box">
-    <span class="nav-home" onclick="goHome()">⌂</span>
-    <div class="case-stamp">Records</div>
+    <button class="modal-x" id="btn-leaderboard-back" type="button" aria-label="Close leaderboards">✕</button>
     <h2>LEADERBOARDS</h2>
     <div id="lb-tabs">
-      <button class="lb-tab active" data-board="speed" type="button">FASTEST TIME</button>
+      <button class="lb-tab active" data-board="escape" type="button">ESCAPE SCORE</button>
+      <button class="lb-tab" data-board="speed" type="button">FASTEST TIME</button>
       <button class="lb-tab" data-board="accuracy" type="button">TOP ACCURACY</button>
     </div>
+    <div id="lb-window">
+      <button class="lb-win active" data-window="all" type="button">All-time</button>
+      <button class="lb-win" data-window="week" type="button">This week</button>
+    </div>
     <div id="lb-list"></div>
-    <button class="modal-back-btn" id="btn-leaderboard-back">← BACK TO MENU</button>
   </div>
 </div>
 
