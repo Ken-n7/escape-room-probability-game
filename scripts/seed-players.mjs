@@ -124,7 +124,7 @@ function simulatePlay(skill, startedAt) {
     total_score: outcome === 'won' ? totalScore : (roomScores.length ? totalScore : null),
     best_time: outcome === 'won' ? durationSec : null, plearn, device,
   };
-  return { play, attempts, events };
+  return { play, attempts, events, roomScores };
 }
 
 // A random start time within the last N days, biased toward school hours.
@@ -145,25 +145,34 @@ async function seedPlayer(name, i) {
   const userId = data.user.id;
 
   const nPlays = pick([1, 1, 2, 2, 2, 3, 3, 4, 5, 6, 8]);   // most play a few times, some grind
-  const plays = [], attempts = [], events = [];
+  const plays = [], attempts = [], events = [], runs = [];
   for (let p = 0; p < nPlays; p++) {
     const sim = simulatePlay(clamp(skill + rand(-0.06, 0.06), 0.3, 0.97), randomStart());
     plays.push({ ...sim.play, user_id: userId });
     sim.attempts.forEach(a => { delete a.id; attempts.push({ ...a, user_id: userId }); });
     sim.events.forEach(e => { delete e.id; events.push({ ...e, play_id: sim.play.id, user_id: userId }); });
+    // Mirror live behaviour: a won, non-P-Learn escape also posts a leaderboard
+    // run. (submitRun fires only on win; P-Learn practice is never submitted.)
+    if (sim.play.outcome === 'won' && !sim.play.plearn) {
+      runs.push({
+        user_id: userId, room_scores: sim.roomScores,
+        total_score: sim.play.total_score, best_time: sim.play.best_time,
+        finished_at: sim.play.ended_at,
+      });
+    }
   }
 
   const e1 = (await sb.from('plays').insert(plays)).error;
   if (e1) { console.log(`✗ ${name}: plays — ${e1.message}`); return null; }
-  // Insert attempts/events in chunks to stay under payload limits.
-  for (const [tbl, rows] of [['question_attempts', attempts], ['events', events]]) {
+  // Insert attempts/events/runs in chunks to stay under payload limits.
+  for (const [tbl, rows] of [['question_attempts', attempts], ['events', events], ['runs', runs]]) {
     for (let k = 0; k < rows.length; k += 500) {
       const err = (await sb.from(tbl).insert(rows.slice(k, k + 500))).error;
       if (err) { console.log(`✗ ${name}: ${tbl} — ${err.message}`); return null; }
     }
   }
   const wins = plays.filter(p => p.outcome === 'won').length;
-  console.log(`✓ ${name.padEnd(14)} skill ${skill.toFixed(2)} · ${nPlays} plays (${wins}W) · ${attempts.length} answers · ${events.length} events`);
+  console.log(`✓ ${name.padEnd(14)} skill ${skill.toFixed(2)} · ${nPlays} plays (${wins}W) · ${runs.length} runs · ${attempts.length} answers · ${events.length} events`);
   return { plays: plays.length, attempts: attempts.length, events: events.length };
 }
 

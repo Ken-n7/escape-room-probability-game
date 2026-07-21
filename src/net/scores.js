@@ -15,22 +15,25 @@ export async function submitRun({ roomScores, totalScore, bestTime }) {
   return { ok: true };
 }
 
-// Fastest time per player (ascending). Reads the owner-permission view, so it
-// spans every player while exposing only username + best time.
-export async function fetchSpeedLeaderboard(limit = 25) {
-  const { data, error } = await supabase
-    .from('speed_leaderboard').select('*')
-    .order('best_time', { ascending: true }).limit(limit);
-  if (error) { console.warn('[scores] speed board failed:', error.message); return []; }
-  return data ?? [];
+// Start of the current ISO week (Monday 00:00, local) as an ISO string — the
+// cutoff for the weekly board. null window means all-time.
+function weekStartISO() {
+  const d = new Date();
+  const mondayOffset = (d.getDay() + 6) % 7; // Sun=6 … Mon=0
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - mondayOffset);
+  return d.toISOString();
 }
 
-// Highest accuracy per player (descending).
-export async function fetchAccuracyLeaderboard(limit = 25) {
-  const { data, error } = await supabase
-    .from('accuracy_leaderboard').select('*')
-    .order('top_score', { ascending: false }).order('runs', { ascending: false }).limit(limit);
-  if (error) { console.warn('[scores] accuracy board failed:', error.message); return []; }
+// Read one leaderboard. `board` ∈ 'escape'|'speed'|'accuracy'; `window` ∈
+// 'all'|'week'. Calls the matching SECURITY DEFINER function, which spans every
+// player while exposing only a username + one metric. Returns raw rows; the
+// caller sorts/limits per board.
+const LB_FN = { escape: 'lb_escape', speed: 'lb_speed', accuracy: 'lb_accuracy' };
+export async function fetchLeaderboard(board = 'escape', window = 'all') {
+  const p_since = window === 'week' ? weekStartISO() : null;
+  const { data, error } = await supabase.rpc(LB_FN[board] ?? 'lb_escape', { p_since });
+  if (error) { console.warn(`[scores] ${board} board failed:`, error.message); return []; }
   return data ?? [];
 }
 
