@@ -17,6 +17,14 @@ let _tab = 'overview';
 let _onBack = null;
 let _loading = false;
 let _drill = null;       // null | { player } | { player, playId } — drill-down view
+let _keyBound = false;   // Escape handler bound once, guarded across remounts
+
+// Per-table interactive state (search box text + sorted column).
+const _query = { players: '', items: '' };
+const _sort  = {
+  players: { key: 'wins',     dir: -1 },   // default: most wins first
+  items:   { key: 'firstAcc', dir:  1 },   // default: hardest (lowest first-try) first
+};
 
 // ── small helpers ──────────────────────────────────────────────────────────────
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -59,30 +67,61 @@ function sparkChart(buckets) {
   return `<div class="spark">${buckets.map(b => `<div class="spark-bar" style="height:${Math.round(b.value / max * 100)}%" title="${b.label}: ${b.value} plays"></div>`).join('')}</div>
     <div class="spark-labels">${buckets.map(b => `<span>${b.label}</span>`).join('')}</div>`;
 }
-const statCard = (value, label, sub = '') =>
-  `<div class="stat-card"><div class="stat-value">${value}</div><div class="stat-label">${label}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div>`;
-const emptyCard = msg => `<div class="dash-empty">${esc(msg)}</div>`;
+const statCard = (value, label, sub = '', accent = '') =>
+  `<div class="stat-card${accent ? ' accent-' + accent : ''}"><div class="stat-value">${value}</div><div class="stat-label">${label}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div>`;
+const emptyCard = (msg, emoji = '📊') => `<div class="dash-empty"><span class="emoji">${emoji}</span>${esc(msg)}</div>`;
+const skeleton = () => `<div class="skel-grid">${'<div class="skel skel-card"></div>'.repeat(4)}</div><div class="skel skel-row"></div>`;
+
+// ── sortable tables + search (client-side, shared by Players & Items) ───────────
+const searchBox = (tab, ph) =>
+  `<div class="dash-search"><input type="text" class="dash-search-input" data-search-tab="${tab}" placeholder="${esc(ph)}" value="${esc(_query[tab])}"></div>`;
+
+// Render a sortable <th>. `num` right-aligns; the arrow reflects current sort.
+function th(tab, key, label, cls = '') {
+  const s = _sort[tab], on = s.key === key;
+  const ind = on ? (s.dir === -1 ? '▾' : '▴') : '↕';
+  return `<th class="sortable${cls ? ' ' + cls : ''}${on ? ' sorted' : ''}" data-sort="${key}" data-sort-tab="${tab}">${esc(label)}<span class="sort-ind">${ind}</span></th>`;
+}
+function applySort(rows, { key, dir }) {
+  return rows.slice().sort((a, b) => {
+    const x = a[key], y = b[key];
+    if (typeof x === 'string' || typeof y === 'string') return String(x ?? '').localeCompare(String(y ?? '')) * dir;
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;           // nulls always sink, regardless of direction
+    if (y == null) return -1;
+    return (x - y) * dir;
+  });
+}
+// Hide table rows whose data-search text doesn't contain the query. No re-render.
+function applyFilter(tab) {
+  const q = (_query[tab] || '').trim().toLowerCase();
+  document.querySelectorAll('#dash-body .dash-table tbody tr[data-search]').forEach(tr => {
+    tr.classList.toggle('filtered-out', !!q && !(tr.dataset.search || '').includes(q));
+  });
+}
 
 // ── shell ────────────────────────────────────────────────────────────────────
 export async function mountDashboard({ onBack } = {}) {
   _onBack = onBack;
   const root = document.getElementById('dash-root');
   root.innerHTML = `
-    <div class="dash-header">
-      <div>
-        <div class="dash-title">Class Dashboard</div>
-        <div class="dash-sub" id="dash-sub">Loading…</div>
+    <div class="dash-topbar">
+      <div class="dash-header">
+        <div>
+          <div class="dash-title">Class Dashboard</div>
+          <div class="dash-sub" id="dash-sub">Loading…</div>
+        </div>
+        <div class="dash-actions">
+          <button class="dash-btn" id="dash-refresh" type="button">↻ Refresh</button>
+          <button class="dash-btn" id="dash-export" type="button">⬇ Export CSV</button>
+          <button class="dash-btn primary" id="dash-back" type="button">← Back to game</button>
+        </div>
       </div>
-      <div class="dash-actions">
-        <button class="dash-btn" id="dash-refresh" type="button">↻ Refresh</button>
-        <button class="dash-btn" id="dash-export" type="button">⬇ Export CSV</button>
-        <button class="dash-btn primary" id="dash-back" type="button">← Back to game</button>
+      <div class="dash-tabs">
+        ${TABS.map(t => `<button class="dash-tab${t.id === _tab ? ' active' : ''}" data-tab="${t.id}" type="button">${t.label}</button>`).join('')}
       </div>
     </div>
-    <div class="dash-tabs">
-      ${TABS.map(t => `<button class="dash-tab${t.id === _tab ? ' active' : ''}" data-tab="${t.id}" type="button">${t.label}</button>`).join('')}
-    </div>
-    <div id="dash-body"><div class="dash-loading">Loading data…</div></div>`;
+    <div id="dash-body">${skeleton()}</div>`;
 
   root.querySelector('#dash-back').onclick    = () => _onBack?.();
   root.querySelector('#dash-refresh').onclick = () => refresh();
@@ -96,9 +135,17 @@ export async function mountDashboard({ onBack } = {}) {
     };
   });
 
-  // Delegated clicks for drill-down (rows + breadcrumbs). #dash-body persists
-  // across renders, so one listener handles every rebuilt view.
-  root.querySelector('#dash-body').addEventListener('click', e => {
+  // Delegated clicks for sort headers + drill-down (rows + breadcrumbs).
+  // #dash-body persists across renders, so one listener handles every rebuilt view.
+  const dashBody = root.querySelector('#dash-body');
+  dashBody.addEventListener('click', e => {
+    const sortTh = e.target.closest('[data-sort]');
+    if (sortTh) {
+      const tab = sortTh.dataset.sortTab, key = sortTh.dataset.sort, s = _sort[tab];
+      if (s.key === key) s.dir = -s.dir;                       // toggle direction
+      else { s.key = key; s.dir = (key === 'u' || key === 'diff' || key === 'qid') ? 1 : -1; }
+      render(); return;
+    }
     const back = e.target.closest('[data-back]');
     if (back) { _drill = back.dataset.back === 'players' ? null : { player: _drill?.player }; render(); return; }
     const run = e.target.closest('[data-run]');
@@ -107,17 +154,44 @@ export async function mountDashboard({ onBack } = {}) {
     if (pl) { _drill = { player: pl.dataset.player }; render(); return; }
   });
 
+  // Live search — filters visible rows without a full re-render (keeps focus).
+  dashBody.addEventListener('input', e => {
+    const inp = e.target.closest('.dash-search-input');
+    if (!inp) return;
+    _query[inp.dataset.searchTab] = inp.value;
+    applyFilter(inp.dataset.searchTab);
+  });
+
+  // Escape steps back out of a drill-down, then leaves the dashboard.
+  if (!_keyBound) {
+    _keyBound = true;
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      const admin = document.getElementById('s-admin');
+      if (!admin || admin.classList.contains('hidden')) return;   // only while dashboard is visible
+      if (_drill?.playId)      { _drill = { player: _drill.player }; render(); }
+      else if (_drill?.player) { _drill = null; render(); }
+      else                     { _onBack?.(); }
+    });
+  }
+
   if (_data) render(); else await refresh();
 }
 
 async function refresh() {
   if (_loading) return;
   _loading = true;
+  const btn = document.getElementById('dash-refresh');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> Refreshing…'; }
   const body = document.getElementById('dash-body');
-  if (body) body.innerHTML = '<div class="dash-loading">Loading data…</div>';
-  const [plays, attempts, events] = await Promise.all([fetchAllPlays(), fetchAllAttempts(), fetchAllEvents()]);
-  _data = { plays, attempts, events };
-  _loading = false;
+  if (body) body.innerHTML = skeleton();
+  try {
+    const [plays, attempts, events] = await Promise.all([fetchAllPlays(), fetchAllAttempts(), fetchAllEvents()]);
+    _data = { plays, attempts, events };
+  } finally {
+    _loading = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = '↻ Refresh'; }
+  }
   render();
 }
 
@@ -140,12 +214,15 @@ function render() {
     : _tab === 'items'  ? renderItems()
     : _tab === 'players' ? renderPlayers()
     : renderBehavior();
+
+  // Restore the active search filter after any full-body rebuild (e.g. re-sort).
+  if (_tab === 'players' || _tab === 'items') applyFilter(_tab);
 }
 
 // ── OVERVIEW ─────────────────────────────────────────────────────────────────
 function renderOverview() {
   const plays = _data.plays;
-  if (!plays.length) return emptyCard('No plays recorded yet. Play a run (while signed in) to see data here.');
+  if (!plays.length) return emptyCard('No plays recorded yet. Play a run (while signed in) to see data here.', '👻');
 
   const finished = plays.filter(p => p.outcome !== 'in_progress');
   const wins   = plays.filter(p => p.outcome === 'won').length;
@@ -166,10 +243,10 @@ function renderOverview() {
 
   return `
     <div class="dash-grid">
-      ${statCard(plays.length, 'Total plays', `${players} unique player${players === 1 ? '' : 's'}`)}
-      ${statCard(pct(wins, finished.length) + '%', 'Win rate', `${wins} won of ${finished.length} finished`)}
+      ${statCard(plays.length, 'Total plays', `${players} unique player${players === 1 ? '' : 's'}`, 'blue')}
+      ${statCard(pct(wins, finished.length) + '%', 'Win rate', `${wins} won of ${finished.length} finished`, 'green')}
       ${statCard(avgDur == null ? '—' : fmtTime(avgDur), 'Avg escape time', 'across winning runs')}
-      ${statCard(losses, 'Caught by ghost', `${aband} abandoned`)}
+      ${statCard(losses, 'Caught by ghost', `${aband} abandoned`, 'red')}
     </div>
     <div class="dash-2col">
       <div class="card"><h3>Completion funnel</h3>${funnelRows(funnel)}
@@ -214,18 +291,20 @@ function itemStats() {
 }
 
 function renderItems() {
-  if (!_data.attempts.length) return emptyCard('No answers recorded yet.');
-  const rows = itemStats();
-  const hardest = rows.slice(0, 10).map(r => ({ label: `Q ${r.qid}`, value: r.firstAcc, display: r.firstAcc + '%' }));
+  if (!_data.attempts.length) return emptyCard('No answers recorded yet.', '📝');
+  const all = itemStats();
+  const rows = applySort(all, _sort.items);
+  const hardest = all.slice().sort((a, b) => a.firstAcc - b.firstAcc)
+    .slice(0, 10).map(r => ({ label: `Q ${r.qid}`, value: r.firstAcc, display: r.firstAcc + '%' }));
 
   const table = `
     <div class="dash-table-wrap"><table class="dash-table">
       <thead><tr>
-        <th>Q</th><th>Diff</th><th class="wide">Question</th>
-        <th class="num">Attempts</th><th class="num">First-try</th><th class="num">Avg time</th><th>Most-picked wrong answer</th>
+        ${th('items', 'qid', 'Q')}${th('items', 'diff', 'Diff')}<th class="wide">Question</th>
+        ${th('items', 'n', 'Attempts', 'num')}${th('items', 'firstAcc', 'First-try', 'num')}${th('items', 'avgTime', 'Avg time', 'num')}<th>Most-picked wrong answer</th>
       </tr></thead>
       <tbody>${rows.map(r => `
-        <tr>
+        <tr data-search="${esc((r.qid + ' ' + r.text).toLowerCase())}">
           <td>${esc(r.qid)}</td><td>${esc(r.diff)}</td>
           <td class="wide">${esc(r.text)}</td>
           <td class="num">${r.n}</td>
@@ -238,8 +317,9 @@ function renderItems() {
   return `
     <div class="card"><h3>Hardest questions (lowest first-try accuracy)</h3>${barRows(hardest, { colorByValue: true })}
       <div class="card-note">First-try accuracy = % who got it right on their first attempt.</div></div>
-    <div class="card"><h3>All questions · item analysis</h3>${table}
-      <div class="card-note">The "most-picked wrong answer" column reveals the common misconception per item.</div></div>`;
+    <div class="card">
+      <div class="card-toolbar"><h3>All questions · item analysis</h3>${searchBox('items', 'Search questions…')}</div>${table}
+      <div class="card-note">Click a column header to sort. The "most-picked wrong answer" column reveals the common misconception per item.</div></div>`;
 }
 
 // ── PLAYERS ──────────────────────────────────────────────────────────────────
@@ -265,18 +345,19 @@ function playerStats() {
 }
 
 function renderPlayers() {
-  if (!_data.plays.length) return emptyCard('No players have played yet.');
-  const rows = playerStats();
+  if (!_data.plays.length) return emptyCard('No players have played yet.', '🎮');
+  const rows = applySort(playerStats(), _sort.players);
   return `
-    <div class="card"><h3>Per-player report card</h3>
+    <div class="card">
+    <div class="card-toolbar"><h3>Per-player report card</h3>${searchBox('players', 'Search players…')}</div>
     <div class="dash-table-wrap"><table class="dash-table">
       <thead><tr>
-        <th>Player</th><th class="num">Plays</th><th class="num">Wins</th>
-        <th class="num">Best score</th><th class="num">Best time</th>
-        <th class="num">Accuracy</th><th class="num">Avg tries→correct</th>
+        ${th('players', 'u', 'Player')}${th('players', 'plays', 'Plays', 'num')}${th('players', 'wins', 'Wins', 'num')}
+        ${th('players', 'best', 'Best score', 'num')}${th('players', 'bestTime', 'Best time', 'num')}
+        ${th('players', 'acc', 'Accuracy', 'num')}${th('players', 'avgAtt', 'Avg tries→correct', 'num')}
       </tr></thead>
       <tbody>${rows.map(r => `
-        <tr class="row-link" data-player="${esc(r.u)}">
+        <tr class="row-link" data-player="${esc(r.u)}" data-search="${esc(r.u.toLowerCase())}">
           <td>${esc(r.u)} <span class="chev">›</span></td>
           <td class="num">${r.plays}</td>
           <td class="num">${r.wins}</td>
@@ -286,7 +367,7 @@ function renderPlayers() {
           <td class="num">${r.avgAtt ?? '—'}</td>
         </tr>`).join('')}</tbody>
     </table></div>
-    <div class="card-note">Click a player to see their run history. Accuracy = correct ÷ all answers; avg tries→correct = attempts a right answer takes.</div></div>`;
+    <div class="card-note">Click a player to see their run history, or a column header to sort. Accuracy = correct ÷ all answers; avg tries→correct = attempts a right answer takes.</div></div>`;
 }
 
 // ── PLAYER DETAIL (drill-down: one player's run history) ────────────────────────
@@ -395,7 +476,7 @@ function renderRunDetail(username, playId) {
 // ── BEHAVIOR ─────────────────────────────────────────────────────────────────
 function renderBehavior() {
   const A = _data.attempts;
-  if (!A.length) return emptyCard('No answers recorded yet.');
+  if (!A.length) return emptyCard('No answers recorded yet.', '📝');
 
   const diffs = ['EASY', 'MODERATE', 'HARD'];
   const accByDiff = diffs.map(d => {
@@ -416,10 +497,10 @@ function renderBehavior() {
 
   return `
     <div class="dash-grid">
-      ${statCard(pct(hintShown, A.length) + '%', 'Answers with a hint shown', `${plearnPlays} P-Learn runs`)}
+      ${statCard(pct(hintShown, A.length) + '%', 'Answers with a hint shown', `${plearnPlays} P-Learn runs`, 'amber')}
       ${statCard(timeouts, 'Question timeouts', 'ran out of time')}
-      ${statCard(deaths, 'Deaths (caught)', 'too many wrong answers')}
-      ${statCard(pct(mobile, _data.plays.length) + '%', 'Plays on mobile', `${_data.plays.length - mobile} on desktop`)}
+      ${statCard(deaths, 'Deaths (caught)', 'too many wrong answers', 'red')}
+      ${statCard(pct(mobile, _data.plays.length) + '%', 'Plays on mobile', `${_data.plays.length - mobile} on desktop`, 'blue')}
     </div>
     <div class="dash-2col">
       <div class="card"><h3>First-try accuracy by difficulty</h3>${barRows(accByDiff, { colorByValue: true })}</div>
