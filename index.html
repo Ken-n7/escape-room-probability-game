@@ -897,11 +897,6 @@
     .funnel-row { display:grid; grid-template-columns:150px 1fr 92px; align-items:center; gap:10px; margin-bottom:9px; font-size:0.82rem; }
     .funnel-track { background:#eef2f7; border-radius:7px; height:28px; overflow:hidden; }
     .funnel-fill { height:100%; border-radius:7px; background:linear-gradient(90deg,#2563eb,#60a5fa); display:flex; align-items:center; padding-left:10px; color:#fff; font-size:0.76rem; font-weight:650; transition:width .5s cubic-bezier(.4,0,.2,1); }
-    .spark { display:flex; align-items:flex-end; gap:3px; height:84px; }
-    .spark-bar { flex:1; background:#bfdbfe; border-radius:3px 3px 0 0; min-height:2px; position:relative; transition:background .12s; }
-    .spark-bar:hover { background:var(--accent); }
-    .spark-labels { display:flex; gap:3px; margin-top:6px; }
-    .spark-labels span { flex:1; text-align:center; color:var(--faint); font-size:0.62rem; }
     /* KPI icon */
     .stat-card { display:flex; flex-direction:column; }
     .stat-icon { position:absolute; top:13px; right:14px; opacity:.9; color:var(--faint); display:inline-flex; }
@@ -915,46 +910,16 @@
     /* Override the global `canvas{position:fixed}` (WebGL renderer) for chart canvases. */
     .chart-box canvas { max-width:100%; position:static; inset:auto; z-index:auto; }
     .gauge-row .chart-box { flex:0 0 180px; width:180px; }
-    /* Donut + gauge */
-    .donut-wrap { display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
-    .donut { position:relative; width:150px; height:150px; flex:0 0 auto; }
-    .donut-svg { width:100%; height:100%; transform:rotate(0deg); }
-    .donut-seg { transition:opacity .12s; }
-    .donut-seg:hover { opacity:.82; }
-    .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; }
-    .donut-value { font-size:1.5rem; font-weight:750; color:var(--ink); line-height:1; letter-spacing:-.02em; }
-    .donut-label { font-size:0.68rem; color:var(--muted); margin-top:2px; }
-    .chart-legend { display:flex; flex-direction:column; gap:8px; flex:1 1 150px; min-width:140px; }
-    .lg-item { display:flex; align-items:center; gap:9px; font-size:0.82rem; color:var(--ink); }
-    .lg-dot { width:11px; height:11px; border-radius:3px; flex:0 0 auto; }
-    .lg-label { color:var(--muted); }
-    .lg-val { margin-left:auto; font-variant-numeric:tabular-nums; color:var(--ink); font-weight:600; }
+    /* Gauge side-panel (the win-rate readout beside the gauge chart) */
     .gauge-row { display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
-    .gauge { width:130px; height:130px; }
     .gauge-side { display:flex; flex-direction:column; gap:5px; font-size:0.86rem; color:var(--ink); }
     .gs-line b { font-variant-numeric:tabular-nums; }
     .gs-line.muted { color:var(--faint); font-size:0.76rem; margin-top:3px; }
-    /* Area/line trend */
-    .ac-peak { font-size:0.72rem; color:var(--faint); text-align:right; margin-bottom:2px; font-variant-numeric:tabular-nums; }
-    .area-chart { width:100%; height:auto; display:block; }
-    .ac-grid { stroke:var(--line2); stroke-width:1; }
-    .ac-dot { fill:#fff; stroke:var(--accent); stroke-width:2; transition:r .1s; cursor:pointer; }
-    .ac-dot:hover { r:4.5; }
-    .ac-labels { display:flex; margin-top:4px; }
-    .ac-labels span { flex:1; text-align:center; color:var(--faint); font-size:0.62rem; }
     /* Mini stat rows */
     .mini-stats { display:flex; flex-direction:column; }
     .ms-row { display:flex; justify-content:space-between; align-items:center; padding:9px 2px; border-bottom:1px solid var(--line2); font-size:0.86rem; color:var(--muted); }
     .ms-row:last-child { border-bottom:none; }
     .ms-row b { color:var(--ink); font-variant-numeric:tabular-nums; }
-    /* Multi-line learning chart */
-    .line-chart { width:100%; height:auto; display:block; }
-    .lc-legend { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:6px; }
-    .lc-lg { display:flex; align-items:center; gap:6px; font-size:0.76rem; color:var(--muted); }
-    .lc-swatch { width:13px; height:3px; border-radius:2px; }
-    .lc-dot { fill:#fff; stroke-width:2; cursor:pointer; transition:r .1s; }
-    .lc-dot:hover { r:5; }
-    .lc-ylabel, .lc-xlabel { fill:var(--faint); font-size:10px; }
     /* Learning verdict banner */
     .verdict { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; margin-bottom:16px; border:1px solid var(--line); background:var(--card); }
     .verdict .v-text { font-size:0.9rem; color:var(--ink); }
