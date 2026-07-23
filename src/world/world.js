@@ -1570,7 +1570,7 @@ function addCorridorLight(scene, x, z, rotY) {
 }
 
 function addLights(scene) {
-  scene.add(new THREE.AmbientLight(0x242a38, 3.25));
+  scene.add(new THREE.AmbientLight(0x2a3242, 4.3));
 
   LEG1_LIGHT_ZS.forEach(z => addCorridorLight(scene, 0, z, 0));
   LEG2_LIGHT_XS.forEach(x => addCorridorLight(scene, x, (leg2Z0+leg2Z1)/2, Math.PI/2));
