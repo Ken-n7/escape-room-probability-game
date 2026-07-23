@@ -307,16 +307,21 @@ select public.sweep_stale_plays(30);
 -- not per answer) so it dodges the API row cap, and the client turns these rows
 -- into each student's accuracy-over-games curve + an improving/flat/declining
 -- verdict. Admin-only: the whole WHERE collapses to false for non-admins.
+-- (Dropped first: its return columns changed, and CREATE OR REPLACE can't alter
+-- a function's OUT-parameter row type.)
+drop function if exists public.game_accuracy();
 create or replace function public.game_accuracy()
 returns table (
-  user_id      uuid,
-  username     text,
-  play_id      uuid,
-  started_at   timestamptz,
-  outcome      text,
-  total_score  int,
-  best_time    numeric,
-  plearn       boolean,
+  user_id         uuid,
+  username        text,
+  play_id         uuid,
+  started_at      timestamptz,
+  outcome         text,
+  total_score     int,
+  best_time       numeric,
+  rooms_completed int,
+  duration_sec    int,
+  plearn          boolean,
   ft_n         int,   ft_correct   int,   -- first-try, overall
   easy_n       int,   easy_correct int,
   mod_n        int,   mod_correct  int,
@@ -328,7 +333,7 @@ stable
 set search_path = public
 as $$
   select pl.user_id, pr.username, pl.id, pl.started_at, pl.outcome,
-         pl.total_score, pl.best_time, pl.plearn,
+         pl.total_score, pl.best_time, pl.rooms_completed, pl.duration_sec, pl.plearn,
          count(*) filter (where qa.attempt_no = 1)::int,
          count(*) filter (where qa.attempt_no = 1 and qa.is_correct)::int,
          count(*) filter (where qa.attempt_no = 1 and qa.difficulty = 'EASY')::int,
@@ -342,7 +347,114 @@ as $$
   left join public.question_attempts qa on qa.play_id = pl.id
   where public.is_admin()
   group by pl.user_id, pr.username, pl.id, pl.started_at, pl.outcome,
-           pl.total_score, pl.best_time, pl.plearn
+           pl.total_score, pl.best_time, pl.rooms_completed, pl.duration_sec, pl.plearn
   order by pl.user_id, pl.started_at;
 $$;
 grant execute on function public.game_accuracy() to authenticated;
+
+-- ── overview_stats(): KPIs, funnel, outcome split, 14-day trend, totals ───────
+-- One jsonb blob so the Overview tab is a single tiny call instead of pulling
+-- every plays/attempts row. Admin-only (returns null otherwise).
+create or replace function public.overview_stats()
+returns jsonb
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select case when public.is_admin() then jsonb_build_object(
+    'total_plays',    (select count(*) from public.plays),
+    'players',        (select count(distinct user_id) from public.plays),
+    'total_answers',  (select count(*) from public.question_attempts),
+    'won',            (select count(*) from public.plays where outcome = 'won'),
+    'lost',           (select count(*) from public.plays where outcome = 'lost'),
+    'abandoned',      (select count(*) from public.plays where outcome = 'abandoned'),
+    'in_progress',    (select count(*) from public.plays where outcome = 'in_progress'),
+    'finished',       (select count(*) from public.plays where outcome <> 'in_progress'),
+    'avg_win_sec',    (select round(avg(duration_sec)) from public.plays where outcome = 'won'),
+    'reached1',       (select count(*) from public.plays where rooms_completed >= 1),
+    'reached2',       (select count(*) from public.plays where rooms_completed >= 2),
+    'reached3',       (select count(*) from public.plays where rooms_completed >= 3),
+    'by_day',         (select coalesce(jsonb_agg(jsonb_build_object('d', d, 'n', n) order by d), '[]'::jsonb)
+                       from ( select started_at::date as d, count(*) as n
+                              from public.plays
+                              where started_at >= (now()::date - interval '13 days')
+                              group by started_at::date ) t)
+  ) end;
+$$;
+grant execute on function public.overview_stats() to authenticated;
+
+-- ── item_stats(): per-question analysis (attempts, first-try acc, top wrong) ──
+create or replace function public.item_stats()
+returns table (
+  qid           text,
+  question_text text,
+  difficulty    text,
+  room_id       int,
+  n             int,
+  first_n       int,
+  first_correct int,
+  avg_time_ms   int,
+  top_wrong     text,
+  top_wrong_n   int
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select qa.qid,
+         max(qa.question_text),
+         max(qa.difficulty),
+         max(qa.room_id),
+         count(*)::int,
+         count(*) filter (where qa.attempt_no = 1)::int,
+         count(*) filter (where qa.attempt_no = 1 and qa.is_correct)::int,
+         round(avg(qa.time_ms))::int,
+         (select w.selected_text from public.question_attempts w
+           where w.qid = qa.qid and not w.is_correct and w.selected_text is not null
+           group by w.selected_text order by count(*) desc, w.selected_text limit 1),
+         (select count(*)::int from public.question_attempts w
+           where w.qid = qa.qid and not w.is_correct and w.selected_text is not null
+           group by w.selected_text order by count(*) desc, w.selected_text limit 1)
+  from public.question_attempts qa
+  where public.is_admin()
+  group by qa.qid;
+$$;
+grant execute on function public.item_stats() to authenticated;
+
+-- ── behavior_stats(): difficulty breakdown + friction totals (one jsonb) ──────
+create or replace function public.behavior_stats()
+returns jsonb
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select case when public.is_admin() then jsonb_build_object(
+    'attempts',    (select count(*) from public.question_attempts),
+    'hint_shown',  (select count(*) from public.question_attempts where hint_shown),
+    'timeouts',    (select count(*) from public.events where type = 'question_timeout'),
+    'deaths',      (select count(*) from public.plays where outcome = 'lost'),
+    'mobile',      (select count(*) from public.plays where device = 'mobile'),
+    'total_plays', (select count(*) from public.plays),
+    'plearn',      (select count(*) from public.plays where plearn),
+    'by_diff',     (select coalesce(jsonb_agg(jsonb_build_object(
+                       'difficulty',  difficulty,
+                       'first_n',     first_n,
+                       'first_correct', first_correct,
+                       'correct_n',   correct_n,
+                       'attempt_sum', attempt_sum)), '[]'::jsonb)
+                     from ( select difficulty,
+                              count(*) filter (where attempt_no = 1) as first_n,
+                              count(*) filter (where attempt_no = 1 and is_correct) as first_correct,
+                              count(*) filter (where is_correct) as correct_n,
+                              sum(attempt_no) filter (where is_correct) as attempt_sum
+                            from public.question_attempts
+                            where difficulty is not null
+                            group by difficulty ) d)
+  ) end;
+$$;
+grant execute on function public.behavior_stats() to authenticated;
+
+create index if not exists qa_difficulty_idx on public.question_attempts (difficulty);

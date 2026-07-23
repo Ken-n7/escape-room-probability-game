@@ -25,7 +25,7 @@ import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
 import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut } from './net/auth.js';
-import { submitRun, fetchLeaderboard, fetchAllRuns } from './net/scores.js';
+import { submitRun, fetchLeaderboard } from './net/scores.js';
 import { startPlay, endPlay, hasActivePlay, flushAbandonBeacon, logAttempt, logEvent } from './net/analytics.js';
 import { mountDashboard } from './ui/dashboard.js';
 
