@@ -290,13 +290,26 @@ function updateDoorLocks({ instant = false } = {}) {
       }
       return;
     }
-    const locked  = door.realIdx > 0 && !roomDone[door.realIdx - 1];
+    // Forward gate: rooms 2/3 stay locked until the previous room is cleared.
+    // Seal-behind: once you're inside an unfinished room, its door shuts and
+    // locks behind you — you must solve the room before it opens again.
+    const forwardLock  = door.realIdx > 0 && !roomDone[door.realIdx - 1];
+    const sealedBehind = !roomDone[door.realIdx] && isInsideRoom(door.realIdx);
+    const locked  = forwardLock || sealedBehind;
     const wasOpen = doorIsOpen[i];
     doorIsOpen[i] = !locked;
     door.panel.userData.locked = locked;
-    if (instant) door.group.rotation.y = door.baseTheta + (locked ? 0 : DOOR_OPEN_ANGLE);
-    else if (!wasOpen && !locked) AudioManager.play('randomTone');
+    if (instant) { door.group.rotation.y = door.baseTheta + (locked ? 0 : DOOR_OPEN_ANGLE); return; }
+    if (!wasOpen && !locked) AudioManager.play('randomTone');            // swung open
+    else if (wasOpen && locked && sealedBehind) onSealBehind();          // shut you in
   });
+}
+
+// The door seals the moment you step into an unfinished room: a heavy shut plus
+// a brief warning. Trying to leave then hits the existing locked-door scare.
+function onSealBehind() {
+  AudioManager.play('randomKnock');
+  setPromptOverride('The door seals shut behind you — solve the room to open it.', 2800);
 }
 
 function openDecoyDoor(i) {
@@ -1162,6 +1175,55 @@ function startGame({ transition = false } = {}) {
 }
 
 // ── Story slides ──────────────────────────────────────────────────────────────
+// ── Typewriter ────────────────────────────────────────────────────────────────
+// Reveals HTML into `el` one character at a time. DOM-safe: the full markup is
+// set first, then text nodes are blanked and refilled in order, so <strong>/<em>/
+// <br> formatting stays intact — only the visible text types out. A soft, fast
+// tick plays as it goes. Only one typer runs at a time; starting a new one (or
+// calling finish) completes the previous instantly.
+const TYPE_CPS = 45;                 // characters per second
+let _activeTyper = null;
+function typeInto(el, html) {
+  if (_activeTyper) _activeTyper.finish();       // snap any in-flight line to full
+  el.innerHTML = html;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const parts = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    parts.push({ node: n, text: n.nodeValue.replace(/\s+/g, ' ') });  // collapse like HTML does
+    n.nodeValue = '';
+  }
+  const total = parts.reduce((s, p) => s + p.text.length, 0);
+  let shown = 0, pi = 0, ci = 0, acc = 0, tick = 0, raf = 0, last = performance.now();
+  const ctrl = { done: false };
+
+  const fill = upTo => {
+    while (shown < upTo && pi < parts.length) {
+      const p = parts[pi];
+      if (ci >= p.text.length) { pi++; ci = 0; continue; }
+      p.node.nodeValue += p.text[ci++]; shown++;
+    }
+  };
+  const step = now => {
+    acc += ((now - last) / 1000) * TYPE_CPS; last = now;
+    const target = Math.min(total, Math.floor(acc));
+    if (target > shown) {
+      fill(target);
+      if (++tick % 2 === 0) AudioManager.play('uiClick', { vol: 0.14, rate: 1.9 });
+    }
+    if (shown >= total) { ctrl.done = true; if (_activeTyper === ctrl) _activeTyper = null; return; }
+    raf = requestAnimationFrame(step);
+  };
+  ctrl.finish = () => {
+    cancelAnimationFrame(raf); fill(total); ctrl.done = true;
+    if (_activeTyper === ctrl) _activeTyper = null;
+  };
+  raf = requestAnimationFrame(step);
+  _activeTyper = ctrl;
+  return ctrl;
+}
+// True when a line is still typing — used so "Next" completes it before advancing.
+const isTyping = () => Boolean(_activeTyper) && !_activeTyper.done;
+
 const STORY_SLIDES = [
   'The doors sealed the moment you stepped inside. This school was abandoned years ago — yet something here is still awake, and it has waited a long time for someone like you.',
   'There is only one way out, and it is locked. The code that opens it lies scattered through these rooms, buried inside problems of chance and probability. Solve them all, or the door never opens.',
@@ -1172,7 +1234,7 @@ const STORY_SLIDES = [
 let storyIdx = 0;
 
 function renderStory() {
-  $('story-text').textContent = STORY_SLIDES[storyIdx];
+  typeInto($('story-text'), STORY_SLIDES[storyIdx]);
   const backBtn = $('btn-story-back');
   const nextBtn = $('btn-story-next');
   if (backBtn) backBtn.disabled = storyIdx === 0;
@@ -1188,6 +1250,7 @@ function renderStory() {
 }
 
 window.storyStep = function(dir) {
+  if (dir > 0 && isTyping()) { _activeTyper.finish(); return; }   // first Next completes the line
   AudioManager.play('pageTurn');
   if (storyIdx >= STORY_SLIDES.length - 1 && dir > 0) { showScreen('ready'); return; }
   storyIdx = Math.max(0, Math.min(STORY_SLIDES.length - 1, storyIdx + dir));
@@ -1286,7 +1349,7 @@ function renderPlearn() {
   const slide = PLEARN_SLIDES[plearnIdx];
   $('plearn-slide-label').textContent = slide.label;
   $('plearn-title').textContent       = slide.title;
-  $('plearn-body').innerHTML          = slide.body;
+  typeInto($('plearn-body'), slide.body);
 
   const noteEl = $('plearn-note');
   if (slide.note) { noteEl.style.display = 'block'; noteEl.textContent = slide.note; }
@@ -1308,6 +1371,7 @@ function renderPlearn() {
 }
 
 window.plearnStep = function(dir) {
+  if (dir > 0 && isTyping()) { _activeTyper.finish(); return; }   // first Next completes the line
   AudioManager.play('pageTurn');
   if (dir > 0 && plearnIdx === PLEARN_SLIDES.length - 1) {
     setMenuCamera();
@@ -1324,6 +1388,8 @@ function goToPlearn() {
   setMenuCamera();
   renderPlearn();
   showScreen('plearn');
+  // Click anywhere (outside the nav buttons) completes the typing line.
+  screens.plearn.onclick = e => { if (!e.target.closest('button') && isTyping()) _activeTyper.finish(); };
 }
 
 function updateFlickerLights(t, dt) {
@@ -1479,7 +1545,7 @@ function animate() {
 
   updateThreatAudio(dt);
   updateAmbientScares(dt);
-  if (gState.current === S.PLAYING) { updateVacantRoomSounds(); updateDecoyTraps(); }
+  if (gState.current === S.PLAYING) { updateVacantRoomSounds(); updateDecoyTraps(); updateDoorLocks(); }
 
   if (gState.current === S.CHASE) { updateChase(dt); renderer.render(scene, camera); return; }
   if (gState.current !== S.PLAYING) { renderer.render(scene, camera); return; }

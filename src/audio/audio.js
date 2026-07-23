@@ -132,14 +132,14 @@ export const AudioManager = {
   },
 
   /** Fire-and-forget one-shot sound. */
-  play(name) {
+  play(name, opts) {
     const buf = _bufs[name];
     const ac  = ctx();
     if (ac.state === 'suspended') ac.resume().catch(() => {});
     if (!buf) {
       if (SOUNDS[name]?.src) {
         this.preload()
-          .then(() => { if (_bufs[name]) this.play(name); })
+          .then(() => { if (_bufs[name]) this.play(name, opts); })
           .catch(err => console.warn(`Audio "${name}" could not be played.`, err));
       }
       return;
@@ -148,7 +148,8 @@ export const AudioManager = {
     const src = ac.createBufferSource();
     const g   = ac.createGain();
     src.buffer   = buf;
-    g.gain.value = (SOUNDS[name]?.vol ?? 1) * _catVol(name);
+    g.gain.value = (SOUNDS[name]?.vol ?? 1) * _catVol(name) * (opts?.vol ?? 1);
+    if (opts?.rate) src.playbackRate.value = opts.rate;
     src.connect(g).connect(masterGain());
     src.start();
   },
