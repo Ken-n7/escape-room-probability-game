@@ -26,7 +26,7 @@ import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase
 import { preloadAssets } from './loaders/preload.js';
 import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut } from './net/auth.js';
 import { submitRun, fetchLeaderboard, fetchAllRuns } from './net/scores.js';
-import { startPlay, endPlay, hasActivePlay, logAttempt, logEvent } from './net/analytics.js';
+import { startPlay, endPlay, hasActivePlay, flushAbandonBeacon, logAttempt, logEvent } from './net/analytics.js';
 import { mountDashboard } from './ui/dashboard.js';
 
 // Stable per-question id ("roomId.bankIndex", e.g. "1.4") for analytics/item
@@ -1529,7 +1529,18 @@ function updateVertical(dt) {
 }
 
 let _tabHidden = false;
-document.addEventListener('visibilitychange', () => { _tabHidden = document.hidden; });
+// Checkpoint an active run as abandoned whenever the page is hidden or torn down,
+// so it can't get stuck at 'in_progress' (tab close, refresh, mobile app-switch).
+// flushAbandonBeacon keeps _play alive, so if the player returns and finishes, a
+// real endPlay() still overwrites the row with the true outcome.
+function _checkpointRun() {
+  if (hasActivePlay()) flushAbandonBeacon(roomDone.filter(Boolean).length);
+}
+document.addEventListener('visibilitychange', () => {
+  _tabHidden = document.hidden;
+  if (document.hidden) _checkpointRun();
+});
+window.addEventListener('pagehide', _checkpointRun);
 
 function animate() {
   requestAnimationFrame(animate);

@@ -2,7 +2,7 @@ import { supabase } from './supabase.js';
 
 // Shared, mutable auth snapshot — import by reference and read `authState.user`
 // / `authState.profile` anywhere. Populated by initAuth() and kept in sync.
-export const authState = { user: null, profile: null };
+export const authState = { user: null, profile: null, accessToken: null };
 
 // Raised for our own, non-Supabase failure cases so the UI can map them to a
 // friendly message. `code` is a stable string; `message` is a sane fallback.
@@ -31,10 +31,12 @@ export function onSignedOut(cb) { _onSignedOut = cb; }
 export async function initAuth() {
   const { data } = await supabase.auth.getSession();
   authState.user = data.session?.user ?? null;
+  authState.accessToken = data.session?.access_token ?? null;
   if (authState.user) await loadProfile();
 
   supabase.auth.onAuthStateChange((event, session) => {
     authState.user = session?.user ?? null;
+    authState.accessToken = session?.access_token ?? null;   // kept fresh for the unload beacon
     if (!authState.user) {
       authState.profile = null;
       if (event === 'SIGNED_OUT') _onSignedOut?.();

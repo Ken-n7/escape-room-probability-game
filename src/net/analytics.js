@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase.js';
 import { authState } from './auth.js';
 
 // ── Lightweight gameplay analytics ────────────────────────────────────────────
@@ -43,6 +43,36 @@ export function endPlay({ outcome, roomsCompleted = 0, totalScore = null, bestTi
 
 export const hasActivePlay = () => Boolean(_play);
 export const currentPlayId = () => _play?.id ?? null;
+
+// Checkpoint the active run as 'abandoned' during page teardown / tab-hide, using
+// a keepalive PATCH that survives the page unloading (a normal fire-and-forget
+// request would be killed). This is why runs stopped going stuck at 'in_progress'
+// when a player closes the tab or app-switches on mobile. It deliberately does
+// NOT clear _play: if the game resumes, a real endPlay()/abandon overwrites this
+// row's outcome, so the checkpoint only stands if the page actually dies.
+export function flushAbandonBeacon(roomsCompleted = 0) {
+  if (!_play || !authState.accessToken) return;
+  const play = _play;
+  const body = JSON.stringify({
+    outcome:      'abandoned',
+    ended_at:     new Date().toISOString(),
+    duration_sec: Math.round((Date.now() - play.startedAt) / 1000),
+    rooms_completed: roomsCompleted,
+  });
+  try {
+    fetch(`${SUPABASE_URL}/rest/v1/plays?id=eq.${play.id}`, {
+      method: 'PATCH',
+      keepalive: true,
+      headers: {
+        apikey:          SUPABASE_ANON_KEY,
+        Authorization:   `Bearer ${authState.accessToken}`,
+        'Content-Type':  'application/json',
+        Prefer:          'return=minimal',
+      },
+      body,
+    }).catch(() => {});
+  } catch { /* teardown — nothing we can do */ }
+}
 
 // One answered question (right or wrong). See question_attempts columns.
 export function logAttempt(a) {
