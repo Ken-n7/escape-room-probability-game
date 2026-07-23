@@ -1017,6 +1017,12 @@ function leaveQuestion() {
 
 function closeQuestion() {
   clearQuestionTimers();
+  // Strip any red/green feedback so a button can't carry a stale colour into the
+  // next question — colours only ever appear on the choice the player picks.
+  document.querySelectorAll('.choice-btn').forEach(b => {
+    b.classList.remove('correct', 'wrong');
+    b.disabled = true;
+  });
   showHUD();
   activeRoomIdx  = -1;
   gState.current = S.PLAYING;
