@@ -71,9 +71,8 @@
       align-items:center;
       transition:opacity 0.55s ease;
     }
-    /* Plain black + bar only. */
+    /* Just the wordmark + bar. */
     #loading-content .case-stamp,
-    #loading-content h1,
     #loading-flavor,
     #loading-status { display:none !important; }
     #loading-content {
@@ -83,12 +82,13 @@
     }
     #loading-content .case-stamp { margin-bottom:1.1rem; }
     #loading-content h1 {
-      font-family:Impact, Haettenschweiler, 'Arial Black', sans-serif;
-      font-size:clamp(3rem,9vw,6rem);
-      line-height:.88; color:var(--bone);
-      text-shadow:0 3px 0 #1b0708, 0 0 40px rgba(181,31,35,.85);
-      animation:flicker .09s infinite;
-      margin:0 0 1.4rem;
+      font-family:'HorrorScratch', Impact, 'Arial Black', sans-serif;
+      font-size:clamp(4rem,14vw,9rem);
+      line-height:.9; color:var(--bone);
+      text-transform:lowercase; letter-spacing:.02em;
+      text-shadow:0 0 42px rgba(181,31,35,.7);
+      animation:flicker .12s infinite;
+      margin:0 0 1.8rem;
     }
     #loading-flavor {
       font-family:monospace; font-size:clamp(0.7rem,1.6vw,0.88rem);
