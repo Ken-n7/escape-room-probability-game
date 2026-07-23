@@ -1,0 +1,12 @@
+/* Entry stylesheet — Vite bundles these @imports, in order, into one hashed
+   file. ORDER MATTERS: later partials (theme, pregame) deliberately override
+   earlier screen rules, so keep this sequence identical to the source order. */
+@import './base.css';
+@import './screens.css';
+@import './hud.css';
+@import './account.css';
+@import './dashboard.css';
+@import './endings.css';
+@import './theme.css';
+@import './pregame.css';
+@import './misc.css';

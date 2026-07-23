@@ -1,0 +1,439 @@
+    /* ── SCENE-BACKED PRE-GAME FLOW ─────────────────────────────────────── */
+    #s-menu,
+    #s-story,
+    #s-plearn,
+    #s-ready,
+    #s-options,
+    #s-pause,
+    #s-settings,
+    #s-about {
+      background:transparent;
+    }
+    #s-menu::before,
+    #s-story::before,
+    #s-plearn::before,
+    #s-ready::before,
+    #s-options::before,
+    #s-pause::before,
+    #s-settings::before,
+    #s-about::before {
+      content:'';
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      z-index:0;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.74), rgba(0,0,0,.22) 46%, rgba(0,0,0,.62)),
+        radial-gradient(circle at 18% 58%, transparent 0 30%, rgba(0,0,0,.72) 100%);
+    }
+
+    #s-menu {
+      align-items:flex-end;
+      justify-content:flex-end;
+      padding:clamp(22px, 4vw, 42px);
+    }
+    #menu-content {
+      position:fixed;
+      right:clamp(22px, 4vw, 42px);
+      bottom:clamp(22px, 4vw, 42px);
+      width:min(310px, calc(100vw - 44px));
+      align-items:stretch;
+      gap:10px;
+    }
+    #menu-content::before {
+      content:'ROOM 308';
+      color:var(--amber);
+      font-family:monospace;
+      font-size:.74rem;
+      border-bottom:1px solid var(--line);
+      padding-bottom:10px;
+      margin-bottom:6px;
+      text-align:right;
+    }
+    .menu-btn {
+      min-height:50px;
+      justify-content:space-between;
+      padding:0 18px;
+      background:rgba(5,7,8,.76);
+      backdrop-filter:blur(2px);
+    }
+    #menu-player-name {
+      top:auto;
+      bottom:18px;
+      left:18px;
+    }
+
+    #s-story {
+      align-items:flex-start;
+      justify-content:center;
+      padding-left:clamp(24px, 7vw, 92px);
+      padding-right:clamp(140px, 18vw, 280px);
+    }
+    #story-text {
+      width:min(700px, 62vw);
+      background:rgba(5,7,8,.58);
+      backdrop-filter:blur(2px);
+    }
+    #story-nav {
+      left:clamp(24px, 7vw, 92px);
+      right:auto;
+      bottom:30px;
+    }
+    #story-actions,
+    #plearn-actions {
+      position:fixed;
+      right:28px;
+      bottom:26px;
+      z-index:25;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .story-action-btn {
+      min-width:84px;
+      min-height:42px;
+      border-radius:8px;
+      border:1px solid rgba(231,223,204,.22);
+      background:rgba(0,0,0,.5);
+      color:var(--bone);
+      font-family:monospace;
+      font-size:.86rem;
+      cursor:pointer;
+      transition:background .15s, transform .15s, opacity .15s;
+    }
+    .story-action-btn.primary {
+      border-color:rgba(143,211,189,.42);
+      color:var(--chalk);
+    }
+    .story-action-btn:hover:not(:disabled) {
+      background:rgba(181,31,35,.25);
+      transform:translateY(-1px);
+    }
+    .story-action-btn:disabled {
+      cursor:default;
+      opacity:.36;
+    }
+
+    #s-plearn {
+      align-items:center;
+      justify-content:center;
+      padding:clamp(24px, 6vw, 84px);
+    }
+    #plearn-box {
+      background:rgba(8,10,12,.82);
+      margin:0 auto;
+    }
+    #s-plearn #plearn-nav {
+      position:fixed;
+      left:clamp(24px, 7vw, 92px);
+      bottom:30px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:8px 10px;
+      border:1px solid rgba(231,223,204,.14);
+      background:rgba(0,0,0,.42);
+      gap:10px;
+    }
+
+    #s-ready {
+      align-items:center;
+      justify-content:center;
+    }
+    #ready-content {
+      margin:0;
+      background:rgba(5,7,8,.58);
+      backdrop-filter:blur(2px);
+    }
+
+    @media (max-width: 720px) {
+      .screen { padding:18px; }
+      #title-content {
+        padding-left:0;
+        text-align:left;
+      }
+      #title-content h1 { font-size:3.1rem; }
+      .title-copy { font-size:.95rem; }
+      #title-arrow {
+        width:100%;
+        min-width:0;
+      }
+      #story-text,
+      #plearn-box,
+      #question-box,
+      #settings-box,
+      #about-box {
+        width:94vw;
+        padding:22px;
+      }
+      #choices-grid { grid-template-columns:1fr; }
+      #scaffold-options { grid-template-columns:1fr; }
+      #ready-content h2,
+      #s-win h1,
+      #s-lose h1,
+      #s-pause h1 { font-size:2.25rem; }
+      #hud-options-btn {
+        width:54px;
+        height:54px;
+        right:10px;
+        top:10px;
+        bottom:auto;
+        font-size:1.35rem;
+      }
+      #mobile-controls { display:block; }
+      #interact-prompt { bottom:154px; font-size:1.1rem; padding:10px 24px; }
+      #hud-player { display:none; }
+      #options-box { padding:22px; }
+      #s-menu {
+        align-items:stretch;
+        justify-content:flex-end;
+      }
+      #menu-content {
+        left:18px;
+        right:18px;
+        bottom:22px;
+        width:auto;
+      }
+      #menu-content::before {
+        text-align:left;
+      }
+      #menu-player-name {
+        bottom:auto;
+        top:18px;
+      }
+      #s-story,
+      #s-plearn,
+      #s-ready {
+        align-items:center;
+        justify-content:center;
+        padding:18px;
+      }
+      #story-text {
+        width:94vw;
+        max-width:none;
+        margin-bottom:86px;
+      }
+      #story-nav {
+        left:18px;
+        bottom:22px;
+      }
+      #story-actions,
+      #plearn-actions {
+        right:18px;
+        bottom:18px;
+      }
+      .story-action-btn {
+        min-width:68px;
+      }
+      #ready-content {
+        margin:0;
+      }
+      #s-plearn #plearn-nav {
+        left:18px;
+        bottom:22px;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 520px) {
+      .screen {
+        padding:12px 18px;
+      }
+      #title-content h1 {
+        font-size:3.35rem;
+      }
+      .title-copy {
+        font-size:.9rem;
+        line-height:1.38;
+      }
+      .title-status {
+        margin-top:.85rem;
+      }
+      #title-arrow {
+        height:44px;
+        margin-top:.95rem;
+      }
+      #menu-content {
+        width:min(380px, 84vw);
+      }
+      #story-text {
+        max-height:calc(100svh - 106px);
+        overflow-y:auto;
+        padding:18px 22px;
+        font-size:.92rem;
+        line-height:1.55;
+      }
+      #story-nav,
+      #plearn-nav {
+        bottom:18px;
+      }
+      .nav-back,
+      .nav-fwd {
+        bottom:14px;
+      }
+      #plearn-box,
+      #settings-box,
+      #about-box,
+      #question-box,
+      #code-box {
+        max-height:calc(100svh - 28px);
+        overflow-y:auto;
+        padding:14px 20px;
+      }
+      #plearn-box {
+        width:min(720px, 82vw);
+      }
+      #plearn-slide-label,
+      #question-room-label,
+      #settings-scores h3,
+      .about-section-title {
+        font-size:.68rem;
+      }
+      /* keep the countdown clear of the round exit button */
+      #question-timer { margin-right:46px; }
+      #plearn-title,
+      #settings-box h2,
+      #about-box h2,
+      #code-box h2 {
+        font-size:1.12rem;
+        margin-bottom:8px;
+      }
+      #plearn-body,
+      #about-box p {
+        font-size:.86rem;
+        line-height:1.35;
+      }
+      #plearn-body br {
+        line-height:.85;
+      }
+      #plearn-note {
+        margin-top:8px;
+        padding:8px 10px;
+        font-size:.82rem;
+      }
+      .lesson-nav-btn,
+      .modal-back-btn {
+        min-height:38px;
+        height:38px;
+      }
+      .settings-row {
+        margin-bottom:10px;
+      }
+      #settings-box .settings-row:first-of-type {
+        display:grid;
+        grid-template-columns:1fr 88px;
+        gap:6px 8px;
+        align-items:end;
+      }
+      #settings-box .settings-row:first-of-type label {
+        grid-column:1 / -1;
+      }
+      .settings-row label {
+        margin-bottom:4px;
+      }
+      #settings-name {
+        padding:8px 12px;
+        font-size:.92rem;
+      }
+      #btn-save-name {
+        width:auto;
+        margin-top:0;
+      }
+      #btn-save-name,
+      #btn-reset-progress {
+        min-height:38px;
+        padding:8px 12px;
+      }
+      #settings-scores {
+        margin:12px 0;
+        padding:12px;
+      }
+      #settings-box {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:10px 14px;
+        align-items:start;
+      }
+      #settings-box h2 {
+        grid-column:1 / -1;
+        margin-bottom:0;
+      }
+      #settings-box .settings-row {
+        grid-column:1;
+      }
+      #settings-scores {
+        grid-column:2;
+        grid-row:2 / span 3;
+        margin:0;
+      }
+      #btn-reset-progress,
+      #settings-saved {
+        grid-column:1;
+      }
+      #settings-saved {
+        min-height:0;
+        margin:0;
+      }
+      #btn-settings-back {   /* now the top-right ✕ — keep it out of the grid flow */
+        position:absolute;
+        top:10px;
+        right:12px;
+        margin:0;
+      }
+      .score-row {
+        margin-bottom:5px;
+        font-size:.78rem;
+      }
+      .about-section {
+        margin:10px 0;
+      }
+      .modal-back-btn {
+        position:sticky;
+        bottom:0;
+        width:100%;
+        background:rgba(5,7,8,.94);
+        backdrop-filter:blur(5px);
+        z-index:2;
+      }
+      #options-box {
+        width:min(620px, 88vw);
+        max-height:calc(100svh - 28px);
+        overflow-y:auto;
+        padding:16px 20px;
+      }
+      #options-box h2 {
+        margin:8px 0 12px;
+        font-size:1.75rem;
+      }
+      .options-actions {
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+      }
+      .options-btn {
+        min-height:38px;
+        font-size:.82rem;
+      }
+      #options-confirm {
+        margin-top:10px;
+        padding:10px;
+      }
+      #options-confirm-text {
+        margin-bottom:8px;
+        font-size:.82rem;
+      }
+      .options-confirm-actions {
+        gap:8px;
+      }
+      #ready-content {
+        width:min(460px, 72vw);
+        padding:20px;
+      }
+      #ready-content h2 {
+        font-size:2rem;
+        margin-bottom:1rem;
+      }
+      .ready-btn {
+        min-height:40px;
+        padding:10px;
+      }
+    }
+
