@@ -1,4 +1,4 @@
-import { fetchAllPlays, fetchAllAttempts, fetchAllEvents, fetchGameAccuracy } from '../net/scores.js';
+import { fetchGameAccuracy, fetchOverviewStats, fetchItemStats, fetchBehaviorStats, fetchRunDetail } from '../net/scores.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  ADMIN DASHBOARD — clean, non-game analytics UI. Renders into #dash-root.
@@ -29,7 +29,6 @@ const _sort  = {
 // ── small helpers ──────────────────────────────────────────────────────────────
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
-const uname = r => r.profiles?.username || '—';
 const fmtTime = s => s == null ? '—' : s < 60 ? Math.round(s) + 's' : Math.floor(s / 60) + 'm ' + String(Math.round(s) % 60).padStart(2, '0') + 's';
 const fmtDateTime = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const fmtDay = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
@@ -39,10 +38,8 @@ const OUTCOME = { won: ['good', 'Escaped'], lost: ['bad', 'Caught'], abandoned: 
 const outcomePill = o => { const [c, t] = OUTCOME[o] || ['mid', o]; return `<span class="pill ${c}">${t}</span>`; };
 
 // drill-down data slicing
-const playsForUser   = u => _data.plays.filter(p => uname(p) === u).sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
-const findPlay       = id => _data.plays.find(p => p.id === id);
-const attemptsForPlay = id => _data.attempts.filter(a => a.play_id === id).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-const eventsForPlay  = id => _data.events.filter(e => e.play_id === id).sort((a, b) => new Date(a.at) - new Date(b.at));
+const gameByPlay = id => (_data.games || []).find(g => g.play_id === id);
+const _runCache  = {};   // playId → { attempts, events }, fetched on demand
 
 // ── chart builders (HTML/CSS, no external libs) ─────────────────────────────────
 function barRows(items, { colorByValue = false } = {}) {
@@ -316,8 +313,10 @@ async function refresh() {
   const body = document.getElementById('dash-body');
   if (body) body.innerHTML = skeleton();
   try {
-    const [plays, attempts, events, games] = await Promise.all([fetchAllPlays(), fetchAllAttempts(), fetchAllEvents(), fetchGameAccuracy()]);
-    _data = { plays, attempts, events, games };
+    const [overview, items, behavior, games] = await Promise.all([
+      fetchOverviewStats(), fetchItemStats(), fetchBehaviorStats(), fetchGameAccuracy(),
+    ]);
+    _data = { overview, items, behavior, games };
   } finally {
     _loading = false;
     if (btn) { btn.disabled = false; btn.innerHTML = '↻ Refresh'; }
@@ -331,14 +330,14 @@ function render() {
   if (heading) heading.textContent = _drill?.player || (TABS.find(t => t.id === _tab)?.label ?? 'Overview');
   const sub = document.getElementById('dash-sub');
   if (sub) {
-    const players = new Set(_data.plays.map(uname)).size;
-    sub.textContent = `${players} player${players === 1 ? '' : 's'} · ${_data.plays.length} plays · ${_data.attempts.length} answers logged`;
+    const o = _data.overview || {};
+    sub.textContent = `${o.players || 0} player${o.players === 1 ? '' : 's'} · ${o.total_plays || 0} plays · ${o.total_answers || 0} answers logged`;
   }
   const body = document.getElementById('dash-body');
   if (!body) return;
 
   // Drill-down views take over the body; a tab click clears _drill.
-  if (_drill?.playId) { body.innerHTML = renderRunDetail(_drill.player, _drill.playId); return; }
+  if (_drill?.playId) { renderRunDetailInto(body, _drill.player, _drill.playId); return; }
   if (_drill?.player) { body.innerHTML = renderPlayerDetail(_drill.player); return; }
 
   body.innerHTML =
@@ -353,43 +352,36 @@ function render() {
 
 // ── OVERVIEW ─────────────────────────────────────────────────────────────────
 function renderOverview() {
-  const plays = _data.plays;
-  if (!plays.length) return emptyCard('No plays recorded yet. Play a run (while signed in) to see data here.', '👻');
+  const o = _data.overview;
+  if (!o || !o.total_plays) return emptyCard('No plays recorded yet. Play a run (while signed in) to see data here.', '👻');
 
-  const finished = plays.filter(p => p.outcome !== 'in_progress');
-  const wins   = plays.filter(p => p.outcome === 'won').length;
-  const losses = plays.filter(p => p.outcome === 'lost').length;
-  const aband  = plays.filter(p => p.outcome === 'abandoned').length;
-  const players = new Set(plays.map(uname)).size;
-  const wonPlays = plays.filter(p => p.outcome === 'won');
-  const avgDur = wonPlays.length ? Math.round(wonPlays.reduce((s, p) => s + (p.duration_sec || 0), 0) / wonPlays.length) : null;
-
+  const wins = o.won, losses = o.lost, aband = o.abandoned, inProg = o.in_progress;
+  const finished = o.finished, avgDur = o.avg_win_sec;
+  const winRate = pct(wins, finished);
   const funnel = [
-    { label: 'Started',        value: plays.length },
-    { label: 'Cleared Room 1', value: plays.filter(p => p.rooms_completed >= 1).length },
-    { label: 'Cleared Room 2', value: plays.filter(p => p.rooms_completed >= 2).length },
-    { label: 'Cleared Room 3', value: plays.filter(p => p.rooms_completed >= 3).length },
+    { label: 'Started',        value: o.total_plays },
+    { label: 'Cleared Room 1', value: o.reached1 },
+    { label: 'Cleared Room 2', value: o.reached2 },
+    { label: 'Cleared Room 3', value: o.reached3 },
     { label: 'Escaped',        value: wins },
   ];
-  const days = playsByDay(plays, 14);
-  const inProg = plays.filter(p => p.outcome === 'in_progress').length;
+  const days = daysTrend(o.by_day || [], 14);
   const outcomes = [
     { label: 'Escaped',     value: wins,   color: C_GOOD },
     { label: 'Caught',      value: losses, color: C_BAD },
     { label: 'Quit',        value: aband,  color: C_MID },
     { label: 'In progress', value: inProg, color: C_GREY },
   ];
-  const winRate = pct(wins, finished.length);
 
   return `
     <div class="dash-grid">
-      ${statCard(plays.length, 'Total plays', `${players} unique player${players === 1 ? '' : 's'}`, 'blue', '🎮')}
-      ${statCard(winRate + '%', 'Win rate', `${wins} won of ${finished.length} finished`, 'green', '🏆')}
+      ${statCard(o.total_plays, 'Total plays', `${o.players} unique player${o.players === 1 ? '' : 's'}`, 'blue', '🎮')}
+      ${statCard(winRate + '%', 'Win rate', `${wins} won of ${finished} finished`, 'green', '🏆')}
       ${statCard(avgDur == null ? '—' : fmtTime(avgDur), 'Avg escape time', 'across winning runs', '', '⏱')}
       ${statCard(losses, 'Caught by ghost', `${aband} abandoned`, 'red', '👻')}
     </div>
     <div class="dash-2col">
-      <div class="card"><h3>How runs end</h3>${donutChart(outcomes, { centerValue: plays.length, centerLabel: 'runs' })}
+      <div class="card"><h3>How runs end</h3>${donutChart(outcomes, { centerValue: o.total_plays, centerLabel: 'runs' })}
         <div class="card-note">Every run's final outcome. Center = total runs.</div></div>
       <div class="card"><h3>Win rate</h3>
         <div class="gauge-row">${gaugeChart(winRate, { label: 'escaped', color: C_GOOD })}
@@ -397,7 +389,7 @@ function renderOverview() {
             <div class="gs-line"><b>${wins}</b> escaped</div>
             <div class="gs-line"><b>${losses}</b> caught</div>
             <div class="gs-line"><b>${aband}</b> quit</div>
-            <div class="gs-line muted">of ${finished.length} finished runs</div>
+            <div class="gs-line muted">of ${finished} finished runs</div>
           </div></div></div>
     </div>
     <div class="card"><h3>Completion funnel</h3>${funnelRows(funnel)}
@@ -405,43 +397,34 @@ function renderOverview() {
     <div class="card"><h3>Plays over the last 14 days</h3>${areaChart(days, { unit: '' })}</div>`;
 }
 
-function playsByDay(plays, days = 14) {
+// Turn the server's sparse [{d,n}] day counts into a dense 14-day series.
+function daysTrend(byDay, days = 14) {
+  const counts = new Map(byDay.map(r => [String(r.d).slice(0, 10), r.n]));
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const keys = [], map = new Map();
+  const out = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today); d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
-    map.set(key, 0);
-    keys.push({ key, label: i % 2 === 0 ? `${d.getMonth() + 1}/${d.getDate()}` : '', full: `${d.getMonth() + 1}/${d.getDate()}` });
+    const full = `${d.getMonth() + 1}/${d.getDate()}`;
+    out.push({ label: i % 2 === 0 ? full : '', full, value: counts.get(key) || 0 });
   }
-  for (const p of plays) { const k = (p.started_at || '').slice(0, 10); if (map.has(k)) map.set(k, map.get(k) + 1); }
-  return keys.map(k => ({ label: k.label, full: k.full, value: map.get(k.key) || 0 }));
+  return out;
 }
 
 // ── ITEM ANALYSIS ──────────────────────────────────────────────────────────────
+// Server already aggregated per question (item_stats RPC) — just shape for display.
 function itemStats() {
-  const byQ = new Map();
-  for (const a of _data.attempts) {
-    if (!byQ.has(a.qid)) byQ.set(a.qid, { qid: a.qid, text: a.question_text, diff: a.difficulty, room: a.room_id, all: [], firsts: [], wrong: {} });
-    const g = byQ.get(a.qid);
-    g.all.push(a);
-    if (a.attempt_no === 1) g.firsts.push(a);
-    if (!a.is_correct && a.selected_text) g.wrong[a.selected_text] = (g.wrong[a.selected_text] || 0) + 1;
-  }
-  return [...byQ.values()].map(g => {
-    const top = Object.entries(g.wrong).sort((a, b) => b[1] - a[1])[0];
-    return {
-      qid: g.qid, text: g.text || g.qid, diff: g.diff || '', room: g.room,
-      n: g.all.length,
-      firstAcc: pct(g.firsts.filter(a => a.is_correct).length, g.firsts.length),
-      avgTime: g.all.length ? Math.round(g.all.reduce((s, a) => s + (a.time_ms || 0), 0) / g.all.length / 100) / 10 : 0,
-      topWrong: top ? `${top[0]} (${top[1]}×)` : '—',
-    };
-  }).sort((a, b) => a.firstAcc - b.firstAcc);
+  return (_data.items || []).map(r => ({
+    qid: r.qid, text: r.question_text || r.qid, diff: r.difficulty || '', room: r.room_id,
+    n: r.n,
+    firstAcc: pct(r.first_correct, r.first_n),
+    avgTime: Math.round((r.avg_time_ms || 0) / 100) / 10,
+    topWrong: r.top_wrong ? `${r.top_wrong} (${r.top_wrong_n}×)` : '—',
+  })).sort((a, b) => a.firstAcc - b.firstAcc);
 }
 
 function renderItems() {
-  if (!_data.attempts.length) return emptyCard('No answers recorded yet.', '📝');
+  if (!(_data.items || []).length) return emptyCard('No answers recorded yet.', '📝');
   const all = itemStats();
   const rows = applySort(all, _sort.items);
   const hardest = all.slice().sort((a, b) => a.firstAcc - b.firstAcc)
@@ -565,13 +548,12 @@ function renderPlayerDetail(username) {
     : emptyCard('No timed runs yet — the learning curve needs real (non-P-Learn) games.', '📈');
 
   const runRows = [...gs].reverse().map(g => {
-    const p = findPlay(g.play_id);
     const ftAcc = accOf(g.ft_correct, g.ft_n);
     return `
       <tr class="row-link" data-run="${esc(g.play_id)}" data-player="${esc(username)}">
         <td>${fmtDateTime(g.started_at)} <span class="chev">›</span></td>
         <td>${outcomePill(g.outcome)}</td>
-        <td class="num">${p ? p.rooms_completed + '/3' : '—'}</td>
+        <td class="num">${g.rooms_completed == null ? '—' : g.rooms_completed + '/3'}</td>
         <td class="num">${g.total_score == null ? '—' : g.total_score + '%'}</td>
         <td class="num">${ftAcc == null ? '—' : ftAcc + '%'}</td>
         <td>${g.plearn ? '<span class="pill mid">P-Learn</span>' : '<span class="pill good">Timed</span>'}</td>
@@ -589,24 +571,36 @@ function renderPlayerDetail(username) {
 }
 
 // ── RUN DETAIL (drill-down: everything from one run) ───────────────────────────
-function renderRunDetail(username, playId) {
-  const play = findPlay(playId);
-  if (!play) return `<div class="crumb"><span class="link" data-back="players">Players</span></div>${emptyCard('Run not found.')}`;
-  const player = uname(play);
-  const atts = attemptsForPlay(playId);
-  const evs = eventsForPlay(playId);
+// Fetched on demand (fetchRunDetail) so the answer/event log is always complete;
+// results are cached per play id. Renders a loading state, then the full view.
+function renderRunDetailInto(body, username, playId) {
+  const cached = _runCache[playId];
+  if (cached) { body.innerHTML = renderRunDetail(username, playId, cached); return; }
+  body.innerHTML = `<div class="crumb"><span class="link" data-back="players">Players</span> <span class="crumb-sep">/</span>
+    <span class="link" data-back="player">${esc(username)}</span></div><div class="dash-empty"><span class="emoji">⏳</span>Loading run…</div>`;
+  fetchRunDetail(playId).then(detail => {
+    _runCache[playId] = detail;
+    if (_drill?.playId === playId) render();   // re-render only if still on this run
+  });
+}
 
-  const crumb = `<div class="crumb">
+function renderRunDetail(username, playId, detail) {
+  const g = gameByPlay(playId);
+  const player = username || (g && g.username);
+  const crumbHead = `<div class="crumb">
     <span class="link" data-back="players">Players</span> <span class="crumb-sep">/</span>
-    <span class="link" data-back="player">${esc(player)}</span> <span class="crumb-sep">/</span>
-    <b>Run · ${fmtDateTime(play.started_at)}</b></div>`;
+    <span class="link" data-back="player">${esc(player)}</span> <span class="crumb-sep">/</span>`;
+  if (!g) return `${crumbHead}<b>Run</b></div>${emptyCard('Run not found.')}`;
+  const atts = detail.attempts, evs = detail.events;
+
+  const crumb = `${crumbHead}<b>Run · ${fmtDateTime(g.started_at)}</b></div>`;
 
   const cards = `
     <div class="dash-grid">
-      ${statCard(outcomePill(play.outcome), 'Outcome')}
-      ${statCard(fmtTime(play.duration_sec), 'Duration')}
-      ${statCard(play.rooms_completed + '/3', 'Rooms cleared')}
-      ${statCard(play.total_score == null ? '—' : play.total_score + '%', 'Score', (play.plearn ? 'P-Learn · ' : '') + (play.device || ''))}
+      ${statCard(outcomePill(g.outcome), 'Outcome')}
+      ${statCard(fmtTime(g.duration_sec), 'Duration')}
+      ${statCard((g.rooms_completed ?? 0) + '/3', 'Rooms cleared')}
+      ${statCard(g.total_score == null ? '—' : g.total_score + '%', 'Score', g.plearn ? 'P-Learn' : 'Timed')}
     </div>`;
 
   // per-room breakdown
@@ -650,26 +644,24 @@ function renderRunDetail(username, playId) {
 
 // ── BEHAVIOR ─────────────────────────────────────────────────────────────────
 function renderBehavior() {
-  const A = _data.attempts;
-  if (!A.length) return emptyCard('No answers recorded yet.', '📝');
+  const b = _data.behavior;
+  if (!b || !b.attempts) return emptyCard('No answers recorded yet.', '📝');
 
   const diffs = ['EASY', 'MODERATE', 'HARD'];
+  const byDiff = new Map((b.by_diff || []).map(d => [d.difficulty, d]));
   const accByDiff = diffs.map(d => {
-    const firsts = A.filter(a => a.difficulty === d && a.attempt_no === 1);
-    return { label: d, value: pct(firsts.filter(a => a.is_correct).length, firsts.length), display: pct(firsts.filter(a => a.is_correct).length, firsts.length) + '%' };
+    const r = byDiff.get(d) || {};
+    const v = pct(r.first_correct || 0, r.first_n || 0);
+    return { label: d, value: v, display: v + '%' };
   });
   const triesByDiff = diffs.map(d => {
-    const correct = A.filter(a => a.difficulty === d && a.is_correct);
-    const avg = correct.length ? correct.reduce((s, a) => s + (a.attempt_no || 1), 0) / correct.length : 0;
-    return { label: d, value: Math.round(avg * 10) / 10, display: (Math.round(avg * 10) / 10) || '—' };
+    const r = byDiff.get(d) || {};
+    const avg = r.correct_n ? Math.round((r.attempt_sum / r.correct_n) * 10) / 10 : 0;
+    return { label: d, value: avg, display: avg || '—' };
   });
 
-  const hintShown = A.filter(a => a.hint_shown).length;
-  const plearnPlays = _data.plays.filter(p => p.plearn).length;
-  const timeouts = _data.events.filter(e => e.type === 'question_timeout').length;
-  const deaths = _data.plays.filter(p => p.outcome === 'lost').length;
-  const mobile = _data.plays.filter(p => p.device === 'mobile').length;
-  const desktop = _data.plays.filter(p => p.device !== 'mobile').length;
+  const hintShown = b.hint_shown, plearnPlays = b.plearn, timeouts = b.timeouts, deaths = b.deaths;
+  const mobile = b.mobile, desktop = b.total_plays - b.mobile;
   const devices = [
     { label: 'Desktop', value: desktop, color: C_BLUE },
     { label: 'Mobile',  value: mobile,  color: C_MID },
@@ -677,10 +669,10 @@ function renderBehavior() {
 
   return `
     <div class="dash-grid">
-      ${statCard(pct(hintShown, A.length) + '%', 'Answers with a hint shown', `${plearnPlays} P-Learn runs`, 'amber', '💡')}
+      ${statCard(pct(hintShown, b.attempts) + '%', 'Answers with a hint shown', `${plearnPlays} P-Learn runs`, 'amber', '💡')}
       ${statCard(timeouts, 'Question timeouts', 'ran out of time', '', '⏳')}
       ${statCard(deaths, 'Deaths (caught)', 'too many wrong answers', 'red', '💀')}
-      ${statCard(pct(mobile, _data.plays.length) + '%', 'Plays on mobile', `${desktop} on desktop`, 'blue', '📱')}
+      ${statCard(pct(mobile, b.total_plays) + '%', 'Plays on mobile', `${desktop} on desktop`, 'blue', '📱')}
     </div>
     <div class="dash-2col">
       <div class="card"><h3>First-try accuracy by difficulty</h3>${barRows(accByDiff, { colorByValue: true })}
@@ -689,7 +681,7 @@ function renderBehavior() {
         <div class="card-note">Higher = players needed more tries before answering correctly.</div></div>
     </div>
     <div class="dash-2col">
-      <div class="card"><h3>Device split</h3>${donutChart(devices, { centerValue: _data.plays.length, centerLabel: 'plays' })}</div>
+      <div class="card"><h3>Device split</h3>${donutChart(devices, { centerValue: b.total_plays, centerLabel: 'plays' })}</div>
       <div class="card"><h3>Where players struggle</h3>
         <div class="mini-stats">
           <div class="ms-row"><span>Ran out of time</span><b>${timeouts}×</b></div>
@@ -701,18 +693,19 @@ function renderBehavior() {
     </div>`;
 }
 
-// ── CSV export (raw answer log — the richest single table) ──────────────────────
+// ── CSV export (per-question item analysis — complete, from the server) ─────────
 function exportCsv() {
-  if (!_data?.attempts?.length) return;
+  if (!_data?.items?.length) return;
   const q = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
-  const header = ['Player', 'Room', 'Difficulty', 'QID', 'Question', 'Correct', 'SelectedText', 'AttemptNo', 'TimeMs', 'HintShown', 'Mode', 'When'];
-  const lines = [header.join(',')].concat(_data.attempts.map(a => [
-    q(uname(a)), a.room_id, q(a.difficulty), q(a.qid), q(a.question_text),
-    a.is_correct, q(a.selected_text), a.attempt_no, a.time_ms ?? '', a.hint_shown, q(a.mode), a.created_at,
+  const header = ['QID', 'Difficulty', 'Room', 'Question', 'Attempts', 'FirstTryN', 'FirstTryCorrect', 'FirstTryPct', 'AvgTimeMs', 'TopWrong', 'TopWrongN'];
+  const lines = [header.join(',')].concat(_data.items.map(r => [
+    q(r.qid), q(r.difficulty), r.room_id, q(r.question_text), r.n,
+    r.first_n, r.first_correct, pct(r.first_correct, r.first_n),
+    r.avg_time_ms ?? '', q(r.top_wrong), r.top_wrong_n ?? '',
   ].join(',')));
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'escape-room-answers.csv'; a.click();
+  a.href = url; a.download = 'escape-room-item-analysis.csv'; a.click();
   URL.revokeObjectURL(url);
 }

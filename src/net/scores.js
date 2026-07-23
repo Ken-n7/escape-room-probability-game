@@ -37,45 +37,43 @@ export async function fetchLeaderboard(board = 'escape', window = 'all') {
   return data ?? [];
 }
 
-// Admin only: every run with its player's name (RLS blocks non-admins).
-export async function fetchAllRuns(limit = 500) {
-  const { data, error } = await supabase
-    .from('runs')
-    .select('room_scores, total_score, best_time, finished_at, profiles(username)')
-    .order('finished_at', { ascending: false }).limit(limit);
-  if (error) { console.warn('[scores] admin fetch failed:', error.message); return []; }
-  return data ?? [];
-}
-
-// ── Admin analytics reads (RLS: admins get all rows, students only their own) ──
-export async function fetchAllPlays(limit = 5000) {
-  const { data, error } = await supabase.from('plays')
-    .select('id, outcome, duration_sec, rooms_completed, total_score, best_time, plearn, device, started_at, ended_at, profiles(username)')
-    .order('started_at', { ascending: false }).limit(limit);
-  if (error) { console.warn('[scores] plays fetch failed:', error.message); return []; }
-  return data ?? [];
-}
-
-export async function fetchAllAttempts(limit = 10000) {
-  const { data, error } = await supabase.from('question_attempts')
-    .select('play_id, room_id, difficulty, qid, question_text, is_correct, selected_index, selected_text, attempt_no, time_ms, hint_shown, mode, created_at, profiles(username)')
-    .order('created_at', { ascending: false }).limit(limit);
-  if (error) { console.warn('[scores] attempts fetch failed:', error.message); return []; }
-  return data ?? [];
-}
-
-// Per-game learning signal (one row per run per player, first-try accuracy
-// overall + by difficulty). Server-side aggregation → small result, no row cap.
+// ── Server-side dashboard aggregates (small results, correct at any scale) ─────
+// Each tab reads a pre-aggregated summary instead of pulling raw rows, so the
+// numbers are never truncated by the API row cap and the payload stays tiny.
 export async function fetchGameAccuracy() {
   const { data, error } = await supabase.rpc('game_accuracy');
   if (error) { console.warn('[scores] game_accuracy failed:', error.message); return []; }
   return data ?? [];
 }
 
-export async function fetchAllEvents(limit = 10000) {
-  const { data, error } = await supabase.from('events')
-    .select('play_id, type, data, at, profiles(username)')
-    .order('at', { ascending: false }).limit(limit);
-  if (error) { console.warn('[scores] events fetch failed:', error.message); return []; }
+export async function fetchOverviewStats() {
+  const { data, error } = await supabase.rpc('overview_stats');
+  if (error) { console.warn('[scores] overview_stats failed:', error.message); return null; }
+  return data;
+}
+
+export async function fetchItemStats() {
+  const { data, error } = await supabase.rpc('item_stats');
+  if (error) { console.warn('[scores] item_stats failed:', error.message); return []; }
   return data ?? [];
+}
+
+export async function fetchBehaviorStats() {
+  const { data, error } = await supabase.rpc('behavior_stats');
+  if (error) { console.warn('[scores] behavior_stats failed:', error.message); return null; }
+  return data;
+}
+
+// Full detail for ONE run — fetched on demand (a single play's rows are far
+// under any cap), so drill-downs are always complete.
+export async function fetchRunDetail(playId) {
+  const [a, e] = await Promise.all([
+    supabase.from('question_attempts')
+      .select('room_id, difficulty, qid, question_text, is_correct, selected_index, selected_text, attempt_no, time_ms, hint_shown, mode, created_at')
+      .eq('play_id', playId).order('created_at', { ascending: true }),
+    supabase.from('events').select('type, data, at').eq('play_id', playId).order('at', { ascending: true }),
+  ]);
+  if (a.error) console.warn('[scores] run attempts failed:', a.error.message);
+  if (e.error) console.warn('[scores] run events failed:', e.error.message);
+  return { attempts: a.data ?? [], events: e.data ?? [] };
 }
