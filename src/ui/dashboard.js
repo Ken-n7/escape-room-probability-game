@@ -67,9 +67,82 @@ function sparkChart(buckets) {
   return `<div class="spark">${buckets.map(b => `<div class="spark-bar" style="height:${Math.round(b.value / max * 100)}%" title="${b.label}: ${b.value} plays"></div>`).join('')}</div>
     <div class="spark-labels">${buckets.map(b => `<span>${b.label}</span>`).join('')}</div>`;
 }
-const statCard = (value, label, sub = '', accent = '') =>
-  `<div class="stat-card${accent ? ' accent-' + accent : ''}"><div class="stat-value">${value}</div><div class="stat-label">${label}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div>`;
+const statCard = (value, label, sub = '', accent = '', icon = '') =>
+  `<div class="stat-card${accent ? ' accent-' + accent : ''}">${icon ? `<div class="stat-icon">${icon}</div>` : ''}<div class="stat-value">${value}</div><div class="stat-label">${label}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div>`;
 const emptyCard = (msg, emoji = '📊') => `<div class="dash-empty"><span class="emoji">${emoji}</span>${esc(msg)}</div>`;
+
+// Status hues (won/lost/abandoned…) — semantic, always shipped with a labelled
+// legend so identity never rests on colour alone.
+const C_GOOD = '#16a34a', C_MID = '#d97706', C_BAD = '#dc2626', C_BLUE = '#2563eb', C_GREY = '#94a3b8';
+
+// ── SVG charts (inline, CSP-safe, no libs) ──────────────────────────────────────
+// Donut with a labelled legend + 2px gaps between segments. Center shows a headline.
+function donutChart(segments, { centerValue = '', centerLabel = '' } = {}) {
+  const live = segments.filter(s => s.value > 0);
+  const total = live.reduce((s, x) => s + x.value, 0) || 1;
+  const GAP = 1.4;                                  // circumference units → ~2px gap
+  let cum = 0;
+  const arcs = live.map(s => {
+    const p = (s.value / total) * 100;
+    const seg = Math.max(0.001, p - GAP);
+    const c = `<circle class="donut-seg" cx="21" cy="21" r="15.9155" fill="none" stroke="${s.color}" stroke-width="5"
+      stroke-dasharray="${seg.toFixed(3)} ${(100 - seg).toFixed(3)}" stroke-dashoffset="${(25 - cum).toFixed(3)}">
+      <title>${esc(s.label)}: ${s.value} (${pct(s.value, total)}%)</title></circle>`;
+    cum += p;
+    return c;
+  }).join('');
+  const legend = segments.map(s => `
+    <div class="lg-item"><span class="lg-dot" style="background:${s.color}"></span>
+      <span class="lg-label">${esc(s.label)}</span>
+      <span class="lg-val">${s.value} · ${pct(s.value, total)}%</span></div>`).join('');
+  return `<div class="donut-wrap">
+    <div class="donut">
+      <svg viewBox="0 0 42 42" class="donut-svg" role="img">
+        <circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--line2)" stroke-width="5"></circle>
+        ${arcs}
+      </svg>
+      <div class="donut-center"><div class="donut-value">${centerValue}</div><div class="donut-label">${esc(centerLabel)}</div></div>
+    </div>
+    <div class="chart-legend">${legend}</div>
+  </div>`;
+}
+
+// Radial gauge for a single 0–100 metric.
+function gaugeChart(value, { label = '', color = C_BLUE } = {}) {
+  const p = Math.max(0, Math.min(100, value));
+  return `<div class="donut gauge">
+    <svg viewBox="0 0 42 42" class="donut-svg" role="img">
+      <circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--line2)" stroke-width="4.5"></circle>
+      <circle cx="21" cy="21" r="15.9155" fill="none" stroke="${color}" stroke-width="4.5" stroke-linecap="round"
+        stroke-dasharray="${p.toFixed(2)} ${(100 - p).toFixed(2)}" stroke-dashoffset="25"><title>${label}: ${value}%</title></circle>
+    </svg>
+    <div class="donut-center"><div class="donut-value">${value}%</div><div class="donut-label">${esc(label)}</div></div>
+  </div>`;
+}
+
+// Area + line trend. Single blue series; native <title> tooltips on each point.
+function areaChart(points, { unit = '' } = {}) {
+  const W = 640, H = 150, padT = 10, padB = 8, padX = 6;
+  const max = Math.max(1, ...points.map(p => p.value));
+  const n = Math.max(1, points.length - 1);
+  const X = i => padX + (i / n) * (W - padX * 2);
+  const Y = v => padT + (1 - v / max) * (H - padT - padB);
+  const pts = points.map((p, i) => `${X(i).toFixed(1)},${Y(p.value).toFixed(1)}`).join(' ');
+  const area = `${padX},${(H - padB).toFixed(1)} ${pts} ${(W - padX).toFixed(1)},${(H - padB).toFixed(1)}`;
+  const grid = [0.25, 0.5, 0.75].map(f => `<line class="ac-grid" x1="${padX}" x2="${W - padX}" y1="${(padT + f * (H - padT - padB)).toFixed(1)}" y2="${(padT + f * (H - padT - padB)).toFixed(1)}"></line>`).join('');
+  const dots = points.map((p, i) => `<circle class="ac-dot" cx="${X(i).toFixed(1)}" cy="${Y(p.value).toFixed(1)}" r="3"><title>${esc(p.full || p.label)}: ${p.value}${unit}</title></circle>`).join('');
+  const svg = `<svg viewBox="0 0 ${W} ${H}" class="area-chart" preserveAspectRatio="xMidYMid meet" role="img">
+    <defs><linearGradient id="ac-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${C_BLUE}" stop-opacity="0.26"/><stop offset="1" stop-color="${C_BLUE}" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${grid}
+    <polygon class="ac-area" points="${area}" fill="url(#ac-grad)"></polygon>
+    <polyline class="ac-line" points="${pts}" fill="none" stroke="${C_BLUE}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
+    ${dots}
+  </svg>`;
+  const labels = `<div class="ac-labels">${points.map(p => `<span>${esc(p.label)}</span>`).join('')}</div>`;
+  return `<div class="ac-peak">Peak: ${max}${unit}</div>${svg}${labels}`;
+}
 const skeleton = () => `<div class="skel-grid">${'<div class="skel skel-card"></div>'.repeat(4)}</div><div class="skel skel-row"></div>`;
 
 // ── sortable tables + search (client-side, shared by Players & Items) ───────────
@@ -240,19 +313,37 @@ function renderOverview() {
     { label: 'Escaped',        value: wins },
   ];
   const days = playsByDay(plays, 14);
+  const inProg = plays.filter(p => p.outcome === 'in_progress').length;
+  const outcomes = [
+    { label: 'Escaped',     value: wins,   color: C_GOOD },
+    { label: 'Caught',      value: losses, color: C_BAD },
+    { label: 'Quit',        value: aband,  color: C_MID },
+    { label: 'In progress', value: inProg, color: C_GREY },
+  ];
+  const winRate = pct(wins, finished.length);
 
   return `
     <div class="dash-grid">
-      ${statCard(plays.length, 'Total plays', `${players} unique player${players === 1 ? '' : 's'}`, 'blue')}
-      ${statCard(pct(wins, finished.length) + '%', 'Win rate', `${wins} won of ${finished.length} finished`, 'green')}
-      ${statCard(avgDur == null ? '—' : fmtTime(avgDur), 'Avg escape time', 'across winning runs')}
-      ${statCard(losses, 'Caught by ghost', `${aband} abandoned`, 'red')}
+      ${statCard(plays.length, 'Total plays', `${players} unique player${players === 1 ? '' : 's'}`, 'blue', '🎮')}
+      ${statCard(winRate + '%', 'Win rate', `${wins} won of ${finished.length} finished`, 'green', '🏆')}
+      ${statCard(avgDur == null ? '—' : fmtTime(avgDur), 'Avg escape time', 'across winning runs', '', '⏱')}
+      ${statCard(losses, 'Caught by ghost', `${aband} abandoned`, 'red', '👻')}
     </div>
     <div class="dash-2col">
-      <div class="card"><h3>Completion funnel</h3>${funnelRows(funnel)}
-        <div class="card-note">How far players get before finishing, losing, or quitting.</div></div>
-      <div class="card"><h3>Plays over the last 14 days</h3>${sparkChart(days)}</div>
-    </div>`;
+      <div class="card"><h3>How runs end</h3>${donutChart(outcomes, { centerValue: plays.length, centerLabel: 'runs' })}
+        <div class="card-note">Every run's final outcome. Center = total runs.</div></div>
+      <div class="card"><h3>Win rate</h3>
+        <div class="gauge-row">${gaugeChart(winRate, { label: 'escaped', color: C_GOOD })}
+          <div class="gauge-side">
+            <div class="gs-line"><b>${wins}</b> escaped</div>
+            <div class="gs-line"><b>${losses}</b> caught</div>
+            <div class="gs-line"><b>${aband}</b> quit</div>
+            <div class="gs-line muted">of ${finished.length} finished runs</div>
+          </div></div></div>
+    </div>
+    <div class="card"><h3>Completion funnel</h3>${funnelRows(funnel)}
+      <div class="card-note">How far players get before finishing, losing, or quitting.</div></div>
+    <div class="card"><h3>Plays over the last 14 days</h3>${areaChart(days, { unit: '' })}</div>`;
 }
 
 function playsByDay(plays, days = 14) {
@@ -262,10 +353,10 @@ function playsByDay(plays, days = 14) {
     const d = new Date(today); d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     map.set(key, 0);
-    keys.push({ key, label: i % 2 === 0 ? `${d.getMonth() + 1}/${d.getDate()}` : '' });
+    keys.push({ key, label: i % 2 === 0 ? `${d.getMonth() + 1}/${d.getDate()}` : '', full: `${d.getMonth() + 1}/${d.getDate()}` });
   }
   for (const p of plays) { const k = (p.started_at || '').slice(0, 10); if (map.has(k)) map.set(k, map.get(k) + 1); }
-  return keys.map(k => ({ label: k.label, value: map.get(k.key) || 0 }));
+  return keys.map(k => ({ label: k.label, full: k.full, value: map.get(k.key) || 0 }));
 }
 
 // ── ITEM ANALYSIS ──────────────────────────────────────────────────────────────
@@ -494,18 +585,35 @@ function renderBehavior() {
   const timeouts = _data.events.filter(e => e.type === 'question_timeout').length;
   const deaths = _data.plays.filter(p => p.outcome === 'lost').length;
   const mobile = _data.plays.filter(p => p.device === 'mobile').length;
+  const desktop = _data.plays.filter(p => p.device !== 'mobile').length;
+  const devices = [
+    { label: 'Desktop', value: desktop, color: C_BLUE },
+    { label: 'Mobile',  value: mobile,  color: C_MID },
+  ];
 
   return `
     <div class="dash-grid">
-      ${statCard(pct(hintShown, A.length) + '%', 'Answers with a hint shown', `${plearnPlays} P-Learn runs`, 'amber')}
-      ${statCard(timeouts, 'Question timeouts', 'ran out of time')}
-      ${statCard(deaths, 'Deaths (caught)', 'too many wrong answers', 'red')}
-      ${statCard(pct(mobile, _data.plays.length) + '%', 'Plays on mobile', `${_data.plays.length - mobile} on desktop`, 'blue')}
+      ${statCard(pct(hintShown, A.length) + '%', 'Answers with a hint shown', `${plearnPlays} P-Learn runs`, 'amber', '💡')}
+      ${statCard(timeouts, 'Question timeouts', 'ran out of time', '', '⏳')}
+      ${statCard(deaths, 'Deaths (caught)', 'too many wrong answers', 'red', '💀')}
+      ${statCard(pct(mobile, _data.plays.length) + '%', 'Plays on mobile', `${desktop} on desktop`, 'blue', '📱')}
     </div>
     <div class="dash-2col">
-      <div class="card"><h3>First-try accuracy by difficulty</h3>${barRows(accByDiff, { colorByValue: true })}</div>
+      <div class="card"><h3>First-try accuracy by difficulty</h3>${barRows(accByDiff, { colorByValue: true })}
+        <div class="card-note">% who nailed it on the first attempt — the cleanest signal of mastery.</div></div>
       <div class="card"><h3>Avg attempts to get it right</h3>${barRows(triesByDiff)}
         <div class="card-note">Higher = players needed more tries before answering correctly.</div></div>
+    </div>
+    <div class="dash-2col">
+      <div class="card"><h3>Device split</h3>${donutChart(devices, { centerValue: _data.plays.length, centerLabel: 'plays' })}</div>
+      <div class="card"><h3>Where players struggle</h3>
+        <div class="mini-stats">
+          <div class="ms-row"><span>Ran out of time</span><b>${timeouts}×</b></div>
+          <div class="ms-row"><span>Caught by the ghost</span><b>${deaths}×</b></div>
+          <div class="ms-row"><span>Needed a hint</span><b>${hintShown}×</b></div>
+          <div class="ms-row"><span>Practiced in P-Learn</span><b>${plearnPlays} runs</b></div>
+        </div>
+        <div class="card-note">Signals of friction — high timeouts or deaths flag content that's too hard or unclear.</div></div>
     </div>`;
 }
 
