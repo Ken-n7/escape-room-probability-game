@@ -43,6 +43,13 @@ const _state = {
 let _gltf   = null;
 let _loader = null;
 
+// Built once, reused for every scare (no per-spawn clone/material work).
+let _ghost     = null;   // the ghost model group (kept in scene, visibility toggled)
+let _lightRig  = null;   // persistent 2-light rig (intensity toggled, never removed)
+let _keyLight  = null;
+let _rimLight  = null;
+let _warmedUp  = false;  // shaders/GPU upload done during loading, not mid-game
+
 function _getLoader() {
   if (!_loader) _loader = makeGLTFLoader();
   return _loader;
@@ -75,16 +82,27 @@ function _tuneMaterials(root, emissiveIntensity = 0.18) {
   });
 }
 
-function _addDetailLights(root) {
-  // Key light — warm, spills onto nearby walls/floor so the ghost feels grounded
-  const key = new THREE.PointLight(0xffdcc4, 8.0, 10, 1.4);
-  key.position.set(0, 1.35, 0.65);
-  root.add(key);
+// Target intensities the rig ramps to when the ghost is on screen.
+const KEY_INTENSITY = 8.0;
+const RIM_INTENSITY = 3.0;
 
+// The ghost's two lights live in a rig that stays in the scene PERMANENTLY at
+// intensity 0. Because the light COUNT never changes, materials never need to
+// recompile their shaders when the ghost appears/disappears (the old code added
+// and removed these lights each spawn, forcing a recompile stall every time —
+// especially painful on mobile GPUs). On spawn we just move the rig to the ghost
+// and turn the intensities up; on clear we turn them back to 0.
+function _buildLightRig() {
+  const rig = new THREE.Group();
+  // Key light — warm, spills onto nearby walls/floor so the ghost feels grounded
+  _keyLight = new THREE.PointLight(0xffdcc4, 0, 10, 1.4);
+  _keyLight.position.set(0, 1.35, 0.65);
+  rig.add(_keyLight);
   // Rim light — red backlight for silhouette drama
-  const rim = new THREE.PointLight(0xff2d18, 3.0, 6, 1.6);
-  rim.position.set(0, 1.65, -0.8);
-  root.add(rim);
+  _rimLight = new THREE.PointLight(0xff2d18, 0, 6, 1.6);
+  _rimLight.position.set(0, 1.65, -0.8);
+  rig.add(_rimLight);
+  return rig;
 }
 
 // ── World light control ───────────────────────────────────────────────────────
@@ -111,11 +129,53 @@ function _restoreWorldLights() {
   });
 }
 
+// ── Ghost singleton ─────────────────────────────────────────────────────────
+// Build the ghost + light rig ONCE and leave them in the scene (ghost hidden,
+// lights at 0). Every later scare just repositions and shows them, so there's no
+// clone / material-clone / add-light work — and no shader recompile — mid-game.
+function _buildGhost() {
+  if (_ghost || !_gltf) return;
+  const clone = skeletonClone(_gltf.scene);
+  _tuneMaterials(clone, 0.2);
+  clone.scale.setScalar(SCALE);
+  clone.visible = false;
+  scene.add(clone);
+  _ghost = clone;
+
+  _lightRig = _buildLightRig();
+  _lightRig.visible = true;          // stays visible so its lights are always counted
+  scene.add(_lightRig);
+
+  _state.mixer = new THREE.AnimationMixer(_ghost);
+  if (_gltf.animations.length) _state.mixer.clipAction(_gltf.animations[0]).play();
+}
+
+// Compile shaders + upload textures/geometry to the GPU during the loading
+// screen (a stall there is expected and hidden), instead of on the first scare.
+// Renders one throwaway frame with the ghost visible; the menu overlay covers
+// the canvas so nothing is seen.
+export function warmUpScare() {
+  if (_warmedUp || !_gltf) return;
+  _buildGhost();
+  if (!_ghost) return;
+  _ghost.position.set(camera.position.x, Y_OFFSET, camera.position.z);
+  _ghost.visible = true;
+  renderer.render(scene, camera);    // forces compile + GPU upload now
+  _ghost.visible = false;
+  _warmedUp = true;
+}
+
 // ── Sprite lifecycle ──────────────────────────────────────────────────────────
 export function clearScareSprite() {
   if (_state.fadeTimer) { clearTimeout(_state.fadeTimer); _state.fadeTimer = null; }
-  if (_state.sprite)    { scene.remove(_state.sprite); _state.sprite = null; _restoreWorldLights(); }
-  if (_state.mixer)     { _state.mixer.stopAllAction(); _state.mixer = null; }
+  if (_state.sprite) {
+    _ghost.visible = false;            // hide, don't remove — keeps it warm for next time
+    if (_keyLight) _keyLight.intensity = 0;
+    if (_rimLight) _rimLight.intensity = 0;
+    _state.sprite = null;
+    _restoreWorldLights();
+    if (_state.mixer) _state.mixer.stopAllAction();
+  }
 }
 
 // ── Blackout scare — every light in the school dies for a few seconds ────────
@@ -157,49 +217,51 @@ export function triggerBlackout() {
 
 function _spawnScare(turnDir) {
   if (_state.sprite || _blackout.active) return;
+  if (!_gltf) { _loadModel(() => {}); return; }   // not preloaded yet — skip this one
+  _buildGhost();
+  if (!_ghost) return;
 
-  _loadModel(gltf => {
-    if (_state.sprite) return;
+  const sinY = Math.sin(look.yaw), cosY = Math.cos(look.yaw);
+  const dist    = 3.2;
+  const lateral = -turnDir * 1.0;
+  const px = camera.position.x + (-sinY * dist) + (cosY  * lateral);
+  const pz = camera.position.z + (-cosY * dist) + (-sinY * lateral);
 
-    const sinY = Math.sin(look.yaw), cosY = Math.cos(look.yaw);
-    const dist    = 3.2;
-    const lateral = -turnDir * 1.0;
-    const px = camera.position.x + (-sinY * dist) + (cosY  * lateral);
-    const pz = camera.position.z + (-cosY * dist) + (-sinY * lateral);
+  _ghost.position.set(px, Y_OFFSET, pz);
+  _ghost.rotation.y = Math.atan2(camera.position.x - px, camera.position.z - pz);
+  _ghost.visible = true;
 
-    const clone = skeletonClone(gltf.scene);
-    _tuneMaterials(clone, 0.2);
-    _addDetailLights(clone);
-    clone.visible = true;
-    clone.scale.setScalar(SCALE);
-    clone.position.set(px, Y_OFFSET, pz);
-    clone.rotation.y = Math.atan2(camera.position.x - px, camera.position.z - pz);
-    scene.add(clone);
-    _dimWorldLights(); // kill scene lights so ghost's own lights own the moment
+  // Bring the persistent light rig onto the ghost and turn it up.
+  _lightRig.position.copy(_ghost.position);
+  _lightRig.rotation.y = _ghost.rotation.y;
+  _keyLight.intensity = KEY_INTENSITY;
+  _rimLight.intensity = RIM_INTENSITY;
 
-    _state.sprite = clone;
-    _state.mixer  = new THREE.AnimationMixer(clone);
-    if (gltf.animations.length) _state.mixer.clipAction(gltf.animations[0]).play();
-    renderer.render(scene, camera); // force immediate frame
+  _dimWorldLights(); // dim scene lights so the ghost's own lights own the moment
+  _state.sprite = _ghost;
 
-    AudioManager.play(SCARE_SOUNDS[Math.floor(Math.random() * SCARE_SOUNDS.length)]);
+  if (_state.mixer && _gltf.animations.length) {
+    _state.mixer.clipAction(_gltf.animations[0]).reset().play();
+  }
+  renderer.render(scene, camera); // immediate frame — cheap now (already warm)
 
-    const totalMs  = 900 + Math.random() * 650;
-    const fadeOutMs = 250;
-    const start    = performance.now();
+  AudioManager.play(SCARE_SOUNDS[Math.floor(Math.random() * SCARE_SOUNDS.length)]);
 
-    const tick = () => {
-      if (!_state.sprite || _state.sprite !== clone) return;
-      const elapsed = performance.now() - start;
-      clone.visible = elapsed <= totalMs - fadeOutMs;
-      if (elapsed < totalMs) {
-        _state.fadeTimer = setTimeout(tick, 16);
-      } else {
-        clearScareSprite();
-      }
-    };
-    _state.fadeTimer = setTimeout(tick, 16);
-  });
+  const totalMs   = 900 + Math.random() * 650;
+  const fadeOutMs = 250;
+  const start     = performance.now();
+
+  const tick = () => {
+    if (_state.sprite !== _ghost) return;
+    const elapsed = performance.now() - start;
+    _ghost.visible = elapsed <= totalMs - fadeOutMs;
+    if (elapsed < totalMs) {
+      _state.fadeTimer = setTimeout(tick, 16);
+    } else {
+      clearScareSprite();
+    }
+  };
+  _state.fadeTimer = setTimeout(tick, 16);
 }
 
 function _playRandomNoise() {
