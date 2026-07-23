@@ -807,7 +807,9 @@
     }
     .dash-navitem:hover { background:rgba(148,163,184,.14); color:var(--ink); }
     .dash-navitem.active { background:var(--accent); color:#fff; font-weight:600; }
-    .dash-navitem .nav-ico { font-size:1rem; width:18px; text-align:center; flex:0 0 auto; }
+    .dash-navitem .nav-ico { width:18px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+    .nav-ico svg { width:17px; height:17px; }
+    .lucide { stroke-width:2; }
     /* Back-to-game: an outlined button so it clearly reads as the way out */
     .dash-back { margin-top:auto; border:1px solid var(--line); background:#fff; color:var(--ink);
       font-weight:600; box-shadow:var(--shadow); justify-content:flex-start; }
@@ -829,6 +831,7 @@
     .dash-btn:active { transform:translateY(.5px); }
     .dash-btn:disabled { opacity:.6; cursor:default; }
     .dash-btn .spin { display:inline-block; animation:dash-spin .7s linear infinite; }
+    .dash-btn.spinning .nav-ico svg { animation:dash-spin .7s linear infinite; }
     @keyframes dash-spin { to { transform:rotate(360deg); } }
     /* Mobile: the rail becomes a horizontal scroll bar on top */
     @media (max-width:720px) {
@@ -901,7 +904,16 @@
     .spark-labels span { flex:1; text-align:center; color:var(--faint); font-size:0.62rem; }
     /* KPI icon */
     .stat-card { display:flex; flex-direction:column; }
-    .stat-icon { position:absolute; top:14px; right:14px; font-size:1.15rem; opacity:.55; }
+    .stat-icon { position:absolute; top:13px; right:14px; opacity:.9; color:var(--faint); display:inline-flex; }
+    .stat-icon svg { width:20px; height:20px; }
+    .accent-blue  .stat-icon { color:var(--accent); }
+    .accent-green .stat-icon { color:#16a34a; }
+    .accent-red   .stat-icon { color:#dc2626; }
+    .accent-amber .stat-icon { color:#d97706; }
+    /* Chart.js canvas containers — height is set inline per chart. */
+    .chart-box { position:relative; width:100%; }
+    .chart-box canvas { max-width:100%; }
+    .gauge-row .chart-box { flex:0 0 180px; width:180px; }
     /* Donut + gauge */
     .donut-wrap { display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
     .donut { position:relative; width:150px; height:150px; flex:0 0 auto; }

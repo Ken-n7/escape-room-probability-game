@@ -1,4 +1,5 @@
 import { fetchGameAccuracy, fetchOverviewStats, fetchItemStats, fetchBehaviorStats, fetchRunDetail } from '../net/scores.js';
+import { donutChart, gaugeChart, areaChart, lineChart, barChart, icon, mountCharts, mountIcons, resetCharts } from './charts.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  ADMIN DASHBOARD — clean, non-game analytics UI. Renders into #dash-root.
@@ -6,10 +7,10 @@ import { fetchGameAccuracy, fetchOverviewStats, fetchItemStats, fetchBehaviorSta
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TABS = [
-  { id: 'overview', label: 'Overview',      icon: '📊' },
-  { id: 'players',  label: 'Players',       icon: '👥' },
-  { id: 'items',    label: 'Item analysis', icon: '📝' },
-  { id: 'behavior', label: 'Behavior',      icon: '🧠' },
+  { id: 'overview', label: 'Overview',      icon: 'layout-dashboard' },
+  { id: 'players',  label: 'Players',       icon: 'users' },
+  { id: 'items',    label: 'Item analysis', icon: 'clipboard-list' },
+  { id: 'behavior', label: 'Behavior',      icon: 'brain' },
 ];
 
 let _data = null;        // { plays, attempts, events }
@@ -41,16 +42,7 @@ const outcomePill = o => { const [c, t] = OUTCOME[o] || ['mid', o]; return `<spa
 const gameByPlay = id => (_data.games || []).find(g => g.play_id === id);
 const _runCache  = {};   // playId → { attempts, events }, fetched on demand
 
-// ── chart builders (HTML/CSS, no external libs) ─────────────────────────────────
-function barRows(items, { colorByValue = false } = {}) {
-  const max = Math.max(1, ...items.map(i => i.value));
-  return items.map(i => `
-    <div class="bar-row">
-      <div class="bar-label" title="${esc(i.label)}">${esc(i.label)}</div>
-      <div class="bar-track"><div class="bar-fill ${colorByValue ? accClass(i.value) : ''}" style="width:${Math.round(i.value / max * 100)}%"></div></div>
-      <div class="bar-val">${i.display ?? i.value}</div>
-    </div>`).join('');
-}
+// ── HTML/CSS mini-charts (funnel + per-room bars stay inline; the rest are Chart.js) ─
 function funnelRows(steps) {
   const top = steps[0]?.value || 1;
   return steps.map(s => `
@@ -60,87 +52,15 @@ function funnelRows(steps) {
       <div class="bar-val">${pct(s.value, top)}%</div>
     </div>`).join('');
 }
-function sparkChart(buckets) {
-  const max = Math.max(1, ...buckets.map(b => b.value));
-  return `<div class="spark">${buckets.map(b => `<div class="spark-bar" style="height:${Math.round(b.value / max * 100)}%" title="${b.label}: ${b.value} plays"></div>`).join('')}</div>
-    <div class="spark-labels">${buckets.map(b => `<span>${b.label}</span>`).join('')}</div>`;
-}
-const statCard = (value, label, sub = '', accent = '', icon = '') =>
-  `<div class="stat-card${accent ? ' accent-' + accent : ''}">${icon ? `<div class="stat-icon">${icon}</div>` : ''}<div class="stat-value">${value}</div><div class="stat-label">${label}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div>`;
+const statCard = (value, label, sub = '', accent = '', ico = '') =>
+  `<div class="stat-card${accent ? ' accent-' + accent : ''}">${ico ? `<div class="stat-icon">${icon(ico)}</div>` : ''}<div class="stat-value">${value}</div><div class="stat-label">${label}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div>`;
 const emptyCard = (msg, emoji = '📊') => `<div class="dash-empty"><span class="emoji">${emoji}</span>${esc(msg)}</div>`;
 
 // Status hues (won/lost/abandoned…) — semantic, always shipped with a labelled
 // legend so identity never rests on colour alone.
 const C_GOOD = '#16a34a', C_MID = '#d97706', C_BAD = '#dc2626', C_BLUE = '#2563eb', C_GREY = '#94a3b8';
 
-// ── SVG charts (inline, CSP-safe, no libs) ──────────────────────────────────────
-// Donut with a labelled legend + 2px gaps between segments. Center shows a headline.
-function donutChart(segments, { centerValue = '', centerLabel = '' } = {}) {
-  const live = segments.filter(s => s.value > 0);
-  const total = live.reduce((s, x) => s + x.value, 0) || 1;
-  const GAP = 1.4;                                  // circumference units → ~2px gap
-  let cum = 0;
-  const arcs = live.map(s => {
-    const p = (s.value / total) * 100;
-    const seg = Math.max(0.001, p - GAP);
-    const c = `<circle class="donut-seg" cx="21" cy="21" r="15.9155" fill="none" stroke="${s.color}" stroke-width="5"
-      stroke-dasharray="${seg.toFixed(3)} ${(100 - seg).toFixed(3)}" stroke-dashoffset="${(25 - cum).toFixed(3)}">
-      <title>${esc(s.label)}: ${s.value} (${pct(s.value, total)}%)</title></circle>`;
-    cum += p;
-    return c;
-  }).join('');
-  const legend = segments.map(s => `
-    <div class="lg-item"><span class="lg-dot" style="background:${s.color}"></span>
-      <span class="lg-label">${esc(s.label)}</span>
-      <span class="lg-val">${s.value} · ${pct(s.value, total)}%</span></div>`).join('');
-  return `<div class="donut-wrap">
-    <div class="donut">
-      <svg viewBox="0 0 42 42" class="donut-svg" role="img">
-        <circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--line2)" stroke-width="5"></circle>
-        ${arcs}
-      </svg>
-      <div class="donut-center"><div class="donut-value">${centerValue}</div><div class="donut-label">${esc(centerLabel)}</div></div>
-    </div>
-    <div class="chart-legend">${legend}</div>
-  </div>`;
-}
-
-// Radial gauge for a single 0–100 metric.
-function gaugeChart(value, { label = '', color = C_BLUE } = {}) {
-  const p = Math.max(0, Math.min(100, value));
-  return `<div class="donut gauge">
-    <svg viewBox="0 0 42 42" class="donut-svg" role="img">
-      <circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--line2)" stroke-width="4.5"></circle>
-      <circle cx="21" cy="21" r="15.9155" fill="none" stroke="${color}" stroke-width="4.5" stroke-linecap="round"
-        stroke-dasharray="${p.toFixed(2)} ${(100 - p).toFixed(2)}" stroke-dashoffset="25"><title>${label}: ${value}%</title></circle>
-    </svg>
-    <div class="donut-center"><div class="donut-value">${value}%</div><div class="donut-label">${esc(label)}</div></div>
-  </div>`;
-}
-
-// Area + line trend. Single blue series; native <title> tooltips on each point.
-function areaChart(points, { unit = '' } = {}) {
-  const W = 640, H = 150, padT = 10, padB = 8, padX = 6;
-  const max = Math.max(1, ...points.map(p => p.value));
-  const n = Math.max(1, points.length - 1);
-  const X = i => padX + (i / n) * (W - padX * 2);
-  const Y = v => padT + (1 - v / max) * (H - padT - padB);
-  const pts = points.map((p, i) => `${X(i).toFixed(1)},${Y(p.value).toFixed(1)}`).join(' ');
-  const area = `${padX},${(H - padB).toFixed(1)} ${pts} ${(W - padX).toFixed(1)},${(H - padB).toFixed(1)}`;
-  const grid = [0.25, 0.5, 0.75].map(f => `<line class="ac-grid" x1="${padX}" x2="${W - padX}" y1="${(padT + f * (H - padT - padB)).toFixed(1)}" y2="${(padT + f * (H - padT - padB)).toFixed(1)}"></line>`).join('');
-  const dots = points.map((p, i) => `<circle class="ac-dot" cx="${X(i).toFixed(1)}" cy="${Y(p.value).toFixed(1)}" r="3"><title>${esc(p.full || p.label)}: ${p.value}${unit}</title></circle>`).join('');
-  const svg = `<svg viewBox="0 0 ${W} ${H}" class="area-chart" preserveAspectRatio="xMidYMid meet" role="img">
-    <defs><linearGradient id="ac-grad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${C_BLUE}" stop-opacity="0.26"/><stop offset="1" stop-color="${C_BLUE}" stop-opacity="0"/>
-    </linearGradient></defs>
-    ${grid}
-    <polygon class="ac-area" points="${area}" fill="url(#ac-grad)"></polygon>
-    <polyline class="ac-line" points="${pts}" fill="none" stroke="${C_BLUE}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
-    ${dots}
-  </svg>`;
-  const labels = `<div class="ac-labels">${points.map(p => `<span>${esc(p.label)}</span>`).join('')}</div>`;
-  return `<div class="ac-peak">Peak: ${max}${unit}</div>${svg}${labels}`;
-}
+// Donut / gauge / area / line / bar charts now come from ./charts.js (Chart.js).
 const skeleton = () => `<div class="skel-grid">${'<div class="skel skel-card"></div>'.repeat(4)}</div><div class="skel skel-row"></div>`;
 
 // ── learning-over-time (per player, from game_accuracy rows) ────────────────────
@@ -166,32 +86,6 @@ function trendPill(v) {
   const [cls, arrow] = TREND[v.key];
   const d = v.diff == null ? '' : ` ${v.diff > 0 ? '+' : ''}${v.diff}pt`;
   return `<span class="pill ${cls || 'flat-pill'}" title="Recent vs early first-try accuracy">${arrow} ${v.label}${d}</span>`;
-}
-
-// Multi-line chart on a fixed 0–100 accuracy scale. `series` = [{name,color,vals}]
-// where vals may contain nulls (skipped). Native <title> tooltips on points.
-function lineChart(labels, series) {
-  const W = 660, H = 190, padT = 12, padB = 22, padL = 30, padR = 8;
-  const n = Math.max(1, labels.length - 1);
-  const X = i => padL + (i / n) * (W - padL - padR);
-  const Y = v => padT + (1 - v / 100) * (H - padT - padB);
-  const grid = [0, 25, 50, 75, 100].map(v => `
-    <line class="ac-grid" x1="${padL}" x2="${W - padR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line>
-    <text class="lc-ylabel" x="${padL - 6}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${v}</text>`).join('');
-  const body = series.map(s => {
-    const pline = s.vals.map((v, i) => v == null ? null : `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).filter(Boolean).join(' ');
-    const dots = s.vals.map((v, i) => v == null ? '' :
-      `<circle class="lc-dot" cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3" style="stroke:${s.color}">
-        <title>${esc(s.name)} · ${esc(labels[i].tip)}: ${v}%</title></circle>`).join('');
-    return `<polyline points="${pline}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>${dots}`;
-  }).join('');
-  // Thin the date labels when there are many games so they don't overlap.
-  const step = labels.length > 9 ? Math.ceil(labels.length / 8) : 1;
-  const xlabels = labels.map((l, i) => (i % step === 0 || i === labels.length - 1)
-    ? `<text class="lc-xlabel" x="${X(i).toFixed(1)}" y="${H - 7}" text-anchor="middle">${esc(l.axis)}</text>` : '').join('');
-  const legend = series.map(s => `<span class="lc-lg"><span class="lc-swatch" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
-  return `<div class="lc-legend">${legend}</div>
-    <svg viewBox="0 0 ${W} ${H}" class="line-chart" preserveAspectRatio="xMidYMid meet" role="img">${grid}${body}${xlabels}</svg>`;
 }
 
 // ── sortable tables + search (client-side, shared by Players & Items) ───────────
@@ -229,11 +123,11 @@ export async function mountDashboard({ onBack } = {}) {
   root.innerHTML = `
     <div class="dash-shell">
       <aside class="dash-sidebar">
-        <div class="dash-brand">Class Dashboard</div>
+        <div class="dash-brand">Dashboard</div>
         <nav class="dash-nav">
-          ${TABS.map(t => `<button class="dash-navitem${t.id === _tab ? ' active' : ''}" data-tab="${t.id}" type="button"><span class="nav-ico">${t.icon}</span>${t.label}</button>`).join('')}
+          ${TABS.map(t => `<button class="dash-navitem${t.id === _tab ? ' active' : ''}" data-tab="${t.id}" type="button"><span class="nav-ico">${icon(t.icon)}</span>${t.label}</button>`).join('')}
         </nav>
-        <button class="dash-navitem dash-back" id="dash-back" type="button"><span class="nav-ico">←</span>Back to game</button>
+        <button class="dash-navitem dash-back" id="dash-back" type="button"><span class="nav-ico">${icon('arrow-left')}</span>Back to game</button>
       </aside>
       <main class="dash-main">
         <header class="dash-pagehead">
@@ -242,8 +136,8 @@ export async function mountDashboard({ onBack } = {}) {
             <div class="dash-sub" id="dash-sub">Loading…</div>
           </div>
           <div class="dash-actions">
-            <button class="dash-btn" id="dash-refresh" type="button">↻ Refresh</button>
-            <button class="dash-btn" id="dash-export" type="button">⬇ Export CSV</button>
+            <button class="dash-btn" id="dash-refresh" type="button"><span class="nav-ico">${icon('refresh-cw')}</span><span class="btn-txt">Refresh</span></button>
+            <button class="dash-btn" id="dash-export" type="button"><span class="nav-ico">${icon('download')}</span>Export CSV</button>
           </div>
         </header>
         <div id="dash-body">${skeleton()}</div>
@@ -302,16 +196,19 @@ export async function mountDashboard({ onBack } = {}) {
     });
   }
 
+  mountIcons(root);                 // paint the sidebar/header Lucide glyphs
   if (_data) render(); else await refresh();
 }
+
+const setBtnText = (btn, txt) => { const t = btn?.querySelector('.btn-txt'); if (t) t.textContent = txt; };
 
 async function refresh() {
   if (_loading) return;
   _loading = true;
   const btn = document.getElementById('dash-refresh');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> Refreshing…'; }
+  if (btn) { btn.disabled = true; btn.classList.add('spinning'); setBtnText(btn, 'Refreshing…'); }
   const body = document.getElementById('dash-body');
-  if (body) body.innerHTML = skeleton();
+  if (body) { resetCharts(); body.innerHTML = skeleton(); }
   try {
     const [overview, items, behavior, games] = await Promise.all([
       fetchOverviewStats(), fetchItemStats(), fetchBehaviorStats(), fetchGameAccuracy(),
@@ -319,13 +216,17 @@ async function refresh() {
     _data = { overview, items, behavior, games };
   } finally {
     _loading = false;
-    if (btn) { btn.disabled = false; btn.innerHTML = '↻ Refresh'; }
+    if (btn) { btn.disabled = false; btn.classList.remove('spinning'); setBtnText(btn, 'Refresh'); }
   }
   render();
 }
 
+// Instantiate Chart.js canvases + Lucide glyphs for whatever was just written.
+function afterRender(root) { mountIcons(root); mountCharts(); }
+
 function render() {
   if (!_data) return;
+  resetCharts();                    // tear down the previous view's live charts
   const heading = document.getElementById('dash-heading');
   if (heading) heading.textContent = _drill?.player || (TABS.find(t => t.id === _tab)?.label ?? 'Overview');
   const sub = document.getElementById('dash-sub');
@@ -337,8 +238,8 @@ function render() {
   if (!body) return;
 
   // Drill-down views take over the body; a tab click clears _drill.
-  if (_drill?.playId) { renderRunDetailInto(body, _drill.player, _drill.playId); return; }
-  if (_drill?.player) { body.innerHTML = renderPlayerDetail(_drill.player); return; }
+  if (_drill?.playId) { renderRunDetailInto(body, _drill.player, _drill.playId); afterRender(body); return; }
+  if (_drill?.player) { body.innerHTML = renderPlayerDetail(_drill.player); afterRender(body); return; }
 
   body.innerHTML =
     _tab === 'overview' ? renderOverview()
@@ -348,6 +249,7 @@ function render() {
 
   // Restore the active search filter after any full-body rebuild (e.g. re-sort).
   if (_tab === 'players' || _tab === 'items') applyFilter(_tab);
+  afterRender(body);
 }
 
 // ── OVERVIEW ─────────────────────────────────────────────────────────────────
@@ -375,10 +277,10 @@ function renderOverview() {
 
   return `
     <div class="dash-grid">
-      ${statCard(o.total_plays, 'Total plays', `${o.players} unique player${o.players === 1 ? '' : 's'}`, 'blue', '🎮')}
-      ${statCard(winRate + '%', 'Win rate', `${wins} won of ${finished} finished`, 'green', '🏆')}
-      ${statCard(avgDur == null ? '—' : fmtTime(avgDur), 'Avg escape time', 'across winning runs', '', '⏱')}
-      ${statCard(losses, 'Caught by ghost', `${aband} abandoned`, 'red', '👻')}
+      ${statCard(o.total_plays, 'Total plays', `${o.players} unique player${o.players === 1 ? '' : 's'}`, 'blue', 'gamepad-2')}
+      ${statCard(winRate + '%', 'Win rate', `${wins} won of ${finished} finished`, 'green', 'trophy')}
+      ${statCard(avgDur == null ? '—' : fmtTime(avgDur), 'Avg escape time', 'across winning runs', '', 'timer')}
+      ${statCard(losses, 'Caught by ghost', `${aband} abandoned`, 'red', 'ghost')}
     </div>
     <div class="dash-2col">
       <div class="card"><h3>How runs end</h3>${donutChart(outcomes, { centerValue: o.total_plays, centerLabel: 'runs' })}
@@ -448,7 +350,7 @@ function renderItems() {
     </table></div>`;
 
   return `
-    <div class="card"><h3>Hardest questions (lowest first-try accuracy)</h3>${barRows(hardest, { colorByValue: true })}
+    <div class="card"><h3>Hardest questions (lowest first-try accuracy)</h3>${barChart(hardest, { colorByValue: true })}
       <div class="card-note">First-try accuracy = % who got it right on their first attempt.</div></div>
     <div class="card">
       <div class="card-toolbar"><h3>All questions · item analysis</h3>${searchBox('items', 'Search questions…')}</div>${table}
@@ -529,10 +431,10 @@ function renderPlayerDetail(username) {
 
   const cards = `
     <div class="dash-grid">
-      ${statCard(gs.length, 'Games played', `${timed.length} timed · ${gs.length - timed.length} practice`, '', '🎮')}
-      ${statCard(days, 'Days active', `last ${fmtDateTime(gs[gs.length - 1].started_at)}`, '', '📅')}
-      ${statCard(ftN ? accOf(ftC, ftN) + '%' : '—', 'First-try accuracy', 'across timed runs', 'blue', '🎯')}
-      ${statCard(bestScore < 0 ? '—' : bestScore + '%', 'Best score', bestTime != null ? 'best time ' + fmtTime(bestTime) : `${wins} escaped`, 'green', '🏆')}
+      ${statCard(gs.length, 'Games played', `${timed.length} timed · ${gs.length - timed.length} practice`, '', 'gamepad-2')}
+      ${statCard(days, 'Days active', `last ${fmtDateTime(gs[gs.length - 1].started_at)}`, '', 'calendar')}
+      ${statCard(ftN ? accOf(ftC, ftN) + '%' : '—', 'First-try accuracy', 'across timed runs', 'blue', 'target')}
+      ${statCard(bestScore < 0 ? '—' : bestScore + '%', 'Best score', bestTime != null ? 'best time ' + fmtTime(bestTime) : `${wins} escaped`, 'green', 'trophy')}
     </div>`;
 
   const mk = (nk, ck) => timed.map(g => accOf(g[ck], g[nk]));
@@ -669,15 +571,15 @@ function renderBehavior() {
 
   return `
     <div class="dash-grid">
-      ${statCard(pct(hintShown, b.attempts) + '%', 'Answers with a hint shown', `${plearnPlays} P-Learn runs`, 'amber', '💡')}
-      ${statCard(timeouts, 'Question timeouts', 'ran out of time', '', '⏳')}
-      ${statCard(deaths, 'Deaths (caught)', 'too many wrong answers', 'red', '💀')}
-      ${statCard(pct(mobile, b.total_plays) + '%', 'Plays on mobile', `${desktop} on desktop`, 'blue', '📱')}
+      ${statCard(pct(hintShown, b.attempts) + '%', 'Answers with a hint shown', `${plearnPlays} P-Learn runs`, 'amber', 'lightbulb')}
+      ${statCard(timeouts, 'Question timeouts', 'ran out of time', '', 'hourglass')}
+      ${statCard(deaths, 'Deaths (caught)', 'too many wrong answers', 'red', 'skull')}
+      ${statCard(pct(mobile, b.total_plays) + '%', 'Plays on mobile', `${desktop} on desktop`, 'blue', 'smartphone')}
     </div>
     <div class="dash-2col">
-      <div class="card"><h3>First-try accuracy by difficulty</h3>${barRows(accByDiff, { colorByValue: true })}
+      <div class="card"><h3>First-try accuracy by difficulty</h3>${barChart(accByDiff, { colorByValue: true })}
         <div class="card-note">% who nailed it on the first attempt — the cleanest signal of mastery.</div></div>
-      <div class="card"><h3>Avg attempts to get it right</h3>${barRows(triesByDiff)}
+      <div class="card"><h3>Avg attempts to get it right</h3>${barChart(triesByDiff, { color: C_BLUE })}
         <div class="card-note">Higher = players needed more tries before answering correctly.</div></div>
     </div>
     <div class="dash-2col">
