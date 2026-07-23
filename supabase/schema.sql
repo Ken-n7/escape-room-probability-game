@@ -268,3 +268,35 @@ drop policy if exists "events_insert" on public.events;
 create policy "events_insert" on public.events for insert with check ( user_id = auth.uid() );
 drop policy if exists "events_select" on public.events;
 create policy "events_select" on public.events for select using ( user_id = auth.uid() or public.is_admin() );
+
+-- ── Stale-run cleanup ────────────────────────────────────────────────────────
+-- A run is tracked in the browser and resolved to won/lost/abandoned when it
+-- ends. If the page dies mid-run without the unload beacon landing (e.g. a phone
+-- kills a backgrounded tab), the row is orphaned at 'in_progress' forever. This
+-- backstop marks such rows 'abandoned' when they are either older than a cutoff
+-- OR superseded by a newer run from the same player (a stronger staleness signal).
+create or replace function public.sweep_stale_plays(p_minutes int default 30)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n integer;
+begin
+  update public.plays p
+     set outcome      = 'abandoned',
+         ended_at     = coalesce(p.ended_at, now()),
+         duration_sec = coalesce(p.duration_sec,
+                                 greatest(0, extract(epoch from (now() - p.started_at))::int))
+   where p.outcome = 'in_progress'
+     and ( p.started_at < now() - make_interval(mins => p_minutes)
+        or exists ( select 1 from public.plays q
+                     where q.user_id = p.user_id and q.started_at > p.started_at ) );
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+grant execute on function public.sweep_stale_plays(int) to authenticated;
+
+-- Clean up whatever orphans already exist (idempotent — safe on every re-run).
+select public.sweep_stale_plays(30);
