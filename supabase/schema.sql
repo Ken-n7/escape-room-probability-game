@@ -300,3 +300,49 @@ grant execute on function public.sweep_stale_plays(int) to authenticated;
 
 -- Clean up whatever orphans already exist (idempotent — safe on every re-run).
 select public.sweep_stale_plays(30);
+
+-- ── game_accuracy(): per-game learning signal (powers the progress dashboard) ──
+-- One row per completed run per player, with first-try accuracy overall and by
+-- difficulty. Aggregating server-side keeps the result tiny (one row per game,
+-- not per answer) so it dodges the API row cap, and the client turns these rows
+-- into each student's accuracy-over-games curve + an improving/flat/declining
+-- verdict. Admin-only: the whole WHERE collapses to false for non-admins.
+create or replace function public.game_accuracy()
+returns table (
+  user_id      uuid,
+  username     text,
+  play_id      uuid,
+  started_at   timestamptz,
+  outcome      text,
+  total_score  int,
+  best_time    numeric,
+  plearn       boolean,
+  ft_n         int,   ft_correct   int,   -- first-try, overall
+  easy_n       int,   easy_correct int,
+  mod_n        int,   mod_correct  int,
+  hard_n       int,   hard_correct int
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select pl.user_id, pr.username, pl.id, pl.started_at, pl.outcome,
+         pl.total_score, pl.best_time, pl.plearn,
+         count(*) filter (where qa.attempt_no = 1)::int,
+         count(*) filter (where qa.attempt_no = 1 and qa.is_correct)::int,
+         count(*) filter (where qa.attempt_no = 1 and qa.difficulty = 'EASY')::int,
+         count(*) filter (where qa.attempt_no = 1 and qa.difficulty = 'EASY' and qa.is_correct)::int,
+         count(*) filter (where qa.attempt_no = 1 and qa.difficulty = 'MODERATE')::int,
+         count(*) filter (where qa.attempt_no = 1 and qa.difficulty = 'MODERATE' and qa.is_correct)::int,
+         count(*) filter (where qa.attempt_no = 1 and qa.difficulty = 'HARD')::int,
+         count(*) filter (where qa.attempt_no = 1 and qa.difficulty = 'HARD' and qa.is_correct)::int
+  from public.plays pl
+  join public.profiles pr on pr.id = pl.user_id
+  left join public.question_attempts qa on qa.play_id = pl.id
+  where public.is_admin()
+  group by pl.user_id, pr.username, pl.id, pl.started_at, pl.outcome,
+           pl.total_score, pl.best_time, pl.plearn
+  order by pl.user_id, pl.started_at;
+$$;
+grant execute on function public.game_accuracy() to authenticated;
