@@ -605,9 +605,9 @@ const _fabricTex   = fabricTex();
 const globeMat     = new THREE.MeshLambertMaterial({ map: globeTex(), emissive: 0x0a0f14, emissiveIntensity: 0.3 });
 const mugMat       = new THREE.MeshLambertMaterial({ color: 0xcfd6cf, emissive: 0x0c0e0c, emissiveIntensity: 0.3 });
 const pageMat      = new THREE.MeshLambertMaterial({ color: 0xd8cfb0, emissive: 0x0e0d0a, emissiveIntensity: 0.3 });  // book page block
-// Collectible question note — lit aged paper with only a faint self-glow, so the
-// flashlight reveals it instead of it beaconing across a dark room.
-const noteMat      = new THREE.MeshLambertMaterial({ map: noteTex(), emissive: 0x1a160e, emissiveIntensity: 0.44, side: THREE.DoubleSide });
+// Collectible question note — aged paper with a warm self-glow boosted enough
+// that it reads clearly against the grey floor debris without fully beaconing.
+const noteMat      = new THREE.MeshLambertMaterial({ map: noteTex(), emissive: 0x4a3a1c, emissiveIntensity: 0.95, side: THREE.DoubleSide });
 const trashMat     = new THREE.MeshLambertMaterial({ map: _metalTex, color: 0x8890a0, emissive: 0x060708, emissiveIntensity: 0.28 });
 const bagMats      = [0x7a2a2a, 0x243a6a, 0x35521f].map(c =>
   new THREE.MeshLambertMaterial({ map: _fabricTex, color: c, emissive: c, emissiveIntensity: 0.1 }));
