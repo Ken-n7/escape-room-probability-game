@@ -6,10 +6,10 @@ import { fetchAllPlays, fetchAllAttempts, fetchAllEvents, fetchGameAccuracy } fr
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'items',    label: 'Item analysis' },
-  { id: 'players',  label: 'Players' },
-  { id: 'behavior', label: 'Behavior' },
+  { id: 'overview', label: 'Overview',      icon: '📊' },
+  { id: 'players',  label: 'Players',       icon: '👥' },
+  { id: 'items',    label: 'Item analysis', icon: '📝' },
+  { id: 'behavior', label: 'Behavior',      icon: '🧠' },
 ];
 
 let _data = null;        // { plays, attempts, events }
@@ -230,32 +230,37 @@ export async function mountDashboard({ onBack } = {}) {
   _onBack = onBack;
   const root = document.getElementById('dash-root');
   root.innerHTML = `
-    <div class="dash-topbar">
-      <div class="dash-header">
-        <div>
-          <div class="dash-title">Class Dashboard</div>
-          <div class="dash-sub" id="dash-sub">Loading…</div>
-        </div>
-        <div class="dash-actions">
-          <button class="dash-btn" id="dash-refresh" type="button">↻ Refresh</button>
-          <button class="dash-btn" id="dash-export" type="button">⬇ Export CSV</button>
-          <button class="dash-btn primary" id="dash-back" type="button">← Back to game</button>
-        </div>
-      </div>
-      <div class="dash-tabs">
-        ${TABS.map(t => `<button class="dash-tab${t.id === _tab ? ' active' : ''}" data-tab="${t.id}" type="button">${t.label}</button>`).join('')}
-      </div>
-    </div>
-    <div id="dash-body">${skeleton()}</div>`;
+    <div class="dash-shell">
+      <aside class="dash-sidebar">
+        <div class="dash-brand">Class Dashboard</div>
+        <nav class="dash-nav">
+          ${TABS.map(t => `<button class="dash-navitem${t.id === _tab ? ' active' : ''}" data-tab="${t.id}" type="button"><span class="nav-ico">${t.icon}</span>${t.label}</button>`).join('')}
+        </nav>
+        <button class="dash-navitem dash-back" id="dash-back" type="button"><span class="nav-ico">←</span>Back to game</button>
+      </aside>
+      <main class="dash-main">
+        <header class="dash-pagehead">
+          <div>
+            <h1 class="dash-h1" id="dash-heading">Overview</h1>
+            <div class="dash-sub" id="dash-sub">Loading…</div>
+          </div>
+          <div class="dash-actions">
+            <button class="dash-btn" id="dash-refresh" type="button">↻ Refresh</button>
+            <button class="dash-btn" id="dash-export" type="button">⬇ Export CSV</button>
+          </div>
+        </header>
+        <div id="dash-body">${skeleton()}</div>
+      </main>
+    </div>`;
 
   root.querySelector('#dash-back').onclick    = () => _onBack?.();
   root.querySelector('#dash-refresh').onclick = () => refresh();
   root.querySelector('#dash-export').onclick  = () => exportCsv();
-  root.querySelectorAll('.dash-tab').forEach(btn => {
+  root.querySelectorAll('.dash-navitem[data-tab]').forEach(btn => {
     btn.onclick = () => {
       _tab = btn.dataset.tab;
       _drill = null;                 // switching tabs leaves any drill-down
-      root.querySelectorAll('.dash-tab').forEach(b => b.classList.toggle('active', b === btn));
+      root.querySelectorAll('.dash-navitem[data-tab]').forEach(b => b.classList.toggle('active', b === btn));
       render();
     };
   });
@@ -322,6 +327,8 @@ async function refresh() {
 
 function render() {
   if (!_data) return;
+  const heading = document.getElementById('dash-heading');
+  if (heading) heading.textContent = _drill?.player || (TABS.find(t => t.id === _tab)?.label ?? 'Overview');
   const sub = document.getElementById('dash-sub');
   if (sub) {
     const players = new Set(_data.plays.map(uname)).size;
