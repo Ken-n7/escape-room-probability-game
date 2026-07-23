@@ -137,7 +137,9 @@ export function areaChart(points, { unit = '', color = '#2563eb', height = 200 }
   return queue({
     type: 'line',
     data: {
-      labels: points.map(p => p.label || ''),
+      // Index-keyed categories so distinct points never merge (Chart.js collapses
+      // duplicate label strings, e.g. the blanked alternate day labels).
+      labels: points.map((_, i) => i),
       datasets: [{
         data: points.map(p => p.value),
         borderColor: color, borderWidth: 2, tension: 0.35,
@@ -156,10 +158,10 @@ export function areaChart(points, { unit = '', color = '#2563eb', height = 200 }
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { title: items => points[items[0].dataIndex]?.full || items[0].label, label: c => ` ${c.parsed.y}${unit}` } },
+        tooltip: { callbacks: { title: items => points[items[0].dataIndex]?.full || '', label: c => ` ${c.parsed.y}${unit}` } },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false, callback: (_v, i) => points[i]?.label ?? '' } },
         y: { beginAtZero: true, grid: { color: LINE2 }, border: { display: false }, ticks: { precision: 0 } },
       },
     },
@@ -172,7 +174,8 @@ export function lineChart(labels, series, { height = 260 } = {}) {
   return queue({
     type: 'line',
     data: {
-      labels: labels.map(l => l.axis),
+      // Index-keyed so two games on the same day don't collapse onto one x-slot.
+      labels: labels.map((_, i) => i),
       datasets: series.map(s => ({
         label: s.name, data: s.vals, borderColor: s.color, backgroundColor: s.color,
         borderWidth: 2, tension: 0.3, spanGaps: true,
@@ -186,7 +189,7 @@ export function lineChart(labels, series, { height = 260 } = {}) {
         tooltip: { callbacks: { title: items => labels[items[0].dataIndex]?.tip || '', label: c => ` ${c.dataset.label}: ${c.parsed.y}%` } },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, callback: (_v, i) => labels[i]?.axis ?? '' } },
         y: { min: 0, max: 100, grid: { color: LINE2 }, border: { display: false }, ticks: { stepSize: 25, callback: v => v } },
       },
     },

@@ -912,7 +912,8 @@
     .accent-amber .stat-icon { color:#d97706; }
     /* Chart.js canvas containers — height is set inline per chart. */
     .chart-box { position:relative; width:100%; }
-    .chart-box canvas { max-width:100%; }
+    /* Override the global `canvas{position:fixed}` (WebGL renderer) for chart canvases. */
+    .chart-box canvas { max-width:100%; position:static; inset:auto; z-index:auto; }
     .gauge-row .chart-box { flex:0 0 180px; width:180px; }
     /* Donut + gauge */
     .donut-wrap { display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
