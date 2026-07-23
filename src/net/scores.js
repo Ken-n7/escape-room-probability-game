@@ -64,6 +64,14 @@ export async function fetchAllAttempts(limit = 10000) {
   return data ?? [];
 }
 
+// Per-game learning signal (one row per run per player, first-try accuracy
+// overall + by difficulty). Server-side aggregation → small result, no row cap.
+export async function fetchGameAccuracy() {
+  const { data, error } = await supabase.rpc('game_accuracy');
+  if (error) { console.warn('[scores] game_accuracy failed:', error.message); return []; }
+  return data ?? [];
+}
+
 export async function fetchAllEvents(limit = 10000) {
   const { data, error } = await supabase.from('events')
     .select('play_id, type, data, at, profiles(username)')

@@ -901,6 +901,21 @@
     .ms-row { display:flex; justify-content:space-between; align-items:center; padding:9px 2px; border-bottom:1px solid var(--line2); font-size:0.86rem; color:var(--muted); }
     .ms-row:last-child { border-bottom:none; }
     .ms-row b { color:var(--ink); font-variant-numeric:tabular-nums; }
+    /* Multi-line learning chart */
+    .line-chart { width:100%; height:auto; display:block; }
+    .lc-legend { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:6px; }
+    .lc-lg { display:flex; align-items:center; gap:6px; font-size:0.76rem; color:var(--muted); }
+    .lc-swatch { width:13px; height:3px; border-radius:2px; }
+    .lc-dot { fill:#fff; stroke-width:2; cursor:pointer; transition:r .1s; }
+    .lc-dot:hover { r:5; }
+    .lc-ylabel, .lc-xlabel { fill:var(--faint); font-size:10px; }
+    /* Learning verdict banner */
+    .verdict { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; margin-bottom:16px; border:1px solid var(--line); background:var(--card); }
+    .verdict .v-text { font-size:0.9rem; color:var(--ink); }
+    .verdict.v-up   { background:#f0fdf4; border-color:#bbf7d0; }
+    .verdict.v-down { background:#fef2f2; border-color:#fecaca; }
+    .verdict.v-flat { background:#fffbeb; border-color:#fde68a; }
+    .pill.flat-pill { background:#f1f5f9; color:#475569; }
     .dash-empty { text-align:center; color:var(--faint); padding:44px 0; font-size:.88rem; }
     .dash-empty .emoji { font-size:1.9rem; display:block; margin-bottom:8px; opacity:.75; }
     /* skeleton loading placeholders */

@@ -1,4 +1,4 @@
-import { fetchAllPlays, fetchAllAttempts, fetchAllEvents } from '../net/scores.js';
+import { fetchAllPlays, fetchAllAttempts, fetchAllEvents, fetchGameAccuracy } from '../net/scores.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  ADMIN DASHBOARD — clean, non-game analytics UI. Renders into #dash-root.
@@ -22,7 +22,7 @@ let _keyBound = false;   // Escape handler bound once, guarded across remounts
 // Per-table interactive state (search box text + sorted column).
 const _query = { players: '', items: '' };
 const _sort  = {
-  players: { key: 'wins',     dir: -1 },   // default: most wins first
+  players: { key: 'lastMs',   dir: -1 },   // default: most recently active first
   items:   { key: 'firstAcc', dir:  1 },   // default: hardest (lowest first-try) first
 };
 
@@ -32,6 +32,7 @@ const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 const uname = r => r.profiles?.username || '—';
 const fmtTime = s => s == null ? '—' : s < 60 ? Math.round(s) + 's' : Math.floor(s / 60) + 'm ' + String(Math.round(s) % 60).padStart(2, '0') + 's';
 const fmtDateTime = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const fmtDay = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 const accClass = v => v >= 75 ? 'good' : v >= 50 ? 'mid' : 'bad';
 const accPill = v => `<span class="pill ${accClass(v)}">${v}%</span>`;
 const OUTCOME = { won: ['good', 'Escaped'], lost: ['bad', 'Caught'], abandoned: ['mid', 'Quit'], in_progress: ['mid', 'In progress'] };
@@ -144,6 +145,57 @@ function areaChart(points, { unit = '' } = {}) {
   return `<div class="ac-peak">Peak: ${max}${unit}</div>${svg}${labels}`;
 }
 const skeleton = () => `<div class="skel-grid">${'<div class="skel skel-card"></div>'.repeat(4)}</div><div class="skel skel-row"></div>`;
+
+// ── learning-over-time (per player, from game_accuracy rows) ────────────────────
+const accOf = (correct, n) => (n ? Math.round(correct / n * 100) : null);
+// A player's runs, oldest→newest (game_accuracy is already ordered by started_at).
+const gamesForUser = u => (_data.games || []).filter(g => g.username === u);
+
+// Verdict from a player's timed (non-P-Learn) runs: compare recent-half first-try
+// accuracy against early-half. P-Learn is excluded — its hints inflate accuracy,
+// so it isn't an honest mastery signal.
+function learningVerdict(username) {
+  const pts = gamesForUser(username).filter(g => !g.plearn && g.ft_n > 0)
+    .map(g => g.ft_correct / g.ft_n * 100);
+  if (pts.length < 2) return { key: 'new', label: 'New', diff: null, n: pts.length };
+  const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+  const half = Math.max(1, Math.floor(pts.length / 2));
+  const diff = Math.round(mean(pts.slice(-half)) - mean(pts.slice(0, half)));
+  const key = diff >= 8 ? 'up' : diff <= -8 ? 'down' : 'flat';
+  return { key, label: { up: 'Improving', down: 'Declining', flat: 'Steady' }[key], diff, n: pts.length };
+}
+const TREND = { up: ['good', '↗'], down: ['bad', '↘'], flat: ['mid', '→'], new: ['', '–'] };
+function trendPill(v) {
+  const [cls, arrow] = TREND[v.key];
+  const d = v.diff == null ? '' : ` ${v.diff > 0 ? '+' : ''}${v.diff}pt`;
+  return `<span class="pill ${cls || 'flat-pill'}" title="Recent vs early first-try accuracy">${arrow} ${v.label}${d}</span>`;
+}
+
+// Multi-line chart on a fixed 0–100 accuracy scale. `series` = [{name,color,vals}]
+// where vals may contain nulls (skipped). Native <title> tooltips on points.
+function lineChart(labels, series) {
+  const W = 660, H = 190, padT = 12, padB = 22, padL = 30, padR = 8;
+  const n = Math.max(1, labels.length - 1);
+  const X = i => padL + (i / n) * (W - padL - padR);
+  const Y = v => padT + (1 - v / 100) * (H - padT - padB);
+  const grid = [0, 25, 50, 75, 100].map(v => `
+    <line class="ac-grid" x1="${padL}" x2="${W - padR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line>
+    <text class="lc-ylabel" x="${padL - 6}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${v}</text>`).join('');
+  const body = series.map(s => {
+    const pline = s.vals.map((v, i) => v == null ? null : `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).filter(Boolean).join(' ');
+    const dots = s.vals.map((v, i) => v == null ? '' :
+      `<circle class="lc-dot" cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3" style="stroke:${s.color}">
+        <title>${esc(s.name)} · ${esc(labels[i].tip)}: ${v}%</title></circle>`).join('');
+    return `<polyline points="${pline}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>${dots}`;
+  }).join('');
+  // Thin the date labels when there are many games so they don't overlap.
+  const step = labels.length > 9 ? Math.ceil(labels.length / 8) : 1;
+  const xlabels = labels.map((l, i) => (i % step === 0 || i === labels.length - 1)
+    ? `<text class="lc-xlabel" x="${X(i).toFixed(1)}" y="${H - 7}" text-anchor="middle">${esc(l.axis)}</text>` : '').join('');
+  const legend = series.map(s => `<span class="lc-lg"><span class="lc-swatch" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
+  return `<div class="lc-legend">${legend}</div>
+    <svg viewBox="0 0 ${W} ${H}" class="line-chart" preserveAspectRatio="xMidYMid meet" role="img">${grid}${body}${xlabels}</svg>`;
+}
 
 // ── sortable tables + search (client-side, shared by Players & Items) ───────────
 const searchBox = (tab, ph) =>
@@ -259,8 +311,8 @@ async function refresh() {
   const body = document.getElementById('dash-body');
   if (body) body.innerHTML = skeleton();
   try {
-    const [plays, attempts, events] = await Promise.all([fetchAllPlays(), fetchAllAttempts(), fetchAllEvents()]);
-    _data = { plays, attempts, events };
+    const [plays, attempts, events, games] = await Promise.all([fetchAllPlays(), fetchAllAttempts(), fetchAllEvents(), fetchGameAccuracy()]);
+    _data = { plays, attempts, events, games };
   } finally {
     _loading = false;
     if (btn) { btn.disabled = false; btn.innerHTML = '↻ Refresh'; }
@@ -414,94 +466,119 @@ function renderItems() {
 }
 
 // ── PLAYERS ──────────────────────────────────────────────────────────────────
-function playerStats() {
+// Per-player roster row, built from the per-game rows (server-aggregated, so
+// first-try accuracy here is correct — not truncated by the API row cap).
+function rosterStats() {
   const byU = new Map();
-  const get = u => { if (!byU.has(u)) byU.set(u, { u, plays: 0, wins: 0, best: null, bestTime: null, correct: 0, total: 0, atToCorrect: [] }); return byU.get(u); };
-  for (const p of _data.plays) {
-    const g = get(uname(p));
-    g.plays++;
-    if (p.outcome === 'won') { g.wins++; if (p.best_time != null && (g.bestTime == null || p.best_time < g.bestTime)) g.bestTime = p.best_time; }
-    if (p.total_score != null && (g.best == null || p.total_score > g.best)) g.best = p.total_score;
+  for (const g of (_data.games || [])) {
+    if (!byU.has(g.username)) byU.set(g.username, { u: g.username, games: 0, timed: 0, wins: 0, ftN: 0, ftC: 0, days: new Set(), lastMs: 0 });
+    const r = byU.get(g.username);
+    r.games++;
+    r.lastMs = Math.max(r.lastMs, new Date(g.started_at).getTime());
+    r.days.add((g.started_at || '').slice(0, 10));
+    if (g.outcome === 'won') r.wins++;
+    if (!g.plearn) { r.timed++; r.ftN += g.ft_n; r.ftC += g.ft_correct; }
   }
-  for (const a of _data.attempts) {
-    const g = get(uname(a));
-    g.total++;
-    if (a.is_correct) { g.correct++; g.atToCorrect.push(a.attempt_no || 1); }
-  }
-  return [...byU.values()].map(g => ({
-    ...g,
-    acc: pct(g.correct, g.total),
-    avgAtt: g.atToCorrect.length ? Math.round(g.atToCorrect.reduce((s, n) => s + n, 0) / g.atToCorrect.length * 10) / 10 : null,
-  })).sort((a, b) => b.wins - a.wins || (b.best ?? -1) - (a.best ?? -1));
+  return [...byU.values()].map(r => {
+    const v = learningVerdict(r.u);
+    return { ...r, days: r.days.size, ftAcc: accOf(r.ftC, r.ftN), trend: v, trendDiff: v.diff };
+  });
 }
 
 function renderPlayers() {
-  if (!_data.plays.length) return emptyCard('No players have played yet.', '🎮');
-  const rows = applySort(playerStats(), _sort.players);
+  if (!(_data.games || []).length) return emptyCard('No players have played yet.', '🎮');
+  const rows = applySort(rosterStats(), _sort.players);
   return `
     <div class="card">
-    <div class="card-toolbar"><h3>Per-player report card</h3>${searchBox('players', 'Search players…')}</div>
+    <div class="card-toolbar"><h3>Class progress — who's learning</h3>${searchBox('players', 'Search players…')}</div>
     <div class="dash-table-wrap"><table class="dash-table">
       <thead><tr>
-        ${th('players', 'u', 'Player')}${th('players', 'plays', 'Plays', 'num')}${th('players', 'wins', 'Wins', 'num')}
-        ${th('players', 'best', 'Best score', 'num')}${th('players', 'bestTime', 'Best time', 'num')}
-        ${th('players', 'acc', 'Accuracy', 'num')}${th('players', 'avgAtt', 'Avg tries→correct', 'num')}
+        ${th('players', 'u', 'Player')}${th('players', 'trendDiff', 'Trend')}
+        ${th('players', 'ftAcc', 'First-try acc', 'num')}${th('players', 'games', 'Games', 'num')}
+        ${th('players', 'timed', 'Timed', 'num')}${th('players', 'days', 'Days', 'num')}
+        ${th('players', 'wins', 'Wins', 'num')}${th('players', 'lastMs', 'Last played', 'num')}
       </tr></thead>
       <tbody>${rows.map(r => `
         <tr class="row-link" data-player="${esc(r.u)}" data-search="${esc(r.u.toLowerCase())}">
           <td>${esc(r.u)} <span class="chev">›</span></td>
-          <td class="num">${r.plays}</td>
+          <td>${trendPill(r.trend)}</td>
+          <td class="num">${r.ftAcc == null ? '—' : accPill(r.ftAcc)}</td>
+          <td class="num">${r.games}</td>
+          <td class="num">${r.timed}</td>
+          <td class="num">${r.days}</td>
           <td class="num">${r.wins}</td>
-          <td class="num">${r.best == null ? '—' : r.best + '%'}</td>
-          <td class="num">${fmtTime(r.bestTime)}</td>
-          <td class="num">${r.total ? accPill(r.acc) : '—'}</td>
-          <td class="num">${r.avgAtt ?? '—'}</td>
+          <td class="num">${r.lastMs ? fmtDateTime(new Date(r.lastMs).toISOString()) : '—'}</td>
         </tr>`).join('')}</tbody>
     </table></div>
-    <div class="card-note">Click a player to see their run history, or a column header to sort. Accuracy = correct ÷ all answers; avg tries→correct = attempts a right answer takes.</div></div>`;
+    <div class="card-note">Click a player for their learning curve. Trend = recent vs early first-try accuracy on timed runs (P-Learn practice excluded — its hints inflate accuracy). Sort by Trend to surface who's slipping.</div></div>`;
 }
 
-// ── PLAYER DETAIL (drill-down: one player's run history) ────────────────────────
-function renderPlayerDetail(username) {
-  const plays = playsForUser(username);
-  const atts = _data.attempts.filter(a => uname(a) === username);
-  const wins = plays.filter(p => p.outcome === 'won').length;
-  const losses = plays.filter(p => p.outcome === 'lost').length;
-  const aband = plays.filter(p => p.outcome === 'abandoned').length;
-  const correct = atts.filter(a => a.is_correct).length;
-  const bestScore = plays.reduce((m, p) => Math.max(m, p.total_score ?? -1), -1);
-  const bestTime = plays.filter(p => p.outcome === 'won').reduce((m, p) => m == null || p.best_time < m ? p.best_time : m, null);
+// ── PLAYER DETAIL (drill-down: one player's learning over their games) ──────────
+function verdictText(v) {
+  if (v.key === 'new') return v.n === 0 ? 'No timed runs yet — only P-Learn practice.' : 'Needs a few timed runs before a trend shows.';
+  const d = Math.abs(v.diff);
+  if (v.key === 'up')   return `First-try accuracy is up ${d} points vs their early games — they're learning.`;
+  if (v.key === 'down') return `First-try accuracy is down ${d} points vs their early games — they're slipping.`;
+  return `Holding steady (${v.diff >= 0 ? '+' : ''}${v.diff} points vs early games).`;
+}
 
+function renderPlayerDetail(username) {
   const crumb = `<div class="crumb"><span class="link" data-back="players">Players</span> <span class="crumb-sep">/</span> <b>${esc(username)}</b></div>`;
+  const gs = gamesForUser(username);
+  if (!gs.length) return `${crumb}${emptyCard('No games recorded for this player yet.', '🎮')}`;
+
+  const timed = gs.filter(g => !g.plearn);
+  const v = learningVerdict(username);
+  const wins = gs.filter(g => g.outcome === 'won').length;
+  const days = new Set(gs.map(g => (g.started_at || '').slice(0, 10))).size;
+  const bestScore = gs.reduce((m, g) => Math.max(m, g.total_score ?? -1), -1);
+  const bestTime = gs.filter(g => g.outcome === 'won' && g.best_time != null).reduce((m, g) => (m == null || g.best_time < m ? g.best_time : m), null);
+  const ftN = timed.reduce((s, g) => s + g.ft_n, 0), ftC = timed.reduce((s, g) => s + g.ft_correct, 0);
+
+  const banner = `<div class="verdict v-${v.key}">${trendPill(v)}<span class="v-text">${verdictText(v)}</span></div>`;
+
   const cards = `
     <div class="dash-grid">
-      ${statCard(plays.length, 'Runs', `${wins} won · ${losses} caught · ${aband} quit`)}
-      ${statCard(pct(wins, plays.length) + '%', 'Win rate')}
-      ${statCard(bestScore < 0 ? '—' : bestScore + '%', 'Best score', bestTime != null ? 'Best time ' + fmtTime(bestTime) : '')}
-      ${statCard(pct(correct, atts.length) + '%', 'Answer accuracy', `${correct}/${atts.length} correct`)}
+      ${statCard(gs.length, 'Games played', `${timed.length} timed · ${gs.length - timed.length} practice`, '', '🎮')}
+      ${statCard(days, 'Days active', `last ${fmtDateTime(gs[gs.length - 1].started_at)}`, '', '📅')}
+      ${statCard(ftN ? accOf(ftC, ftN) + '%' : '—', 'First-try accuracy', 'across timed runs', 'blue', '🎯')}
+      ${statCard(bestScore < 0 ? '—' : bestScore + '%', 'Best score', bestTime != null ? 'best time ' + fmtTime(bestTime) : `${wins} escaped`, 'green', '🏆')}
     </div>`;
 
-  const runRows = plays.map(p => {
-    const n = attemptsForPlay(p.id).length;
+  const mk = (nk, ck) => timed.map(g => accOf(g[ck], g[nk]));
+  const labels = timed.map((g, i) => ({ axis: fmtDay(g.started_at), tip: `G${i + 1} · ${fmtDay(g.started_at)}` }));
+  const chart = timed.length
+    ? `${lineChart(labels, [
+        { name: 'Overall',  color: '#0f172a', vals: timed.map(g => accOf(g.ft_correct, g.ft_n)) },
+        { name: 'Easy',     color: C_GOOD,    vals: mk('easy_n', 'easy_correct') },
+        { name: 'Moderate', color: C_MID,     vals: mk('mod_n', 'mod_correct') },
+        { name: 'Hard',     color: C_BAD,     vals: mk('hard_n', 'hard_correct') },
+      ])}
+      <div class="card-note">Each point is one timed run, oldest → newest — hover for the date. Rising line = learning; flat = stuck; falling = slipping.</div>`
+    : emptyCard('No timed runs yet — the learning curve needs real (non-P-Learn) games.', '📈');
+
+  const runRows = [...gs].reverse().map(g => {
+    const p = findPlay(g.play_id);
+    const ftAcc = accOf(g.ft_correct, g.ft_n);
     return `
-      <tr class="row-link" data-run="${esc(p.id)}" data-player="${esc(username)}">
-        <td>${fmtDateTime(p.started_at)} <span class="chev">›</span></td>
-        <td>${outcomePill(p.outcome)}</td>
-        <td class="num">${p.rooms_completed}/3</td>
-        <td class="num">${p.total_score == null ? '—' : p.total_score + '%'}</td>
-        <td class="num">${fmtTime(p.duration_sec)}</td>
-        <td class="num">${n}</td>
-        <td>${p.plearn ? '<span class="pill mid">P-Learn</span>' : ''} ${p.device === 'mobile' ? '📱' : '🖥'}</td>
+      <tr class="row-link" data-run="${esc(g.play_id)}" data-player="${esc(username)}">
+        <td>${fmtDateTime(g.started_at)} <span class="chev">›</span></td>
+        <td>${outcomePill(g.outcome)}</td>
+        <td class="num">${p ? p.rooms_completed + '/3' : '—'}</td>
+        <td class="num">${g.total_score == null ? '—' : g.total_score + '%'}</td>
+        <td class="num">${ftAcc == null ? '—' : ftAcc + '%'}</td>
+        <td>${g.plearn ? '<span class="pill mid">P-Learn</span>' : '<span class="pill good">Timed</span>'}</td>
       </tr>`;
   }).join('');
 
-  return `${crumb}${cards}
-    <div class="card"><h3>Run history</h3>
+  return `${crumb}${banner}${cards}
+    <div class="card"><h3>First-try accuracy across games</h3>${chart}</div>
+    <div class="card"><h3>Every game (newest first)</h3>
     <div class="dash-table-wrap"><table class="dash-table">
-      <thead><tr><th>When</th><th>Outcome</th><th class="num">Reached</th><th class="num">Score</th><th class="num">Duration</th><th class="num">Answers</th><th>Mode</th></tr></thead>
-      <tbody>${runRows || '<tr><td colspan="7" class="dash-empty">No runs.</td></tr>'}</tbody>
+      <thead><tr><th>When</th><th>Outcome</th><th class="num">Reached</th><th class="num">Score</th><th class="num">First-try</th><th>Mode</th></tr></thead>
+      <tbody>${runRows || '<tr><td colspan="6" class="dash-empty">No games.</td></tr>'}</tbody>
     </table></div>
-    <div class="card-note">Click a run to see every answer and event from it.</div></div>`;
+    <div class="card-note">Click a game to see every answer and event from it.</div></div>`;
 }
 
 // ── RUN DETAIL (drill-down: everything from one run) ───────────────────────────
