@@ -20,7 +20,7 @@ import {
   showScreen, showHUD, hideOptionsConfirm,
   updateFullscreenLabel, toggleFullscreen, setCanInteract,
 } from './ui/hud.js';
-import { updateAmbientScares, resetAmbientScares, clearScareSprite, triggerBlackout } from './scares/scare.js';
+import { updateAmbientScares, resetAmbientScares, clearScareSprite, triggerBlackout, warmUpScare } from './scares/scare.js';
 import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
@@ -1847,6 +1847,9 @@ const authReady = initAuth().catch(err => { console.warn('[auth] init failed:', 
 // Always land on the menu (players see the hallway first). The menu shows the
 // full file list when signed in, or just Log In / Sign Up when not.
 async function enterFromAuth() {
+  // Warm the ghost once now (behind the menu overlay): compiles its shaders and
+  // uploads its textures/geometry during the menu, not on the first scare.
+  warmUpScare();
   await authReady;
   applyMenuAuthState();
   showScreen('menu');
