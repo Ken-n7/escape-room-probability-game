@@ -1,0 +1,51 @@
+    /* ── Fonts ───────────────────────────────────────────────────────────── */
+    /* Scratchy horror font — used for the wall scrawls in the vacant/decoy rooms
+       (drawn onto canvas textures; see scrawlTex in world.js). */
+    @font-face {
+      font-family:'HorrorScratch';
+      src:url('/assets/fonts/HorrorGameWallScratches-Regular.ttf') format('truetype');
+      font-display:swap;
+    }
+
+    /* ── Reset ───────────────────────────────────────────────────────────── */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#000; overflow:hidden; font-family:'Georgia',serif; }
+    html,
+    body,
+    canvas,
+    .screen,
+    #hud,
+    button,
+    .nav-home,
+    .nav-back,
+    .nav-fwd,
+    #menu-icons span {
+      -webkit-user-select:none;
+      user-select:none;
+      -webkit-touch-callout:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    input,
+    textarea,
+    [contenteditable="true"] {
+      -webkit-user-select:text;
+      user-select:text;
+      -webkit-touch-callout:default;
+    }
+    canvas {
+      display:block;
+      position:fixed;
+      inset:0;
+      z-index:0;
+      touch-action:none;
+    }
+
+    /* ── Full-screen panel base ──────────────────────────────────────────── */
+    .screen {
+      position:fixed; inset:0;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      z-index:20;
+    }
+    .screen.hidden { display:none !important; }
+

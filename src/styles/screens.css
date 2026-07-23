@@ -1,0 +1,127 @@
+    /* ── TITLE ───────────────────────────────────────────────────────────── */
+    #s-title {
+      background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #0a0e0a;
+      cursor:pointer;
+    }
+    #s-title::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.55); }
+    #title-content { position:relative; text-align:center; }
+    #title-content h1 {
+      font-family:monospace; font-size:clamp(2.5rem,6vw,4.5rem);
+      color:#cc1111; text-shadow:0 0 30px #ff0000,0 0 60px #660000;
+      letter-spacing:6px; line-height:1.1;
+    }
+    #title-arrow {
+      position:fixed; bottom:32px; right:40px;
+      width:54px; height:54px; border-radius:50%;
+      border:2px solid #cc1111; color:#cc1111;
+      font-size:1.5rem; display:flex; align-items:center; justify-content:center;
+      cursor:pointer; z-index:30; transition:background 0.2s;
+    }
+    #title-arrow:hover { background:rgba(200,0,0,0.2); }
+
+    /* ── MAIN MENU ───────────────────────────────────────────────────────── */
+    #s-menu { background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #0a0e0a; }
+    #s-menu::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.55); }
+    #menu-content { position:relative; display:flex; flex-direction:column; gap:16px; align-items:center; }
+    #menu-icons { position:fixed; top:16px; right:16px; display:flex; flex-direction:column; gap:8px; z-index:25; }
+    #menu-icons span {
+      font-size:2rem; cursor:pointer; filter:drop-shadow(0 0 4px gold);
+      transition:transform 0.15s;
+    }
+    #menu-icons span:hover { transform:scale(1.15); }
+    .menu-btn {
+      display:flex; align-items:center; gap:12px; padding:12px 36px;
+      border-radius:999px; background:rgba(255,255,255,0.88);
+      font-family:monospace; font-size:1.3rem; font-weight:700;
+      color:#cc1111; letter-spacing:2px; cursor:pointer; border:none;
+      text-shadow:0 0 6px #ff0000; transition:transform 0.15s,background 0.15s;
+      min-width:220px;
+    }
+    .menu-btn:hover { transform:scale(1.04); background:#fff; }
+    .menu-btn .icon { font-size:1.5rem; }
+    /* `display:flex` above outranks the UA [hidden] rule, so hidden buttons
+       (e.g. ADMIN for non-admins) would still show without this override. */
+    .menu-btn[hidden] { display:none !important; }
+    #menu-player-name {
+      position:fixed; top:14px; left:16px; z-index:25;
+      color:rgba(255,200,100,0.7); font-family:monospace; font-size:0.8rem;
+      letter-spacing:1px;
+    }
+
+    /* ── SHARED back/home nav ─────────────────────────────────────────────── */
+    .nav-home {
+      position:fixed; top:14px; left:14px; z-index:25;
+      font-size:1.6rem; cursor:pointer; filter:drop-shadow(0 0 6px gold);
+    }
+    .nav-back {
+      position:fixed; bottom:28px; left:36px;
+      font-size:2rem; color:#cc1111; cursor:pointer; z-index:25;
+    }
+    .nav-fwd {
+      position:fixed; bottom:20px; right:36px;
+      font-size:2rem; color:#cc1111; cursor:pointer; z-index:25;
+    }
+
+    /* ── STORY SLIDES ────────────────────────────────────────────────────── */
+    #s-story { background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c08; }
+    #s-story::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.62); }
+    #story-text {
+      position:relative; max-width:700px; color:#fff;
+      font-size:clamp(1rem,2.2vw,1.35rem); text-align:center;
+      line-height:1.75; text-shadow:1px 1px 4px #000; padding:0 24px;
+    }
+    #story-nav  { position:fixed; bottom:28px; display:flex; gap:24px; z-index:25; }
+    .story-dot  { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.3); }
+    .story-dot.active { background:#cc1111; }
+
+    /* ── P-LEARN LESSON SLIDES ───────────────────────────────────────────── */
+    #s-plearn {
+      background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c12;
+    }
+    #s-plearn::before { content:''; position:absolute; inset:0; background:rgba(0,0,10,0.72); }
+    #plearn-box {
+      position:relative; max-width:740px; width:90%;
+      background:rgba(5,10,30,0.88); border:1px solid #334488;
+      border-radius:14px; padding:32px 40px; text-align:center;
+    }
+    #plearn-slide-label {
+      color:#8899cc; font-family:monospace; font-size:0.75rem;
+      letter-spacing:3px; margin-bottom:10px;
+    }
+    #plearn-title {
+      color:#aabbff; font-family:monospace; font-size:clamp(1.2rem,3vw,1.7rem);
+      letter-spacing:2px; margin-bottom:18px;
+      text-shadow:0 0 12px #4466ff;
+    }
+    #plearn-body {
+      color:#ccd4ee; font-size:clamp(0.9rem,1.8vw,1.05rem);
+      line-height:1.8; text-align:left; margin-bottom:16px;
+    }
+    #plearn-note {
+      background:rgba(30,50,100,0.7); border:1px solid #334488;
+      border-radius:8px; padding:12px 18px;
+      color:#aaddff; font-family:monospace; font-size:1rem;
+      letter-spacing:1px; text-align:center; margin-top:12px;
+      display:none;
+    }
+    #plearn-nav { position:fixed; bottom:28px; display:flex; gap:20px; z-index:25; }
+    .plearn-dot { width:9px; height:9px; border-radius:50%; background:rgba(100,130,255,0.3); }
+    .plearn-dot.active { background:#4488ff; }
+    /* ── ARE YOU READY ───────────────────────────────────────────────────── */
+    #s-ready { background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c08; }
+    #s-ready::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.6); }
+    #ready-content { position:relative; text-align:center; }
+    #ready-content h2 {
+      color:#cc1111; font-family:monospace; font-size:clamp(2rem,5vw,3.5rem);
+      letter-spacing:4px; text-shadow:0 0 20px #ff0000; margin-bottom:2rem;
+    }
+    .ready-btn {
+      display:block; width:260px; margin:10px auto; padding:14px;
+      border-radius:10px; border:none; font-family:monospace;
+      font-size:1.1rem; font-weight:700; letter-spacing:3px;
+      cursor:pointer; transition:transform 0.15s;
+    }
+    .ready-btn:hover { transform:scale(1.04); }
+    #btn-yes { background:rgba(0,0,0,0.75); color:#fff; }
+    #btn-no  { background:rgba(0,0,0,0.75); color:#888; }
+

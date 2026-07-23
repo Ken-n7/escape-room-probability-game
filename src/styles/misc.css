@@ -1,0 +1,162 @@
+    /* ── PERSISTENT FULLSCREEN BUTTON ───────────────────────────────────── */
+    #persistent-fs-btn {
+      position:fixed;
+      top:10px;
+      right:10px;
+      z-index:50;
+      width:36px;
+      height:36px;
+      border-radius:50%;
+      border:1px solid rgba(231,223,204,.22);
+      background:rgba(0,0,0,.46);
+      color:rgba(231,223,204,.6);
+      cursor:pointer;
+      padding:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      backdrop-filter:blur(2px);
+      transition:background .15s, border-color .15s, color .15s;
+    }
+    #persistent-fs-btn:hover {
+      background:rgba(181,31,35,.25);
+      border-color:rgba(231,223,204,.46);
+      color:rgba(231,223,204,.9);
+    }
+    /* During gameplay: FS btn stacks below the burger, centered under it */
+    body[data-hud-visible="true"] #persistent-fs-btn {
+      top:68px;   /* 48px burger + 10px gap */
+      right:16px; /* (10 + 48/2) - 36/2 = centers 36px btn under 48px burger */
+    }
+    body[data-controls="touch"][data-hud-visible="true"] #persistent-fs-btn {
+      top:74px;   /* 54px burger + 10px gap */
+      right:19px; /* (10 + 54/2) - 36/2 = centers 36px btn under 54px burger */
+    }
+
+    /* ═══ AUTH — in-theme restyle + logged-out menu (overrides earlier) ═════ */
+    /* Login screen floats over the hallway: translucent veil, no opaque bg. */
+    #s-login { background:rgba(3,4,6,0.66) !important; }
+    #s-login::after { opacity:0.5 !important; }
+    /* Everything scales to the screen (clamp: min / preferred-vh / desktop max)
+       so the whole modal always fits — no inner scrollbar. */
+    #auth-box {
+      background:var(--panel-strong, rgba(8,10,12,0.94));
+      border:1px solid var(--line, rgba(209,183,126,0.28));
+      border-radius:10px;
+      width:min(390px, 92vw);
+      padding:clamp(15px, 3.2vh, 30px) clamp(20px, 5vw, 34px);
+      box-shadow:0 24px 70px rgba(0,0,0,0.7), inset 0 0 46px rgba(0,0,0,0.55);
+      backdrop-filter:blur(3px);
+    }
+    #auth-title {
+      font-family:'HorrorScratch', Impact, 'Arial Black', sans-serif;
+      color:var(--amber); font-size:clamp(1.35rem, 4.6vh, 2rem);
+      letter-spacing:3px; margin-bottom:clamp(2px, 0.6vh, 6px);
+      text-shadow:0 0 20px rgba(212,155,69,0.35);
+    }
+    #auth-subtitle { color:var(--muted); font-family:Georgia,serif; font-style:italic; font-size:clamp(0.7rem, 1.7vh, 0.82rem); margin-bottom:clamp(10px, 2.6vh, 22px); }
+    .auth-row { margin-bottom:clamp(8px, 2.2vh, 16px); }
+    .auth-row label { margin-bottom:clamp(3px, 0.8vh, 6px); font-size:clamp(0.68rem, 1.6vh, 0.75rem); }
+    .auth-row input { padding:clamp(7px, 1.5vh, 10px) 14px; font-size:clamp(0.86rem, 1.9vh, 0.95rem); }
+    .auth-hint, .auth-warn { font-size:clamp(0.62rem, 1.5vh, 0.7rem); margin-top:clamp(3px, 0.8vh, 6px); }
+    #auth-error { min-height:clamp(14px, 2vh, 20px); margin:clamp(2px, 0.6vh, 8px) 0; }
+    .auth-btn { min-height:clamp(38px, 5.4vh, 46px); font-size:clamp(0.8rem, 1.9vh, 0.9rem); }
+    #auth-toggle-line { margin-top:clamp(8px, 2vh, 16px); font-size:clamp(0.72rem, 1.7vh, 0.78rem); }
+    /* Short (landscape phone) screens: switch to a compact layout so the whole
+       form fits without scrolling — shed the flavour line + hints, tighten. */
+    @media (max-height:470px) {
+      #auth-subtitle, .auth-hint { display:none; }
+      #auth-box { padding:12px 22px; }
+      #auth-title { font-size:1.2rem; margin-bottom:2px; }
+      .auth-row { margin-bottom:7px; }
+      .auth-row label { margin-bottom:2px; }
+      .auth-row input { padding:6px 12px; font-size:0.88rem; }
+      .auth-btn { min-height:34px; }
+      #auth-error { min-height:10px; margin:2px 0; }
+      #auth-toggle-line { margin-top:7px; }
+    }
+    .auth-close {
+      position:absolute; top:10px; right:12px; width:30px; height:30px;
+      background:none; border:none; color:var(--muted); font-size:1rem; cursor:pointer; border-radius:6px;
+    }
+    .auth-close:hover { color:var(--bone); background:rgba(255,255,255,0.06); }
+    .auth-row label { color:var(--muted); }
+    .auth-row input {
+      background:rgba(5,7,8,0.85); border:1px solid var(--line); color:var(--bone);
+    }
+    .auth-row input:focus { border-color:var(--amber); box-shadow:0 0 0 2px rgba(212,155,69,0.16); }
+    .auth-row input.invalid { border-color:var(--blood); box-shadow:0 0 0 2px rgba(181,31,35,0.18); }
+    .auth-hint { color:var(--muted); opacity:0.75; }
+    .auth-btn {
+      background:rgba(5,7,8,0.72); border:1px solid rgba(231,223,204,0.2); color:var(--bone);
+      border-radius:8px; min-height:46px; letter-spacing:2px;
+      box-shadow:inset 4px 0 0 rgba(181,31,35,0.75); transition:background 0.15s, transform 0.12s;
+    }
+    .auth-btn:hover { background:rgba(181,31,35,0.25); transform:translateX(2px); }
+    .auth-btn.primary { box-shadow:inset 4px 0 0 var(--amber); }
+    .auth-btn.primary:hover { background:rgba(212,155,69,0.16); }
+    #auth-toggle-line { color:var(--muted); }
+    #btn-auth-toggle { color:var(--amber); }
+    .auth-eye { color:var(--muted); }
+    .auth-eye:hover { color:var(--bone); }
+    #auth-error { color:#e8908f; }
+    .auth-warn { color:var(--amber); }
+
+    /* Lower-right Log In / Sign Up (shown only when logged out). */
+    #menu-auth {
+      position:fixed; right:22px; bottom:22px; z-index:6;
+      display:none; flex-direction:column; gap:10px; align-items:stretch;
+    }
+    .auth-cta {
+      min-width:190px; padding:13px 20px; cursor:pointer;
+      font-family:monospace; font-size:0.9rem; letter-spacing:2px; text-align:left;
+      background:rgba(5,7,8,0.82); border:1px solid var(--line); color:var(--bone);
+      border-radius:8px; box-shadow:inset 4px 0 0 rgba(181,31,35,0.75);
+      transition:background 0.15s, transform 0.12s;
+    }
+    .auth-cta:hover { background:rgba(181,31,35,0.25); transform:translateX(3px); }
+    .auth-cta.primary { box-shadow:inset 4px 0 0 var(--amber); }
+    .auth-cta.primary:hover { background:rgba(212,155,69,0.18); }
+
+    /* Auth-state toggles: what the menu shows before vs after sign-in. */
+    #s-menu[data-authed="false"] #menu-content,
+    #s-menu[data-authed="false"] #icon-logout,
+    #s-menu[data-authed="false"] #icon-settings,
+    #s-menu[data-authed="false"] #menu-player-name { display:none !important; }
+    #s-menu[data-authed="false"] #menu-auth  { display:flex; }
+
+    /* Top-right close ✕ (settings panel — replaces the bottom back button). */
+    .modal-x {
+      position:absolute; top:12px; right:14px; width:34px; height:34px; z-index:4;
+      display:flex; align-items:center; justify-content:center; line-height:1;
+      background:none; border:1px solid var(--line); border-radius:6px;
+      color:var(--muted); font-size:0.95rem; cursor:pointer;
+    }
+    .modal-x:hover { color:var(--bone); background:rgba(255,255,255,0.06); border-color:var(--amber); }
+
+    /* Reusable themed confirmation dialog (replaces native confirm()). */
+    #confirm-dialog {
+      position:fixed; inset:0; z-index:200; padding:16px;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(3,4,6,0.7); backdrop-filter:blur(2px);
+    }
+    #confirm-dialog.hidden { display:none; }
+    #confirm-box {
+      background:var(--panel-strong, rgba(8,10,12,0.96)); border:1px solid var(--line);
+      border-radius:10px; padding:24px 26px; width:min(360px, 92vw); text-align:center;
+      box-shadow:0 24px 70px rgba(0,0,0,0.72);
+    }
+    #confirm-text { color:var(--bone); font-family:Georgia,serif; font-size:1.02rem; line-height:1.5; margin-bottom:20px; }
+    #confirm-actions { display:flex; gap:10px; }
+    .confirm-btn {
+      flex:1; padding:11px 14px; cursor:pointer; border-radius:8px;
+      font-family:monospace; font-size:0.85rem; letter-spacing:1px;
+      background:rgba(5,7,8,0.72); border:1px solid rgba(231,223,204,0.2); color:var(--bone);
+      transition:background 0.15s;
+    }
+    .confirm-btn:hover { background:rgba(231,223,204,0.1); }
+    .confirm-btn.danger { box-shadow:inset 4px 0 0 var(--blood); }
+    .confirm-btn.danger:hover { background:rgba(181,31,35,0.28); }
+
+    /* ── Keyframes ───────────────────────────────────────────────────────── */
+    @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:.72} }
