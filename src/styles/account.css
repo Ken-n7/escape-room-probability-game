@@ -32,6 +32,16 @@
       width:100%; accent-color:#d49b45; touch-action:pan-x;
       cursor:pointer;
     }
+    .qual-seg { display:flex; gap:6px; }
+    .qual-seg button {
+      flex:1; padding:9px 4px; background:#1a1008;
+      border:1px solid #553322; border-radius:6px;
+      color:#b08a5c; font-family:monospace; font-size:0.8rem;
+      letter-spacing:1px; cursor:pointer; transition:background .15s, border-color .15s, color .15s;
+    }
+    .qual-seg button:hover { border-color:#cc7722; color:#ffcc88; }
+    .qual-seg button.active { background:#331500; border-color:#cc4400; color:#ff8844; font-weight:700; }
+    .qual-hint { margin-top:7px; color:#7a6a55; font-family:monospace; font-size:0.68rem; letter-spacing:.5px; min-height:1em; }
     #settings-sensitivity-value {
       color:#ffaa55; font-family:monospace; font-size:0.75rem;
       white-space:nowrap;

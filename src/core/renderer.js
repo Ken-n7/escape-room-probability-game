@@ -1,13 +1,18 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
+import { resolveKnobs, effectivePixelRatio } from './quality.js';
 
+// Boot the renderer at whatever tier the player last chose (Auto by default).
+// antialias is fixed at context creation, so it can only change on reload;
+// pixel ratio + shadows are re-applied live from main.js on tier changes.
+const _boot = resolveKnobs();
 export const renderer = new THREE.WebGLRenderer({
-  antialias: false,
+  antialias: _boot.antialias,
   powerPreference: 'high-performance',
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.shadowMap.enabled = false;
+renderer.setPixelRatio(effectivePixelRatio(_boot));
+renderer.shadowMap.enabled = _boot.shadows;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.tabIndex = 0;
 

@@ -5,6 +5,7 @@ import { buildWorld, flickerLights, DOOR_OPEN_ANGLE } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
+import { getMode, setMode, getTier, getKnobs, onQualityChange, cycleMode, effectivePixelRatio, needsReload, QUALITY_TIERS } from './core/quality.js';
 import {
   GameDevice, applyDeviceProfile, initInput,
   lockPointer, flushLookInput, queueLookDelta,
@@ -238,6 +239,31 @@ function updateVolumeUI() {
     if (label) label.textContent = percent + '%';
   });
 }
+
+// ── Graphics quality ──────────────────────────────────────────────────────────
+// Live-applies the knobs a tier change can hot-swap (pixel ratio, shadows).
+// anti-alias is fixed at GL-context creation, so that one needs a reload — the
+// Settings hint says so when it differs from what booted.
+function applyQualityToRenderer(knobs) {
+  renderer.setPixelRatio(effectivePixelRatio(knobs));
+  renderer.shadowMap.enabled = knobs.shadows;
+}
+onQualityChange(applyQualityToRenderer);
+
+function updateQualityUI() {
+  const mode = getMode();
+  document.querySelectorAll('#settings-quality button').forEach(b =>
+    b.classList.toggle('active', b.dataset.q === mode));
+  const hint = $('settings-quality-hint');
+  if (hint) {
+    const tier = QUALITY_TIERS[getTier()].label;
+    const base = mode === 'auto' ? `Auto — using ${tier} on this device` : `${tier} quality`;
+    hint.textContent = needsReload() ? `${base} · restart to apply anti-aliasing` : base;
+  }
+}
+document.querySelectorAll('#settings-quality button').forEach(b => {
+  b.onclick = () => { setMode(b.dataset.q); updateQualityUI(); };
+});
 
 function updateSettingsScores() {
   bestScores.forEach((score, i) => {
@@ -562,6 +588,7 @@ function openSettings(from = 'menu') {
   $('settings-saved').textContent = '';
   updateSensitivityUI();
   updateVolumeUI();
+  updateQualityUI();
   updateFullscreenLabel();
   updateSettingsScores();
   showScreen('settings');
@@ -1542,6 +1569,9 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', _checkpointRun);
 
+// Dev-only FPS/tier overlay (element created in the import.meta.env.DEV block).
+let _devFpsEl = null, _fpsFrames = 0, _fpsAccum = 0;
+
 function animate() {
   requestAnimationFrame(animate);
   if (_tabHidden) return;
@@ -1550,6 +1580,14 @@ function animate() {
   const dt  = Math.min((now - prevTime) / 1000, 0.05);
   prevTime  = now;
   const t   = now * 0.001;
+
+  if (_devFpsEl) {
+    _fpsFrames++; _fpsAccum += dt;
+    if (_fpsAccum >= 0.5) {
+      _devFpsEl.textContent = `${Math.round(_fpsFrames / _fpsAccum)} fps · ${getTier()}${getMode() === 'auto' ? ' (auto)' : ''}`;
+      _fpsFrames = 0; _fpsAccum = 0;
+    }
+  }
 
   updateFlickerLights(t, dt);
   updateDoors(dt);
@@ -1842,6 +1880,25 @@ if (import.meta.env.DEV) {
   window.__devWin     = triggerDevWin;
   // Render the dashboard regardless of admin role (dev only) for UI testing.
   window.__openDash   = () => { showScreen('admin'); return mountDashboard({ onBack: () => showScreen('menu') }); };
+
+  // Graphics A/B rig: an FPS + tier readout, and press G to cycle quality live
+  // (auto → low → medium → high → auto) so effects can be compared on the spot.
+  _devFpsEl = document.createElement('div');
+  _devFpsEl.id = 'dev-fps';
+  _devFpsEl.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;padding:4px 9px;'
+    + 'background:rgba(0,0,0,.62);color:#8ef58e;font:600 12px/1.3 monospace;border-radius:6px;'
+    + 'pointer-events:none;letter-spacing:.5px;white-space:nowrap;';
+  _devFpsEl.textContent = 'measuring…';
+  document.body.appendChild(_devFpsEl);
+  window.__setQuality = setMode;   // console: __setQuality('high')
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'g' && e.key !== 'G') return;
+    const el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;   // don't hijack typing
+    const mode = cycleMode();
+    updateQualityUI();
+    _devFpsEl.textContent = `→ ${mode}`;
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
