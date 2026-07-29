@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeGLTFLoader } from '../loaders/gltf-loader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG } from '../core/config.js';
+import { getKnobs, onQualityChange } from '../core/quality.js';
 
 const {
   hallW, hallH, leg1Len, leg2EndX, leg2Z0, leg2Z1,
@@ -579,19 +580,68 @@ function noteTex() {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MATERIALS
 // ═══════════════════════════════════════════════════════════════════════════════
-const wallMat      = new THREE.MeshLambertMaterial({ map: grungeTex('#3c3c3c'), emissive: 0x050608, emissiveIntensity: 0.22, side: THREE.DoubleSide });
-const doorPanelMat = new THREE.MeshLambertMaterial({ map: doorTex(), emissive: 0x080502, emissiveIntensity: 0.3 });
-const doorTrimMat  = new THREE.MeshLambertMaterial({ map: grungeTex('#1f1206'), emissive: 0x050301, emissiveIntensity: 0.28 });
-const floorMat     = new THREE.MeshLambertMaterial({ map: floorTex(), emissive: 0x070707, emissiveIntensity: 0.28 });
-const ceilMat      = new THREE.MeshLambertMaterial({ map: ceilTex(), emissive: 0x14140f, emissiveIntensity: 0.5 });
-const lockerMat    = new THREE.MeshLambertMaterial({ map: lockerTex(), emissive: 0x020602, emissiveIntensity: 0.18 });
-// Wood furniture + metal legs are now textured + light-responsive (Lambert) so
-// the flashlight reveals grain and form instead of a flat colour cutout. One
-// shared wood texture and one metal texture cover every desk/chair/shelf/leg.
+// Tier 2 PBR: the big surfaces are MeshStandardMaterial so the point lights give
+// them real specular + energy, and a procedural normal map (derived from each
+// colour texture's luminance) fakes surface relief. The normal maps are the
+// expensive detail, so they're gated to the "normals" tier knob (High only) and
+// toggled live below; roughness/metalness apply at every tier.
+
+// Tangent-space normal map from a colour/height texture's luminance (Sobel).
+// Shares the source's wrap + repeat so it tiles identically. Stays linear.
+function normalFromTexture(srcTex, strength = 1) {
+  const src = srcTex.image, w = src.width, h = src.height;
+  const data = src.getContext('2d').getImageData(0, 0, w, h).data;
+  const lum = (x, y) => {
+    x = (x + w) % w; y = (y + h) % h;                 // wrap → seamless tiling
+    const i = (y * w + x) * 4;
+    return (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) / 255;
+  };
+  const out = document.createElement('canvas'); out.width = w; out.height = h;
+  const octx = out.getContext('2d'), img = octx.createImageData(w, h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let nx = -(lum(x + 1, y) - lum(x - 1, y)) * strength;
+    let ny = -(lum(x, y + 1) - lum(x, y - 1)) * strength;
+    let nz = 1; const len = Math.hypot(nx, ny, nz) || 1;
+    const i = (y * w + x) * 4;
+    img.data[i]     = (nx / len * 0.5 + 0.5) * 255;
+    img.data[i + 1] = (ny / len * 0.5 + 0.5) * 255;
+    img.data[i + 2] = (nz / len * 0.5 + 0.5) * 255;
+    img.data[i + 3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(out);
+  t.wrapS = srcTex.wrapS; t.wrapT = srcTex.wrapT; t.repeat.copy(srcTex.repeat);
+  return t;
+}
+
+// A lit PBR surface with a tier-gated normal map. Records the (material, normal)
+// pair so applyNormals() can switch the relief on/off per quality tier.
+const _normalPairs = [];
+function stdSurface(mapTex, { rough = 0.85, metal = 0, emissive = 0x000000, emissiveIntensity = 0, side, transparent = false, nStrength = 1, nScale = 0.6 } = {}) {
+  const mat = new THREE.MeshStandardMaterial({
+    map: mapTex, roughness: rough, metalness: metal,
+    emissive, emissiveIntensity, side, transparent,
+    normalScale: new THREE.Vector2(nScale, nScale),
+  });
+  _normalPairs.push({ mat, tex: normalFromTexture(mapTex, nStrength) });
+  return mat;
+}
+function applyNormals(on) {
+  for (const { mat, tex } of _normalPairs) { mat.normalMap = on ? tex : null; mat.needsUpdate = true; }
+}
+
+const wallMat      = stdSurface(grungeTex('#3c3c3c'), { rough: 0.94, metal: 0.0,  emissive: 0x050608, emissiveIntensity: 0.22, side: THREE.DoubleSide, nScale: 0.8 });
+const doorPanelMat = stdSurface(doorTex(),            { rough: 0.8,  metal: 0.1,  emissive: 0x080502, emissiveIntensity: 0.3,  nScale: 0.6 });
+const doorTrimMat  = stdSurface(grungeTex('#1f1206'), { rough: 0.85, metal: 0.1,  emissive: 0x050301, emissiveIntensity: 0.28, nScale: 0.6 });
+const floorMat     = stdSurface(floorTex(),           { rough: 0.72, metal: 0.05, emissive: 0x070707, emissiveIntensity: 0.28, nScale: 0.5 });
+const ceilMat      = stdSurface(ceilTex(),            { rough: 0.88, metal: 0.0,  emissive: 0x14140f, emissiveIntensity: 0.5,  nScale: 0.4 });
+const lockerMat    = stdSurface(lockerTex(),          { rough: 0.52, metal: 0.35, emissive: 0x020602, emissiveIntensity: 0.18, nScale: 0.8 });
+// Wood furniture + metal legs share one wood + one metal texture across every
+// desk/chair/shelf/leg. Wood is matte; metal catches a fluorescent glint.
 const _woodTex = woodTex(), _metalTex = metalTex();
-const deskMat      = new THREE.MeshLambertMaterial({ map: _woodTex,  emissive: 0x0b0805, emissiveIntensity: 0.32 });
-const darkMat      = new THREE.MeshLambertMaterial({ map: _metalTex, emissive: 0x050506, emissiveIntensity: 0.25 });
-const doorFrameMat = new THREE.MeshLambertMaterial({ map: grungeTex('#1c1208'), emissive: 0x050301, emissiveIntensity: 0.26 });
+const deskMat      = stdSurface(_woodTex,             { rough: 0.7,  metal: 0.0,  emissive: 0x0b0805, emissiveIntensity: 0.32, nScale: 0.5 });
+const darkMat      = stdSurface(_metalTex,            { rough: 0.5,  metal: 0.45, emissive: 0x050506, emissiveIntensity: 0.25, nScale: 0.6 });
+const doorFrameMat = stdSurface(grungeTex('#1c1208'), { rough: 0.85, metal: 0.1,  emissive: 0x050301, emissiveIntensity: 0.26, nScale: 0.6 });
 const candleMat    = new THREE.MeshBasicMaterial({ color: 0xddeedd });
 const exitSignMat  = new THREE.MeshBasicMaterial({ color: 0xff2200 });
 const paperMat     = new THREE.MeshLambertMaterial({ map: grungeTex('#6e6a5e'), emissive: 0x0a0a08, emissiveIntensity: 0.3 });
@@ -616,8 +666,13 @@ const bagMats      = [0x7a2a2a, 0x243a6a, 0x35521f].map(c =>
   new THREE.MeshLambertMaterial({ map: _fabricTex, color: c, emissive: c, emissiveIntensity: 0.1 }));
 const handleMat    = new THREE.MeshLambertMaterial({ color: 0x6a5a38, emissive: 0x161206, emissiveIntensity: 0.4 });  // tarnished pull
 // Classroom-only abandoned surfaces + blood decals (corridors keep the plainer look)
-const roomWallMat  = new THREE.MeshLambertMaterial({ map: roomWallTex(), emissive: 0x060505, emissiveIntensity: 0.2, side: THREE.DoubleSide });
-const roomFloorMat = new THREE.MeshLambertMaterial({ map: roomFloorTex(), emissive: 0x060606, emissiveIntensity: 0.24 });
+const roomWallMat  = stdSurface(roomWallTex(),  { rough: 0.93, metal: 0.0,  emissive: 0x060505, emissiveIntensity: 0.2,  side: THREE.DoubleSide, nScale: 0.8 });
+const roomFloorMat = stdSurface(roomFloorTex(), { rough: 0.72, metal: 0.05, emissive: 0x060606, emissiveIntensity: 0.24, nScale: 0.5 });
+
+// Surface relief (normal maps) is the costly detail — gate it to the tier knob
+// (High only) and hot-swap when the player changes quality.
+applyNormals(getKnobs().normals);
+onQualityChange(k => applyNormals(k.normals));
 // Blood decals — transparent PNGs from public/assets/blood1. Textures load async;
 // each decal appears once its image arrives. Aspect kept per-image so the
 // handprint / smears aren't stretched.
