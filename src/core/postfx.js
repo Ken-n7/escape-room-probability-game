@@ -32,9 +32,10 @@ function build() {
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
-  // Glow on bright emissives (fluorescents, exit sign, candle). Conservative so
-  // it doesn't wash the dark corridors: modest strength, high threshold.
-  bloomPass = new UnrealBloomPass(new THREE.Vector2(s.x, s.y), 0.55, 0.5, 0.85);
+  // Glow on bright emissives (fluorescents, exit sign, candle). Kept gentle so
+  // the lights gleam rather than blind: low strength, high threshold so only the
+  // very brightest pixels bloom. (strength, radius, threshold)
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(s.x, s.y), 0.28, 0.4, 0.9);
   composer.addPass(bloomPass);
 
   smaaPass = new SMAAPass(s.x, s.y);
