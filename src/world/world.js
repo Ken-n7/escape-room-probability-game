@@ -1482,37 +1482,59 @@ function buildExitDoor(scene, interactiveObjects) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export const flickerLights = [];
 
-let fluorescentTemplate = null;
 let fluorescentLoading = false;
 const pendingFluorescentFixtures = [];
 
-function collectEmissiveMaterials(root) {
-  const materials = [];
-  root.traverse(obj => {
-    if (!obj.isMesh || !obj.material) return;
-    const sourceMats = Array.isArray(obj.material) ? obj.material : [obj.material];
-    const clonedMats = sourceMats.map(mat => mat.clone());
-    obj.material = Array.isArray(obj.material) ? clonedMats : clonedMats[0];
-    clonedMats.forEach(mat => {
-      const name = (mat.name || '').toLowerCase();
-      const canGlow = mat.emissive && (mat.emissiveMap || name.includes('glass') || name.includes('light'));
-      if (!canGlow) return;
-      mat.emissive = new THREE.Color(0xcde9ff);
-      mat.emissiveIntensity = 0.42;
-      mat.needsUpdate = true;
-      materials.push(mat);
-    });
+// The fluorescent GLTF explodes into ~14 sub-meshes; 9 fixtures = ~126 draw
+// calls, by far the scene's biggest cost on weak GPUs. We merge the model ONCE
+// into one geometry per material (scaled + centred exactly as before) and share
+// those geometries across every fixture — so each fixture is just 2 meshes, and
+// all 9 reuse the same buffers. Per-fixture flicker survives: the emissive
+// (glass/tube) material is cloned per fixture, the static housing is shared.
+let _fluorescentParts = null;   // [{ geometry, material, emissive }]
+
+function prepareFluorescentParts(templateScene) {
+  const scaled = templateScene.clone(true);
+  scaled.scale.setScalar(2.1);
+  const center = new THREE.Vector3();
+  new THREE.Box3().setFromObject(scaled).getCenter(center);
+  scaled.position.sub(center);
+  scaled.updateMatrixWorld(true);
+
+  const groups = new Map();   // source material uuid -> { material, geos: [] }
+  scaled.traverse(obj => {
+    if (!obj.isMesh || !obj.geometry) return;
+    const mat = Array.isArray(obj.material) ? obj.material[0] : obj.material;
+    if (!mat) return;
+    const g = obj.geometry.clone();
+    for (const name of Object.keys(g.attributes)) {           // keep only mergeable attrs
+      if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
+    }
+    g.applyMatrix4(obj.matrixWorld);
+    if (!groups.has(mat.uuid)) groups.set(mat.uuid, { material: mat, geos: [] });
+    groups.get(mat.uuid).geos.push(g);
   });
-  return materials;
+
+  _fluorescentParts = [];
+  for (const { material, geos } of groups.values()) {
+    let geometry;
+    try { geometry = geos.length > 1 ? mergeGeometries(geos, false) : geos[0]; }
+    catch { geometry = null; }                                 // attribute mismatch → skip merge
+    if (!geometry) continue;
+    if (geos.length > 1) geos.forEach(g => g.dispose());
+    const name = (material.name || '').toLowerCase();
+    const emissive = !!(material.emissive && (material.emissiveMap || name.includes('glass') || name.includes('light')));
+    _fluorescentParts.push({ geometry, material, emissive });
+  }
 }
 
 function addFluorescentFixture(scene, x, z, rotY, syncTarget) {
-  if (!fluorescentTemplate) {
+  if (!_fluorescentParts) {
     pendingFluorescentFixtures.push({ scene, x, z, rotY, syncTarget });
     if (!fluorescentLoading) {
       fluorescentLoading = true;
       makeGLTFLoader().load(FLUORESCENT_MODEL_PATH, gltf => {
-        fluorescentTemplate = gltf.scene;
+        prepareFluorescentParts(gltf.scene);
         pendingFluorescentFixtures.splice(0).forEach(item =>
           addFluorescentFixture(item.scene, item.x, item.z, item.rotY, item.syncTarget));
       }, undefined, err => console.warn('Fluorescent light asset failed to load.', err));
@@ -1520,21 +1542,26 @@ function addFluorescentFixture(scene, x, z, rotY, syncTarget) {
     return;
   }
 
-  const fixture = fluorescentTemplate.clone(true);
-  const emissiveMaterials = collectEmissiveMaterials(fixture);
-  fixture.scale.setScalar(2.1);
-
-  const box = new THREE.Box3().setFromObject(fixture);
-  const center = new THREE.Vector3();
-  box.getCenter(center);
-  fixture.position.sub(center);
-
   const group = new THREE.Group();
   group.position.set(x, hallH - 0.14, z);
   group.rotation.y = rotY;
-  group.add(fixture);
-  scene.add(group);
+  const emissiveMaterials = [];
 
+  for (const part of _fluorescentParts) {
+    // Clone only the glowing material so each fixture flickers on its own timer;
+    // the static housing material is shared across all fixtures.
+    let mat = part.material;
+    if (part.emissive) {
+      mat = part.material.clone();
+      mat.emissive = new THREE.Color(0xcde9ff);
+      mat.emissiveIntensity = 0.42;
+      mat.needsUpdate = true;
+      emissiveMaterials.push(mat);
+    }
+    group.add(new THREE.Mesh(part.geometry, mat));   // geometry shared across fixtures
+  }
+
+  scene.add(group);
   syncTarget.emissiveMaterials.push(...emissiveMaterials);
 }
 
