@@ -1574,6 +1574,10 @@ window.addEventListener('pagehide', _checkpointRun);
 // Dev-only FPS/tier overlay (element created in the import.meta.env.DEV block).
 let _devFpsEl = null, _fpsFrames = 0, _fpsAccum = 0;
 
+// Head-bob state (Med/High). Vertical only — x/z are the player position.
+const BOB_RATE = 9, BOB_AMP = 0.04;
+let _bobPhase = 0, _bobAmt = 0;
+
 function animate() {
   requestAnimationFrame(animate);
   if (_tabHidden) return;
@@ -1638,6 +1642,11 @@ function animate() {
 
   updateVertical(dt);
   camera.position.y = CFG.player.eyeH + _jumpY;
+  // Head-bob (Med/High) — subtle vertical sway while walking on the ground.
+  const _bobMoving = (fwd || rgt) && _jumpY === 0 && getKnobs().pbr;
+  _bobAmt += ((_bobMoving ? 1 : 0) - _bobAmt) * Math.min(1, dt * 9);
+  if (_bobMoving) _bobPhase += dt * BOB_RATE;
+  camera.position.y += Math.sin(_bobPhase * 2) * BOB_AMP * _bobAmt;
 
   // ── Interaction prompt ────────────────────────────────────────────────────
   nearObject = findNearObject();
