@@ -614,29 +614,61 @@ function normalFromTexture(srcTex, strength = 1) {
   return t;
 }
 
-// PBR is a Medium/High feature — it's the one thing that made Low expensive.
-// On Low we build cheap Lambert instead (no PBR BRDF, no normal maps), keeping
-// it the 60fps baseline. Decided at world-build; switching Low<->Med/High
-// applies on restart (see needsReload()).
+// Live PBR: each surface keeps a cheap Lambert variant and (lazily) a Standard
+// variant with a procedural normal map. Meshes get whichever the tier wants;
+// switching Low<->Med/High remaps them in place — no reload, no state loss. The
+// Standard set is built on first upgrade, so a device that stays on Low never
+// pays for it. `_usePBR` (boot) still governs the GLTF light fixtures, which are
+// minor and stay at their boot class.
 const _usePBR = getKnobs().pbr;
+const _normalPairs = [];   // {mat, tex} for every built Standard variant
+const _surfaces = [];      // { mapTex, opts, lambert, standard, current }
+let _worldScene = null;    // set in buildWorld(); target of live remaps
 
-// A lit surface. On Med/High: MeshStandard + a tier-gated procedural normal map.
-// On Low: MeshLambert (same map/emissive, none of the cost).
-const _normalPairs = [];
-function stdSurface(mapTex, { rough = 0.85, metal = 0, emissive = 0x000000, emissiveIntensity = 0, side, transparent = false, nStrength = 1, nScale = 0.6 } = {}) {
-  if (!_usePBR) {
-    return new THREE.MeshLambertMaterial({ map: mapTex, emissive, emissiveIntensity, side, transparent });
-  }
+function makeLambert(mapTex, o) {
+  return new THREE.MeshLambertMaterial({ map: mapTex, emissive: o.emissive ?? 0x000000, emissiveIntensity: o.emissiveIntensity ?? 0, side: o.side, transparent: o.transparent ?? false });
+}
+function ensureStandard(slot) {
+  if (slot.standard) return slot.standard;
+  const o = slot.opts;
   const mat = new THREE.MeshStandardMaterial({
-    map: mapTex, roughness: rough, metalness: metal,
-    emissive, emissiveIntensity, side, transparent,
-    normalScale: new THREE.Vector2(nScale, nScale),
+    map: slot.mapTex, roughness: o.rough ?? 0.85, metalness: o.metal ?? 0,
+    emissive: o.emissive ?? 0x000000, emissiveIntensity: o.emissiveIntensity ?? 0,
+    side: o.side, transparent: o.transparent ?? false,
+    normalScale: new THREE.Vector2(o.nScale ?? 0.6, o.nScale ?? 0.6),
   });
-  _normalPairs.push({ mat, tex: normalFromTexture(mapTex, nStrength) });
+  slot.standard = mat;
+  _normalPairs.push({ mat, tex: normalFromTexture(slot.mapTex, o.nStrength ?? 1) });
   return mat;
+}
+function stdSurface(mapTex, opts = {}) {
+  const slot = { mapTex, opts, lambert: makeLambert(mapTex, opts), standard: null, current: null };
+  _surfaces.push(slot);
+  slot.current = getKnobs().pbr ? ensureStandard(slot) : slot.lambert;
+  return slot.current;
 }
 function applyNormals(on) {
   for (const { mat, tex } of _normalPairs) { mat.normalMap = on ? tex : null; mat.needsUpdate = true; }
+}
+// Swap every surface to the tier's variant (building Standard on first need) and
+// remap any meshes still holding the other variant, then re-gate normal maps.
+// Safe before the world exists — it just updates the slots.
+function applyPBR(on) {
+  const map = new Map();
+  for (const slot of _surfaces) {
+    const target = on ? ensureStandard(slot) : slot.lambert;
+    const other  = on ? slot.lambert : slot.standard;
+    if (other && other !== target) map.set(other, target);
+    slot.current = target;
+  }
+  if (map.size && _worldScene) {
+    _worldScene.traverse(o => {
+      if (!o.isMesh || !o.material) return;
+      if (Array.isArray(o.material)) o.material = o.material.map(m => map.get(m) || m);
+      else { const t = map.get(o.material); if (t) o.material = t; }
+    });
+  }
+  applyNormals(getKnobs().normals);
 }
 
 const wallMat      = stdSurface(grungeTex('#3c3c3c'), { rough: 0.94, metal: 0.0,  emissive: 0x050608, emissiveIntensity: 0.22, side: THREE.DoubleSide, nScale: 0.8 });
@@ -678,10 +710,10 @@ const handleMat    = new THREE.MeshLambertMaterial({ color: 0x6a5a38, emissive: 
 const roomWallMat  = stdSurface(roomWallTex(),  { rough: 0.93, metal: 0.0,  emissive: 0x060505, emissiveIntensity: 0.2,  side: THREE.DoubleSide, nScale: 0.8 });
 const roomFloorMat = stdSurface(roomFloorTex(), { rough: 0.72, metal: 0.05, emissive: 0x060606, emissiveIntensity: 0.24, nScale: 0.5 });
 
-// Surface relief (normal maps) is the costly detail — gate it to the tier knob
-// (High only) and hot-swap when the player changes quality.
+// Boot: apply the tier's normal gating. Then live-swap PBR + normals whenever
+// the player changes quality — buildWorld() wires _worldScene so meshes remap.
 applyNormals(getKnobs().normals);
-onQualityChange(k => applyNormals(k.normals));
+onQualityChange(() => applyPBR(getKnobs().pbr));
 // Blood decals — transparent PNGs from public/assets/blood1. Textures load async;
 // each decal appears once its image arrives. Aspect kept per-image so the
 // handprint / smears aren't stretched.
@@ -1713,6 +1745,11 @@ export function buildWorld(scene) {
   });
 
   const decoyNotes = _decoyRooms.flatMap(r => r.meshes);
+
+  // Wire the scene for live quality swaps + sync the freshly-built meshes to the
+  // current tier (covers a quality change made before the world was built).
+  _worldScene = scene;
+  applyPBR(getKnobs().pbr);
 
   return {
     wallBoxes: _collision,
