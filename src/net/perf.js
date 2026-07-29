@@ -14,14 +14,23 @@ let _session = null, _device = null;
 let _minute = 0, _frames = 0, _samples = [];
 let _lastFlush = 0, _enabled = false;
 
+// crypto.randomUUID exists only in secure contexts (HTTPS / localhost); over
+// plain-HTTP LAN it's undefined. Fall back to a valid UUID v4 so telemetry never
+// throws at boot AND the string still satisfies the uuid DB column.
+const uuid = () => (crypto?.randomUUID?.() ??
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  }));
+
 // Anonymous, per-tab. Persisted in sessionStorage so a reload continues the same
 // session; a fresh tab starts a new one. Never linked to auth.
 function sessionId() {
   try {
     let s = sessionStorage.getItem(KEY_SESSION);
-    if (!s) { s = crypto.randomUUID(); sessionStorage.setItem(KEY_SESSION, s); }
+    if (!s) { s = uuid(); sessionStorage.setItem(KEY_SESSION, s); }
     return s;
-  } catch { return crypto.randomUUID(); }
+  } catch { return uuid(); }
 }
 
 // The real GPU string (e.g. "Apple A15 GPU", "Mali-G57") — the single most useful
