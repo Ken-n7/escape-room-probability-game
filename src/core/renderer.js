@@ -13,6 +13,11 @@ export const renderer = new THREE.WebGLRenderer({
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(effectivePixelRatio(_boot));
 renderer.shadowMap.enabled = _boot.shadows;
+// Filmic grade for every tier (near-free). OutputPass applies this in the
+// composed path; the renderer applies it on the direct (Low) path. Exposure is
+// nudged >1 so the already-dark horror scene doesn't lose its lifted brightness.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.tabIndex = 0;
 

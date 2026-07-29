@@ -6,6 +6,7 @@ import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
 import { getMode, setMode, getTier, getKnobs, onQualityChange, cycleMode, effectivePixelRatio, needsReload, QUALITY_TIERS } from './core/quality.js';
+import { renderScene } from './core/postfx.js';
 import {
   GameDevice, applyDeviceProfile, initInput,
   lockPointer, flushLookInput, queueLookDelta,
@@ -1593,22 +1594,22 @@ function animate() {
   updateDoors(dt);
   updateContainers(dt);
 
-  if (updateStartCameraTransition(now)) { renderer.render(scene, camera); return; }
+  if (updateStartCameraTransition(now)) { renderScene(); return; }
   if (gState.current === S.LOSE) { initLoseCanvas(); updateLoseCanvas(); return; }
   if (gState.current === S.WIN) return;
-  if (gState.current === S.MENU) { renderer.render(scene, camera); return; }
+  if (gState.current === S.MENU) { renderScene(); return; }
 
   updateThreatAudio(dt);
   updateAmbientScares(dt);
   if (gState.current === S.PLAYING) { updateVacantRoomSounds(); updateDecoyTraps(); updateDoorLocks(); }
 
-  if (gState.current === S.CHASE) { updateChase(dt); renderer.render(scene, camera); return; }
-  if (gState.current !== S.PLAYING) { renderer.render(scene, camera); return; }
+  if (gState.current === S.CHASE) { updateChase(dt); renderScene(); return; }
+  if (gState.current !== S.PLAYING) { renderScene(); return; }
 
   if (_holdStartViewFrames > 0) {
     _holdStartViewFrames--;
     setCameraView(START_CAMERA_VIEW);
-    renderer.render(scene, camera);
+    renderScene();
     return;
   }
 
@@ -1661,7 +1662,7 @@ function animate() {
     }
   }
 
-  renderer.render(scene, camera);
+  renderScene();
 }
 
 // ── Resize ────────────────────────────────────────────────────────────────────
