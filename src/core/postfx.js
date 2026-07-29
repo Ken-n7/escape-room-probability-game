@@ -14,12 +14,11 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { FilmPass } from 'three/examples/jsm/postprocessing/FilmPass.js';
-import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { renderer, scene, camera } from './renderer.js';
 import { getKnobs, onQualityChange, effectivePixelRatio } from './quality.js';
 
-let composer = null, bloomPass = null, smaaPass = null, filmPass = null, gtaoPass = null;
+let composer = null, bloomPass = null, smaaPass = null, filmPass = null;
 let _active = false;   // true when the composer should drive the frame
 
 function size() {
@@ -32,15 +31,6 @@ function build() {
   const s = size();
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-
-  // Ambient occlusion — soft contact darkening where geometry meets (under
-  // desks/chairs/lockers, wall corners). Grounds objects; light-count-proof.
-  // Modest radius/intensity so it deepens shadow crevices without going sooty.
-  gtaoPass = new GTAOPass(scene, camera, s.x, s.y);
-  gtaoPass.output = GTAOPass.OUTPUT.Default;
-  gtaoPass.blendIntensity = 0.85;
-  gtaoPass.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1, thickness: 1, scale: 1, samples: 8, distanceFallOff: 1, screenSpaceRadius: false });
-  composer.addPass(gtaoPass);
 
   // Glow on bright emissives (fluorescents, exit sign, candle). Kept gentle so
   // the lights gleam rather than blind: low strength, high threshold so only the
@@ -69,10 +59,9 @@ function applySize() {
 // Enable/disable passes for a tier; lazily builds the composer the first time a
 // tier actually needs it. Low tier (no bloom, no AA) stays on the direct path.
 export function configurePostFX(k = getKnobs()) {
-  const wants = k.bloom || k.antialias || k.ssao;
+  const wants = k.bloom || k.antialias;
   if (wants && !composer) build();
   if (composer) {
-    gtaoPass.enabled  = k.ssao;
     bloomPass.enabled = k.bloom;
     smaaPass.enabled  = k.antialias;
     filmPass.enabled  = true;
