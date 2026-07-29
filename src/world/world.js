@@ -598,9 +598,12 @@ const paperMat     = new THREE.MeshLambertMaterial({ map: grungeTex('#6e6a5e'), 
 const bookMats     = [0x6b1a1a, 0x1a3a5b, 0x1a5b2a, 0x5b4a1a, 0x3a1a5b]
   .map(c => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.12 }));
 // Wall decor + extra clutter (posters are double-sided so orientation is forgiving)
-const posterMats   = ['chart', 'dice', 'num'].map(k => new THREE.MeshBasicMaterial({ map: posterTex(k), side: THREE.DoubleSide }));
-const clockMat     = new THREE.MeshBasicMaterial({ map: clockTex(), transparent: true, side: THREE.DoubleSide });
-const mapMat       = new THREE.MeshBasicMaterial({ map: mapTex(), side: THREE.DoubleSide });
+// Wall decor is LIT (Lambert) — it must fall into shadow with the room, not
+// self-glow. Tiny emissive matches the walls' ambient lift so it doesn't read
+// as a pure-black rectangle in the dark.
+const posterMats   = ['chart', 'dice', 'num'].map(k => new THREE.MeshLambertMaterial({ map: posterTex(k), side: THREE.DoubleSide, emissive: 0x050608, emissiveIntensity: 0.22 }));
+const clockMat     = new THREE.MeshLambertMaterial({ map: clockTex(), transparent: true, side: THREE.DoubleSide, emissive: 0x050608, emissiveIntensity: 0.22 });
+const mapMat       = new THREE.MeshLambertMaterial({ map: mapTex(), side: THREE.DoubleSide, emissive: 0x050608, emissiveIntensity: 0.22 });
 const _fabricTex   = fabricTex();
 const globeMat     = new THREE.MeshLambertMaterial({ map: globeTex(), emissive: 0x0a0f14, emissiveIntensity: 0.3 });
 const mugMat       = new THREE.MeshLambertMaterial({ color: 0xcfd6cf, emissive: 0x0c0e0c, emissiveIntensity: 0.3 });
@@ -897,7 +900,8 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
   const cbPos = P(D - 0.12, W/2);
   const cbMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(cbW, cbH),
-    new THREE.MeshBasicMaterial({ map: chalkboardTex([]) })
+    // Lit, like the walls — the board darkens with the room instead of glowing.
+    new THREE.MeshLambertMaterial({ map: chalkboardTex([]), emissive: 0x050608, emissiveIntensity: 0.22 })
   );
   cbMesh.position.set(cbPos.x, cbH/2 + 0.9, cbPos.z);
   cbMesh.rotation.order = 'YXZ';
