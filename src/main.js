@@ -1575,7 +1575,7 @@ window.addEventListener('pagehide', _checkpointRun);
 let _devFpsEl = null, _fpsFrames = 0, _fpsAccum = 0;
 
 // Head-bob state (Med/High). Vertical only — x/z are the player position.
-const BOB_RATE = 9, BOB_AMP = 0.04;
+const BOB_RATE = 9, BOB_AMP = 0.022;
 let _bobPhase = 0, _bobAmt = 0;
 
 function animate() {

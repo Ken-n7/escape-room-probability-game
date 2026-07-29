@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { getKnobs, onQualityChange } from '../core/quality.js';
 
-const COUNT = 220, SPAN = 14, Y0 = 0.2, Y1 = 3.0;
+const COUNT = 110, SPAN = 14, Y0 = 0.2, Y1 = 3.0;
 let _points = null, _phase = null;
 
 // Soft radial sprite so each mote is a round glow, not a hard square.
@@ -35,7 +35,7 @@ export function initDust(scene) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   const mat = new THREE.PointsMaterial({
-    color: 0xb8c4d4, size: 0.06, map: moteTexture(), transparent: true, opacity: 0.5,
+    color: 0xb8c4d4, size: 0.05, map: moteTexture(), transparent: true, opacity: 0.3,
     depthWrite: false, sizeAttenuation: true, blending: THREE.AdditiveBlending,
   });
   _points = new THREE.Points(g, mat);
