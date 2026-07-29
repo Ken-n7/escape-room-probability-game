@@ -5,7 +5,7 @@ import { buildWorld, flickerLights, DOOR_OPEN_ANGLE } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
-import { getMode, setMode, getTier, getKnobs, onQualityChange, cycleMode, effectivePixelRatio, needsReload, QUALITY_TIERS } from './core/quality.js';
+import { getMode, setMode, getTier, getKnobs, onQualityChange, cycleMode, effectivePixelRatio, QUALITY_TIERS } from './core/quality.js';
 import { renderScene } from './core/postfx.js';
 import {
   GameDevice, applyDeviceProfile, initInput,
@@ -258,8 +258,7 @@ function updateQualityUI() {
   const hint = $('settings-quality-hint');
   if (hint) {
     const tier = QUALITY_TIERS[getTier()].label;
-    const base = mode === 'auto' ? `Auto — using ${tier} on this device` : `${tier} quality`;
-    hint.textContent = needsReload() ? `${base} · restart to apply fully` : base;
+    hint.textContent = mode === 'auto' ? `Auto — using ${tier} on this device` : `${tier} quality`;
   }
 }
 document.querySelectorAll('#settings-quality button').forEach(b => {
