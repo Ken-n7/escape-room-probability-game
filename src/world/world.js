@@ -680,6 +680,31 @@ function _flush(scene) {
   _batch.clear();
 }
 
+// Collapse a LIVE group's static mesh children into one mesh per material, baked
+// into the group's local space. The group still animates as a unit (its own
+// transform is untouched) but issues far fewer draw calls. Child sub-groups
+// (moving pivots/slides) are skipped automatically — only direct meshes merge.
+// Pass `keep` (a Set) to exclude meshes that must survive, e.g. the raycast /
+// interaction target that carries userData.
+function mergeGroupStatics(group, keep = null) {
+  const byMat = new Map();
+  const remove = [];
+  for (const child of group.children) {
+    if (!child.isMesh || (keep && keep.has(child))) continue;
+    child.updateMatrix();
+    const g = child.geometry.clone().applyMatrix4(child.matrix);   // bake local transform
+    if (!byMat.has(child.material)) byMat.set(child.material, []);
+    byMat.get(child.material).push(g);
+    remove.push(child);
+  }
+  for (const c of remove) group.remove(c);
+  for (const [mat, geos] of byMat) {
+    const merged = geos.length > 1 ? mergeGeometries(geos, false) : geos[0];
+    if (merged) group.add(new THREE.Mesh(merged, mat));
+    if (geos.length > 1) geos.forEach(g => g.dispose());
+  }
+}
+
 const bx  = (w,h,d,x,y,z,mat)        => _push(_bxGeo(w,h,d), mat, x, y, z);
 const bxr = (w,h,d,x,y,z,rx,ry,mat)  => _push(_bxGeo(w,h,d), mat, x, y, z, rx, ry);
 const pl  = (w,h,x,y,z,rx,ry,mat)    => _push(_plGeo(w,h),   mat, x, y, z, rx, ry);
@@ -1288,6 +1313,9 @@ function buildDoor(scene, def, doorIndex, interactiveObjects) {
   });
 
   scene.add(group);
+  // Collapse the two plates → 1 and two knobs → 1; the panel stays the door's
+  // raycast target. The whole group still swings as one, so knobs swing with it.
+  mergeGroupStatics(group, new Set([panel]));
   const dr = rect(-0.15, 0.15, dLoc[0], dLoc[1]);
   _addBox(dr.minX, dr.maxX, dr.minZ, dr.maxZ, { doorIndex });
   return { group, panel, baseTheta: f.theta, realIdx: def.idx, key: def.key };
@@ -1342,6 +1370,7 @@ function buildCabinet(scene, x, z, yaw, io, containers) {
   io.push(target);
   containers.push(record);
   _unitCollision(x, z, yaw, W, D, H);   // tall — always blocks
+  mergeGroupStatics(mount);   // collapse the 6 static body boxes → 1 (doors stay live on their pivots)
   return record;
 }
 
@@ -1370,6 +1399,8 @@ function buildDrawerUnit(scene, x, z, yaw, io, containers) {
   io.push(panel);
   containers.push(record);
   _unitCollision(x, z, yaw, W, D, H);   // ~table height — must jump onto it
+  mergeGroupStatics(mount);                       // 5 static body boxes → 1
+  mergeGroupStatics(slide, new Set([panel]));     // tray boxes → 1 (drawer face kept as the target)
   return record;
 }
 
