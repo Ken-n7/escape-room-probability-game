@@ -14,6 +14,13 @@ let _session = null, _device = null;
 let _minute = 0, _frames = 0, _samples = [];
 let _lastFlush = 0, _enabled = false;
 
+// Dev-only fine-grained local stream: every 0.5s beacon the fps window to the
+// Vite dev server's /__fps sink (see vite.config.js), which appends it to
+// fps-telemetry.jsonl. Lets us watch second-by-second fps on a LAN/phone run
+// without the per-minute Supabase round-trip. Stripped from production builds.
+const LOCAL_MS = 500;
+let _localSamples = [], _localLast = 0;
+
 // crypto.randomUUID exists only in secure contexts (HTTPS / localhost); over
 // plain-HTTP LAN it's undefined. Fall back to a valid UUID v4 so telemetry never
 // throws at boot AND the string still satisfies the uuid DB column.
@@ -69,6 +76,7 @@ export function initPerf() {
   _session   = sessionId();
   _device    = deviceProfile();
   _lastFlush = performance.now();
+  _localLast = performance.now();
 }
 
 // Feed one gameplay frame. `dt` is the frame delta in seconds (already clamped by
@@ -78,6 +86,25 @@ export function samplePerf(dt) {
   _samples.push(1 / dt);
   _frames++;
   if (performance.now() - _lastFlush >= FLUSH_MS) flushPerf();
+  if (import.meta.env.DEV) localSample(dt);
+}
+
+// Dev-only: accumulate a 0.5s window and beacon it to the local sink.
+function localSample(dt) {
+  _localSamples.push(1 / dt);
+  const now = performance.now();
+  if (now - _localLast < LOCAL_MS) return;
+  const s = _localSamples; _localSamples = []; _localLast = now;
+  const avg = s.reduce((a, b) => a + b, 0) / s.length;
+  const body = JSON.stringify({
+    fps: +avg.toFixed(1),
+    fps_min: +Math.min(...s).toFixed(1),
+    dpr: _device?.dpr, gpu: _device?.gpu, is_mobile: _device?.is_mobile,
+    t: Date.now(),
+  });
+  try {
+    if (!navigator.sendBeacon?.('/__fps', body)) fetch('/__fps', { method: 'POST', body, keepalive: true }).catch(() => {});
+  } catch { /* sink absent — ignore */ }
 }
 
 function aggregate() {

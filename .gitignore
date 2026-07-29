@@ -48,3 +48,6 @@ public/assets/ASSET_CREDITS.md
 record-hallway.js
 check-frame.js
 hallway-preview.png
+
+# Local fps telemetry capture (dev sink output)
+fps-telemetry.jsonl
