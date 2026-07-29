@@ -2,6 +2,7 @@ import * as THREE                  from 'three';
 import { CFG }                    from './core/config.js';
 import { ROOMS, EXIT_CODE, QUESTIONS_PER_ROOM } from './data/questions.js';
 import { buildWorld, flickerLights, DOOR_OPEN_ANGLE } from './world/world.js';
+import { initDust, updateDust } from './world/dust.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
 import { renderer, scene, camera } from './core/renderer.js';
@@ -40,6 +41,7 @@ const {
   wallBoxes, interactiveObjects, roomNotes, roomDoors, roomContainers, decoyNotes,
   realRoomRects, decoyRects, vacantRects, randomizeNotes, relocateNote,
 } = buildWorld(scene);
+initDust(scene);
 
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
 
@@ -1592,6 +1594,7 @@ function animate() {
   updateFlickerLights(t, dt);
   updateDoors(dt);
   updateContainers(dt);
+  updateDust(dt, camera);
 
   if (updateStartCameraTransition(now)) { renderScene(); return; }
   if (gState.current === S.LOSE) { initLoseCanvas(); updateLoseCanvas(); return; }
