@@ -27,6 +27,7 @@ import { preloadAssets } from './loaders/preload.js';
 import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut } from './net/auth.js';
 import { submitRun, fetchLeaderboard } from './net/scores.js';
 import { startPlay, endPlay, hasActivePlay, flushAbandonBeacon, logAttempt, logEvent } from './net/analytics.js';
+import { initPerf, samplePerf, flushPerfBeacon } from './net/perf.js';
 import { mountDashboard } from './ui/dashboard.js';
 
 // Stable per-question id ("roomId.bankIndex", e.g. "1.4") for analytics/item
@@ -1535,6 +1536,7 @@ let _tabHidden = false;
 // real endPlay() still overwrites the row with the true outcome.
 function _checkpointRun() {
   if (hasActivePlay()) flushAbandonBeacon(roomDone.filter(Boolean).length);
+  flushPerfBeacon();   // send the final partial minute of perf data too
 }
 document.addEventListener('visibilitychange', () => {
   _tabHidden = document.hidden;
@@ -1550,6 +1552,10 @@ function animate() {
   const dt  = Math.min((now - prevTime) / 1000, 0.05);
   prevTime  = now;
   const t   = now * 0.001;
+
+  // Anonymous perf telemetry — only count real gameplay frames (menus/cutscenes
+  // aren't representative). Aggregates internally, writes one row per minute.
+  if (gState.current === S.PLAYING || gState.current === S.CHASE) samplePerf(dt);
 
   updateFlickerLights(t, dt);
   updateDoors(dt);
@@ -2116,5 +2122,6 @@ updateMenuName();
 updateFullscreenLabel();
 updateNoteVisibility();
 updateDoorLocks({ instant: true });
+initPerf();
 animate();
 preloadAssets(enterFromAuth);
