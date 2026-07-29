@@ -39,7 +39,7 @@ function build() {
   gtaoPass = new GTAOPass(scene, camera, s.x, s.y);
   gtaoPass.output = GTAOPass.OUTPUT.Default;
   gtaoPass.blendIntensity = 0.85;
-  gtaoPass.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1, thickness: 1, scale: 1, samples: 16, distanceFallOff: 1, screenSpaceRadius: false });
+  gtaoPass.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1, thickness: 1, scale: 1, samples: 8, distanceFallOff: 1, screenSpaceRadius: false });
   composer.addPass(gtaoPass);
 
   // Glow on bright emissives (fluorescents, exit sign, candle). Kept gentle so
