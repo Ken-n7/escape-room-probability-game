@@ -2,10 +2,9 @@
 //  GRAPHICS QUALITY — the single source of truth for render tiers.
 //
 //  The player picks a mode in Settings (Auto/Low/Medium/High); this module
-//  resolves it to a concrete tier and a bag of "knobs". Today only a few knobs
-//  are live (pixel ratio, anti-alias, shadows) — the rest (bloom, ssao, texRes,
-//  normals) are placeholders that upcoming graphics effects will read via
-//  getKnobs()/onQualityChange(). Build effects gated on these from day one.
+//  resolves it to a concrete tier and a bag of "knobs". Live today: pixel ratio,
+//  anti-alias, bloom, normals. `shadows` is a stub (nothing casts/receives yet);
+//  `texRes` is a placeholder. Effects read these via getKnobs()/onQualityChange().
 //
 //  This file imports nothing heavy (no THREE, no renderer) so it can be read at
 //  boot before the renderer is constructed, and can't create an import cycle.
@@ -14,9 +13,9 @@
 // pixelRatio here is a CAP — actual = min(devicePixelRatio, cap). Low forces 1.0
 // (downsamples on retina → big perf win + softer edges); High allows up to 2×.
 export const QUALITY_TIERS = {
-  low:    { label: 'Low',    pixelRatio: 1.0,  antialias: false, shadows: false, bloom: false, ssao: false, texRes: 512,  normals: false },
-  medium: { label: 'Medium', pixelRatio: 1.25, antialias: true,  shadows: false, bloom: true,  ssao: false, texRes: 1024, normals: false },
-  high:   { label: 'High',   pixelRatio: 1.5,  antialias: true,  shadows: true,  bloom: true,  ssao: true,  texRes: 2048, normals: true },
+  low:    { label: 'Low',    pixelRatio: 1.0,  antialias: false, shadows: false, bloom: false, texRes: 512,  normals: false },
+  medium: { label: 'Medium', pixelRatio: 1.25, antialias: true,  shadows: false, bloom: true,  texRes: 1024, normals: false },
+  high:   { label: 'High',   pixelRatio: 1.5,  antialias: true,  shadows: true,  bloom: true,  texRes: 2048, normals: true },
 };
 export const QUALITY_MODES = ['auto', 'low', 'medium', 'high'];
 
