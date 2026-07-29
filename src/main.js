@@ -1585,7 +1585,7 @@ function animate() {
   if (_devFpsEl) {
     _fpsFrames++; _fpsAccum += dt;
     if (_fpsAccum >= 0.5) {
-      _devFpsEl.textContent = `${Math.round(_fpsFrames / _fpsAccum)} fps · ${getTier()}${getMode() === 'auto' ? ' (auto)' : ''}`;
+      _devFpsEl.textContent = `${Math.round(_fpsFrames / _fpsAccum)} fps · ${getTier()}${getMode() === 'auto' ? ' (auto)' : ''} · pr${renderer.getPixelRatio()}`;
       _fpsFrames = 0; _fpsAccum = 0;
     }
   }

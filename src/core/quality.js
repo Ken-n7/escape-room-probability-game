@@ -15,8 +15,8 @@
 // (downsamples on retina → big perf win + softer edges); High allows up to 2×.
 export const QUALITY_TIERS = {
   low:    { label: 'Low',    pixelRatio: 1.0,  antialias: false, shadows: false, bloom: false, ssao: false, texRes: 512,  normals: false },
-  medium: { label: 'Medium', pixelRatio: 1.35, antialias: true,  shadows: false, bloom: true,  ssao: false, texRes: 1024, normals: false },
-  high:   { label: 'High',   pixelRatio: 2.0,  antialias: true,  shadows: true,  bloom: true,  ssao: true,  texRes: 2048, normals: true },
+  medium: { label: 'Medium', pixelRatio: 1.25, antialias: true,  shadows: false, bloom: true,  ssao: false, texRes: 1024, normals: false },
+  high:   { label: 'High',   pixelRatio: 1.5,  antialias: true,  shadows: true,  bloom: true,  ssao: true,  texRes: 2048, normals: true },
 };
 export const QUALITY_MODES = ['auto', 'low', 'medium', 'high'];
 
