@@ -259,7 +259,7 @@ function updateQualityUI() {
   if (hint) {
     const tier = QUALITY_TIERS[getTier()].label;
     const base = mode === 'auto' ? `Auto — using ${tier} on this device` : `${tier} quality`;
-    hint.textContent = needsReload() ? `${base} · restart to apply anti-aliasing` : base;
+    hint.textContent = needsReload() ? `${base} · restart to apply fully` : base;
   }
 }
 document.querySelectorAll('#settings-quality button').forEach(b => {

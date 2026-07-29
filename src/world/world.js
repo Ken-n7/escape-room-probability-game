@@ -614,10 +614,19 @@ function normalFromTexture(srcTex, strength = 1) {
   return t;
 }
 
-// A lit PBR surface with a tier-gated normal map. Records the (material, normal)
-// pair so applyNormals() can switch the relief on/off per quality tier.
+// PBR is a Medium/High feature — it's the one thing that made Low expensive.
+// On Low we build cheap Lambert instead (no PBR BRDF, no normal maps), keeping
+// it the 60fps baseline. Decided at world-build; switching Low<->Med/High
+// applies on restart (see needsReload()).
+const _usePBR = getKnobs().pbr;
+
+// A lit surface. On Med/High: MeshStandard + a tier-gated procedural normal map.
+// On Low: MeshLambert (same map/emissive, none of the cost).
 const _normalPairs = [];
 function stdSurface(mapTex, { rough = 0.85, metal = 0, emissive = 0x000000, emissiveIntensity = 0, side, transparent = false, nStrength = 1, nScale = 0.6 } = {}) {
+  if (!_usePBR) {
+    return new THREE.MeshLambertMaterial({ map: mapTex, emissive, emissiveIntensity, side, transparent });
+  }
   const mat = new THREE.MeshStandardMaterial({
     map: mapTex, roughness: rough, metalness: metal,
     emissive, emissiveIntensity, side, transparent,
@@ -1541,12 +1550,27 @@ let fluorescentTemplate = null;
 let fluorescentLoading = false;
 const pendingFluorescentFixtures = [];
 
+// The GLTF fixtures load as PBR (MeshStandard). On Low, rebuild them as cheap
+// Lambert (keeping map/emissive/name so the flicker glow still works) so the
+// baseline pays no PBR cost anywhere.
+function toLambertLike(mat) {
+  const l = new THREE.MeshLambertMaterial({
+    map: mat.map || null, emissiveMap: mat.emissiveMap || null,
+    emissive: mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000),
+    emissiveIntensity: mat.emissiveIntensity ?? 1,
+    transparent: mat.transparent, opacity: mat.opacity, side: mat.side,
+  });
+  if (mat.color) l.color.copy(mat.color);
+  l.name = mat.name;
+  return l;
+}
+
 function collectEmissiveMaterials(root) {
   const materials = [];
   root.traverse(obj => {
     if (!obj.isMesh || !obj.material) return;
     const sourceMats = Array.isArray(obj.material) ? obj.material : [obj.material];
-    const clonedMats = sourceMats.map(mat => mat.clone());
+    const clonedMats = sourceMats.map(mat => _usePBR ? mat.clone() : toLambertLike(mat));
     obj.material = Array.isArray(obj.material) ? clonedMats : clonedMats[0];
     clonedMats.forEach(mat => {
       const name = (mat.name || '').toLowerCase();

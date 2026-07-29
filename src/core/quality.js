@@ -13,9 +13,9 @@
 // pixelRatio here is a CAP — actual = min(devicePixelRatio, cap). Low forces 1.0
 // (downsamples on retina → big perf win + softer edges); High allows up to 2×.
 export const QUALITY_TIERS = {
-  low:    { label: 'Low',    pixelRatio: 1.0,  antialias: false, shadows: false, bloom: false, texRes: 512,  normals: false },
-  medium: { label: 'Medium', pixelRatio: 1.25, antialias: true,  shadows: false, bloom: true,  texRes: 1024, normals: false },
-  high:   { label: 'High',   pixelRatio: 1.5,  antialias: true,  shadows: true,  bloom: true,  texRes: 2048, normals: true },
+  low:    { label: 'Low',    pixelRatio: 1.0,  antialias: false, shadows: false, bloom: false, texRes: 512,  normals: false, pbr: false },
+  medium: { label: 'Medium', pixelRatio: 1.25, antialias: true,  shadows: false, bloom: true,  texRes: 1024, normals: false, pbr: true  },
+  high:   { label: 'High',   pixelRatio: 1.5,  antialias: true,  shadows: true,  bloom: true,  texRes: 2048, normals: true,  pbr: true  },
 };
 export const QUALITY_MODES = ['auto', 'low', 'medium', 'high'];
 
@@ -61,7 +61,8 @@ export function resolveKnobs() {
 
 // True when the current tier differs from boot in a way that only a reload can
 // apply (anti-alias is fixed at WebGL context creation).
-export const needsReload = () => !!_bootKnobs && _bootKnobs.antialias !== getKnobs().antialias;
+export const needsReload = () => !!_bootKnobs &&
+  (_bootKnobs.antialias !== getKnobs().antialias || _bootKnobs.pbr !== getKnobs().pbr);
 
 function emit() { const k = getKnobs(); _listeners.forEach(fn => { try { fn(k); } catch (e) { console.warn('[quality] listener failed', e); } }); }
 
