@@ -40,19 +40,24 @@ const {
   realRoomRects, decoyRects, vacantRects, randomizeNotes, relocateNote,
 } = buildWorld(scene);
 
-// Anisotropic filtering — recovers sharpness on surfaces seen at grazing angles
-// (floors + walls receding down corridors), which is exactly what looks blurry
-// when we render at a low pixel ratio for weak phones. Costs only extra texture
-// samples at those angles — no extra pixels, no passes — so it's the cheapest way
-// to make pr1.0 look crisp. Applied once to every texture in the built scene.
+// Two per-material tweaks applied once to the built scene:
+//  • Anisotropic filtering — recovers sharpness on surfaces at grazing angles
+//    (floors/walls receding down corridors), the thing that looks blurry at the
+//    low pixel ratio we use for weak phones. Only extra texture samples, no
+//    extra pixels — the cheapest way to make pr1.0 look crisp.
+//  • Dithering — hides 8-bit colour banding (visible horizontal steps) in the
+//    dark smooth gradients, made worse by the brightness lift. Adds a tiny
+//    imperceptible noise before quantization; nearly free.
 {
   const aniso = Math.min(renderer.capabilities.getMaxAnisotropy(), 4);
   const seen = new Set();
   scene.traverse(o => {
     if (!o.isMesh) return;
     for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+      if (!m) continue;
+      if (!m.dithering) { m.dithering = true; m.needsUpdate = true; }
       for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap']) {
-        const t = m && m[key];
+        const t = m[key];
         if (t && !seen.has(t)) { seen.add(t); t.anisotropy = aniso; t.needsUpdate = true; }
       }
     }
