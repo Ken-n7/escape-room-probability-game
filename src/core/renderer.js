@@ -6,7 +6,7 @@ export const renderer = new THREE.WebGLRenderer({
   powerPreference: 'high-performance',
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
 renderer.shadowMap.enabled = false;
 // ACES filmic tone mapping — richer contrast and gentler highlight rolloff than
 // the default linear clamp, so the fluorescents and candles don't blow out to
