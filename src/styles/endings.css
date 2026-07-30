@@ -164,7 +164,7 @@
     .modal-back-btn {
       margin-top:20px; padding:9px 22px; background:transparent;
       border:1px solid #443322; border-radius:6px;
-      color:#886644; font-family:monospace; font-size:0.8rem;
+      color:#868c94; font-family:monospace; font-size:0.8rem;
       letter-spacing:2px; cursor:pointer; transition:background 0.15s;
     }
     .modal-back-btn:hover { background:rgba(80,40,0,0.3); }
