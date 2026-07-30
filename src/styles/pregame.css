@@ -39,19 +39,25 @@
       transform:translateY(-50%);
       right:auto;
       bottom:auto;
-      width:min(330px, calc(100vw - 80px));
+      width:min(340px, calc(100vw - 80px));
       align-items:stretch;
       gap:12px;
     }
-    #menu-content::before { text-align:left; }
+    #menu-content::before { white-space:nowrap; }
+    /* Big painted wordmark above the buttons (the mockup's title slot). */
     #menu-content::before {
       content:'ODDSCAPE';
-      color:var(--amber);
-      font-family:monospace;
-      font-size:.74rem;
-      border-bottom:1px solid var(--line);
-      padding-bottom:10px;
-      margin-bottom:6px;
+      color:var(--bone);
+      font-family:var(--font-title);
+      font-weight:400;
+      font-size:clamp(2.6rem, 11vw, 4.4rem);
+      line-height:.92;
+      letter-spacing:.01em;
+      text-transform:uppercase;
+      text-shadow:0 3px 18px rgba(0,0,0,.85), 0 0 34px rgba(181,31,35,.35);
+      border-bottom:none;
+      padding-bottom:0;
+      margin-bottom:clamp(14px, 3vh, 26px);
       text-align:left;
     }
     .menu-btn {

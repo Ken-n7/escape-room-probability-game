@@ -82,10 +82,10 @@
     }
     #loading-content .case-stamp { margin-bottom:1.1rem; }
     #loading-content h1 {
-      font-family:'HorrorScratch', Impact, 'Arial Black', sans-serif;
-      font-size:clamp(4rem,14vw,9rem);
+      font-family:var(--font-title);
+      font-size:clamp(3.4rem,13vw,8rem);
       line-height:.9; color:var(--bone);
-      text-transform:lowercase; letter-spacing:.02em;
+      text-transform:uppercase; letter-spacing:.01em;
       text-shadow:0 0 42px rgba(181,31,35,.7);
       animation:flicker .12s infinite;
       margin:0 0 1.8rem;
