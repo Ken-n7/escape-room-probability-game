@@ -28,18 +28,22 @@
     }
 
     #s-menu {
-      align-items:flex-end;
-      justify-content:flex-end;
+      align-items:flex-start;
+      justify-content:center;
       padding:clamp(22px, 4vw, 42px);
     }
     #menu-content {
       position:fixed;
-      right:clamp(22px, 4vw, 42px);
-      bottom:clamp(22px, 4vw, 42px);
-      width:min(310px, calc(100vw - 44px));
+      left:clamp(40px, 6vw, 96px);
+      top:50%;
+      transform:translateY(-50%);
+      right:auto;
+      bottom:auto;
+      width:min(330px, calc(100vw - 80px));
       align-items:stretch;
-      gap:10px;
+      gap:12px;
     }
+    #menu-content::before { text-align:left; }
     #menu-content::before {
       content:'ODDSCAPE';
       color:var(--amber);
@@ -48,7 +52,7 @@
       border-bottom:1px solid var(--line);
       padding-bottom:10px;
       margin-bottom:6px;
-      text-align:right;
+      text-align:left;
     }
     .menu-btn {
       min-height:50px;
@@ -191,6 +195,8 @@
       #menu-content {
         left:18px;
         right:18px;
+        top:auto;
+        transform:none;
         bottom:22px;
         width:auto;
       }

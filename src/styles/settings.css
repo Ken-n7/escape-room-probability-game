@@ -151,3 +151,68 @@
   .st-tab { padding:7px 9px; letter-spacing:2px; }
   #settings-box { padding:16px 18px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BRUSH-STROKE MENU/TAB BUTTONS (shared)
+   Flat list, ◆ diamond bullets, torn white paint-swipe on the active/hover
+   item (dark text). Used by the main-menu buttons and the settings sidebar
+   tabs so both read the same. Loaded last → wins over the older card styling.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.menu-btn,
+.st-nav .st-tab:not(.st-back) {
+  position:relative; z-index:0;
+  display:flex; align-items:center; gap:14px;
+  justify-content:flex-start; text-align:left;
+  width:100%; min-width:0;
+  background:none; border:none; box-shadow:none; border-radius:0;
+  padding:11px 18px; transform:none;
+  color:var(--st-ink);
+  font-family:monospace; text-transform:uppercase;
+  letter-spacing:3px; font-weight:700;
+  text-shadow:0 1px 3px rgba(0,0,0,.7);
+  transition:color .14s ease;
+  cursor:pointer;
+}
+.menu-btn { font-size:clamp(1rem,2.6vw,1.24rem); }
+
+/* ◆ bullet on the left (replaces the old right-side .icon glyph) */
+.menu-btn .icon { display:none; }
+.menu-btn::before,
+.st-nav .st-tab:not(.st-back)::before {
+  content:'\25C6'; /* ◆ */
+  color:var(--st-red); font-size:.62em; line-height:1;
+  transition:opacity .14s ease;
+  text-shadow:none;
+}
+
+/* The torn white paint swipe — a pseudo layer behind the text */
+.menu-btn::after,
+.st-nav .st-tab:not(.st-back)::after {
+  content:''; position:absolute; inset:0 -6px; z-index:-1;
+  background:#f2f0ea; opacity:0;
+  clip-path:polygon(
+    2% 20%, 7% 4%, 21% 13%, 41% 3%, 63% 11%, 83% 1%, 96% 15%,
+    99% 42%, 98% 72%, 93% 94%, 77% 83%, 55% 97%, 32% 87%, 13% 98%,
+    4% 76%, 1% 48%);
+  transition:opacity .14s ease;
+}
+
+/* Active / hover / keyboard-focus → paint swipe, dark ink, no bullet */
+.menu-btn:hover,
+.menu-btn:focus-visible,
+.st-nav .st-tab.is-active,
+.st-nav .st-tab:not(.st-back):hover,
+.st-nav .st-tab:not(.st-back):focus-visible {
+  color:#16181c; text-shadow:none;
+  background:none; box-shadow:none; transform:none;
+}
+.menu-btn:hover::after,
+.menu-btn:focus-visible::after,
+.st-nav .st-tab.is-active::after,
+.st-nav .st-tab:not(.st-back):hover::after,
+.st-nav .st-tab:not(.st-back):focus-visible::after { opacity:1; }
+.menu-btn:hover::before,
+.menu-btn:focus-visible::before,
+.st-nav .st-tab.is-active::before,
+.st-nav .st-tab:not(.st-back):hover::before,
+.st-nav .st-tab:not(.st-back):focus-visible::before { opacity:0; }
