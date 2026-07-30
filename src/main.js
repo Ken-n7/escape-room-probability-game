@@ -40,6 +40,25 @@ const {
   realRoomRects, decoyRects, vacantRects, randomizeNotes, relocateNote,
 } = buildWorld(scene);
 
+// Anisotropic filtering — recovers sharpness on surfaces seen at grazing angles
+// (floors + walls receding down corridors), which is exactly what looks blurry
+// when we render at a low pixel ratio for weak phones. Costs only extra texture
+// samples at those angles — no extra pixels, no passes — so it's the cheapest way
+// to make pr1.0 look crisp. Applied once to every texture in the built scene.
+{
+  const aniso = Math.min(renderer.capabilities.getMaxAnisotropy(), 4);
+  const seen = new Set();
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+      for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap']) {
+        const t = m && m[key];
+        if (t && !seen.has(t)) { seen.add(t); t.anisotropy = aniso; t.needsUpdate = true; }
+      }
+    }
+  });
+}
+
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
 
 // ── Menu camera ────────────────────────────────────────────────────────────────
@@ -75,6 +94,8 @@ function setMenuCamera() {
 const $ = id => document.getElementById(id);
 const elSensitivity      = $('settings-sensitivity');
 const elSensitivityValue = $('settings-sensitivity-value');
+const elBrightness       = $('settings-brightness');
+const elBrightnessValue  = $('settings-brightness-value');
 
 // ── Local storage / save ──────────────────────────────────────────────────────
 const SAVE_KEY = 'escape_room_v1';
@@ -93,6 +114,21 @@ let bestScores = _save.bestScores || [null, null, null];
 let bestTime   = _save.bestTime   || null;
 setLookSensitivity(normalizeSensitivity(_save.lookSensitivity));
 
+// Brightness — a multiplier on the renderer's base exposure. The world is
+// deliberately dark, but phone panels (and bright rooms) can make it unreadable,
+// so let players lift it. Mobile defaults brighter since those screens run dimmer.
+const BASE_EXPOSURE = 1.25;   // matches renderer.js; brightness scales it
+const _isMobile = /Android|iPhone|iPad|iPod|Mobile|Silk|Tablet/i.test(navigator.userAgent || '')
+  || (navigator.maxTouchPoints > 1 && typeof matchMedia === 'function' && matchMedia('(pointer:coarse)').matches);
+function normalizeBrightness(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return _isMobile ? 1.35 : 1;
+  return Math.min(2, Math.max(0.7, n));
+}
+let brightness = normalizeBrightness(_save.brightness ?? (_isMobile ? 1.35 : 1));
+function applyBrightness() { renderer.toneMappingExposure = BASE_EXPOSURE * brightness; }
+applyBrightness();
+
 // Sound category volumes (spec 6.3) — 0..1, applied via AudioManager
 const soundVols = { music: 1, footsteps: 1, jumpscares: 1, ..._save.soundVols };
 Object.entries(soundVols).forEach(([cat, v]) => {
@@ -103,7 +139,7 @@ Object.entries(soundVols).forEach(([cat, v]) => {
 });
 
 function persistSave() {
-  writeSave({ playerName, bestScores, bestTime, lookSensitivity, soundVols });
+  writeSave({ playerName, bestScores, bestTime, lookSensitivity, soundVols, brightness });
 }
 
 // ── Game state ────────────────────────────────────────────────────────────────
@@ -228,6 +264,13 @@ function updateSensitivityUI() {
   const percent = Math.round(lookSensitivity * 100);
   elSensitivity.value = String(percent);
   elSensitivityValue.textContent = percent + '%';
+}
+
+function updateBrightnessUI() {
+  if (!elBrightness || !elBrightnessValue) return;
+  const percent = Math.round(brightness * 100);
+  elBrightness.value = String(percent);
+  elBrightnessValue.textContent = percent + '%';
 }
 
 function updateVolumeUI() {
@@ -562,6 +605,7 @@ function openSettings(from = 'menu') {
   $('settings-name').value = playerName;
   $('settings-saved').textContent = '';
   updateSensitivityUI();
+  updateBrightnessUI();
   updateVolumeUI();
   updateFullscreenLabel();
   updateSettingsScores();
@@ -1728,6 +1772,14 @@ elSensitivity?.addEventListener('input', e => {
   // Slider value is a percent (45–180); convert to the 0.45–1.8 multiplier.
   setLookSensitivity(normalizeSensitivity(Number(e.target.value) / 100));
   updateSensitivityUI();
+  persistSave();
+});
+elBrightness?.addEventListener('input', e => {
+  // Slider percent (70–200) → exposure multiplier; applies live so players can
+  // dial it while looking at the scene.
+  brightness = normalizeBrightness(Number(e.target.value) / 100);
+  applyBrightness();
+  updateBrightnessUI();
   persistSave();
 });
 let _volPreviewAt = 0;
