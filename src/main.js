@@ -1279,6 +1279,10 @@ function typeInto(el, html) {
 }
 // True when a line is still typing — used so "Next" completes it before advancing.
 const isTyping = () => Boolean(_activeTyper) && !_activeTyper.done;
+// Hard-stop any in-flight typewriter (cancels its rAF loop and, with it, the
+// per-tick typing sound). Call when LEAVING a typing screen — otherwise the
+// typer keeps running invisibly and the tick sound plays on to the end.
+const stopTyper = () => { if (_activeTyper) _activeTyper.finish(); };
 
 const STORY_SLIDES = [
   'The doors sealed the moment you stepped inside. This school was abandoned years ago — yet something here is still awake, and it has waited a long time for someone like you.',
@@ -1314,11 +1318,13 @@ window.storyStep = function(dir) {
 };
 
 window.storySkip = function() {
+  stopTyper();                 // don't leave the typing sound running after skip
   storyIdx = STORY_SLIDES.length - 1;
   showScreen('ready');
 };
 
 window.goHome = function() {
+  stopTyper();                 // stop any in-flight story/P-Learn typing + its sound
   abandonPlayIfActive();
   storyIdx = 0;
   plearnIdx = 0;
