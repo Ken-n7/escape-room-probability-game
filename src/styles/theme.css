@@ -1,20 +1,28 @@
     /* ── THEME REFRESH: non-game screens ─────────────────────────────────── */
     :root {
       --ink: #050709;
-      --panel: rgba(8, 11, 12, 0.82);
-      --panel-strong: rgba(8, 10, 12, 0.92);
-      --line: rgba(209, 183, 126, 0.28);
-      --line-red: rgba(177, 30, 30, 0.45);
-      --bone: #e7dfcc;
-      --paper: #c8b98e;
-      --muted: #9b927c;
+      --panel: rgba(10, 11, 13, 0.85);
+      --panel-strong: rgba(8, 9, 12, 0.94);
+      --line: rgba(229, 32, 43, 0.30);           /* accent-tinted borders */
+      --line-red: rgba(229, 32, 43, 0.50);
+      --bone: #dfe3e8;                            /* cool off-white text */
+      --paper: #b9bec6;
+      --muted: #868c94;
       --blood: #b51f23;
-      --amber: #d49b45;
+      /* Unified accent — placeholder red, matches Settings (--st-red). Swap here
+         to recolour every screen at once. --amber is repointed to it so the many
+         existing var(--amber) usages become the accent automatically. */
+      --accent: #e5202b;
+      --accent-hi: #ff3644;
+      --amber: var(--accent);
       --chalk: #8fd3bd;
       --green: #5fae72;
+      /* Shared type stacks (match Settings) */
+      --font-ui: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+      --font-title: Impact, 'Arial Narrow Bold', 'Arial Black', sans-serif;
     }
 
-    body { font-family: Georgia, 'Times New Roman', serif; color:var(--bone); }
+    body { font-family: var(--font-ui); color:var(--bone); }
     button, input { font:inherit; }
     button { touch-action:manipulation; }
     * { letter-spacing:0 !important; }
