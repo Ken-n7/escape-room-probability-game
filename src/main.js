@@ -613,8 +613,32 @@ function openSettings(from = 'menu') {
   updateBrightnessUI();
   updateVolumeUI();
   updateFullscreenLabel();
+  updateSettingsFullscreenBtn();
   updateSettingsScores();
+  showSettingsTab('display');        // always open on the first tab
   showScreen('settings');
+}
+
+// Tabbed settings: show one category panel at a time.
+function showSettingsTab(name) {
+  document.querySelectorAll('#s-settings .st-tab[data-tab]').forEach(t =>
+    t.classList.toggle('is-active', t.dataset.tab === name));
+  document.querySelectorAll('#s-settings .st-panel').forEach(p => {
+    const on = p.dataset.panel === name;
+    p.classList.toggle('is-active', on);
+    p.hidden = !on;
+  });
+}
+
+// Fullscreen toggle button living in the Video tab.
+function updateSettingsFullscreenBtn() {
+  const btn = $('btn-settings-fullscreen');
+  if (!btn) return;
+  const row = btn.closest('.settings-row');
+  if (row) row.style.display = document.fullscreenEnabled ? '' : 'none';   // hide where unsupported (iOS Safari)
+  const on = !!document.fullscreenElement;
+  btn.setAttribute('aria-pressed', String(on));
+  btn.textContent = on ? 'On' : 'Off';
 }
 
 // ── Options / pause flow ──────────────────────────────────────────────────────
@@ -1814,6 +1838,12 @@ document.querySelectorAll('.settings-vol').forEach(slider => {
 $('btn-settings-back').onclick = () => {
   if (settingsFrom === 'options') openOptions(false); else showScreen('menu');
 };
+$('btn-settings-x')?.addEventListener('click', () => $('btn-settings-back').click());
+document.querySelectorAll('#s-settings .st-tab[data-tab]').forEach(tab => {
+  tab.addEventListener('click', () => { showSettingsTab(tab.dataset.tab); AudioManager.play('uiClick', { vol: 0.3 }); });
+});
+$('btn-settings-fullscreen')?.addEventListener('click', () => { toggleFullscreen(); AudioManager.play('uiClick'); });
+document.addEventListener('fullscreenchange', updateSettingsFullscreenBtn);
 $('icon-settings').onclick   = () => openSettings('menu');
 $('icon-about').onclick      = () => showScreen('about');
 $('btn-about-back').onclick  = () => showScreen('menu');

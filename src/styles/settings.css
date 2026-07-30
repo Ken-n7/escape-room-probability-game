@@ -1,0 +1,153 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTINGS — tabbed layout (VIDEO / AUDIO / CONTROLS / GAME) over the blurred
+   game. Loaded LAST so it overrides the older amber #settings-box rules.
+   Accent colour is a placeholder red (--st-red) — swap later for the real theme.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root { --st-red:#e5202b; --st-red-hi:#ff3644; --st-ink:#c9ced5; --st-dim:#868c94; }
+
+/* Background = the live game, blurred, with a dark scrim (not the static image) */
+#s-settings { background:none; }
+#s-settings::before {
+  content:''; position:absolute; inset:0;
+  background:rgba(4,5,7,0.55);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+}
+
+#settings-box {
+  position:relative;
+  width:min(1040px, 94vw);
+  max-width:none;
+  background:none; border:none; box-shadow:none; border-radius:0;
+  padding:clamp(18px,3.5vh,40px) clamp(20px,4vw,54px);
+  text-align:left;
+}
+
+/* Title — clean bold, red underline spanning the box (matches the mockup feel) */
+#settings-box h2 {
+  margin:0; padding-bottom:12px;
+  font-family:Impact, 'Arial Narrow Bold', 'Arial Black', sans-serif;
+  font-weight:800; letter-spacing:3px; text-transform:uppercase;
+  font-size:clamp(1.9rem,5.5vw,3.2rem);
+  color:#fff; text-shadow:none;
+  border-bottom:2px solid var(--st-red);
+}
+
+.st-body {
+  display:flex; align-items:flex-start;
+  gap:clamp(22px,5vw,64px);
+  margin-top:clamp(16px,3vh,32px);
+}
+
+/* ── Left category rail (stays a sidebar, just narrows on small screens) ───── */
+.st-nav {
+  display:flex; flex-direction:column; gap:5px;
+  flex:0 0 auto; min-width:clamp(112px,15vw,172px);
+}
+.st-tab {
+  appearance:none; -webkit-appearance:none;
+  background:none; border:none; border-radius:4px; cursor:pointer;
+  font-family:monospace; letter-spacing:3px; text-transform:uppercase; text-align:left;
+  font-size:clamp(0.8rem,2.3vw,1.02rem);
+  color:var(--st-dim); padding:9px 14px;
+  transition:color .14s ease, background .14s ease, box-shadow .14s ease;
+}
+.st-tab:hover { color:#e2e6ea; }
+.st-tab.is-active {
+  color:#fff; background:var(--st-red);
+  box-shadow:0 0 18px rgba(229,32,43,.45);
+}
+/* Two-ID specificity to beat the legacy #btn-settings-back rule (from when this
+   id was the top-right ✕), which absolutely-positions it on small screens. */
+#s-settings #btn-settings-back.st-back {
+  position:static; float:none; top:auto; right:auto; left:auto; bottom:auto; width:auto;
+  margin-top:clamp(18px,5vh,44px); color:#c06b4c; letter-spacing:3px;
+}
+#s-settings #btn-settings-back.st-back:hover { color:#ff9d7d; }
+
+/* ── Right panels ──────────────────────────────────────────────────────────── */
+.st-panels { flex:1 1 auto; min-width:0; max-width:540px; }
+.st-panel { display:none; }
+.st-panel.is-active { display:block; }
+
+/* Rows (override the old amber styling) */
+#s-settings .settings-row { margin-bottom:clamp(14px,2.4vh,22px); text-align:left; float:none; }
+#s-settings .settings-row > label,
+#s-settings .settings-label-line,
+#s-settings .st-inline-label {
+  display:flex; color:var(--st-ink); font-family:monospace;
+  font-size:clamp(0.82rem,2.2vw,0.98rem); letter-spacing:1.4px;
+  text-transform:none; margin-bottom:8px;
+}
+#s-settings .settings-label-line { justify-content:space-between; align-items:center; gap:12px; }
+#s-settings [id$="-value"] { color:var(--st-red); font-family:monospace; font-size:0.82rem; white-space:nowrap; }
+
+/* Sliders — red accent */
+#s-settings input[type="range"] {
+  width:100%; accent-color:var(--st-red); touch-action:pan-x; cursor:pointer;
+}
+
+/* Fullscreen toggle */
+.st-inline { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.st-inline .st-inline-label { margin-bottom:0; }
+.st-toggle {
+  min-width:66px; padding:7px 16px; cursor:pointer;
+  background:none; border:1px solid var(--st-red); border-radius:4px;
+  color:var(--st-red); font-family:monospace; letter-spacing:2px; text-transform:uppercase;
+  font-size:0.82rem; transition:background .14s, color .14s;
+}
+.st-toggle:hover { background:rgba(229,32,43,.14); }
+.st-toggle[aria-pressed="true"] { background:var(--st-red); color:#fff; }
+
+/* Player name row */
+.st-name-row { display:flex; gap:10px; align-items:center; }
+#s-settings #settings-name {
+  flex:1 1 auto; min-width:0; padding:10px 14px;
+  background:rgba(0,0,0,.35); border:1px solid rgba(229,32,43,.4); border-radius:5px;
+  color:#fff; font-family:monospace; font-size:0.95rem; letter-spacing:1px; outline:none;
+}
+#s-settings #settings-name:focus { border-color:var(--st-red); }
+#s-settings #btn-save-name {
+  float:none; margin:0; padding:9px 18px; cursor:pointer;
+  background:none; border:1px solid var(--st-red); border-radius:5px;
+  color:var(--st-red); font-family:monospace; letter-spacing:2px; text-transform:uppercase; font-size:0.8rem;
+  transition:background .14s, color .14s;
+}
+#s-settings #btn-save-name:hover { background:var(--st-red); color:#fff; }
+
+/* Scores */
+#s-settings #settings-scores {
+  clear:both; margin:6px 0 18px; padding:14px 16px;
+  background:rgba(0,0,0,.32); border:1px solid rgba(229,32,43,.28); border-radius:7px;
+}
+#s-settings #settings-scores h3 {
+  color:var(--st-dim); font-family:monospace; font-size:0.78rem;
+  letter-spacing:3px; text-transform:uppercase; margin:0 0 12px;
+}
+#s-settings .score-row {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:8px; color:var(--st-ink); font-family:monospace; font-size:0.85rem;
+}
+#s-settings .score-row:last-child { margin-bottom:0; }
+#s-settings .score-row .score-val { color:var(--st-red); letter-spacing:1px; }
+
+/* Reset */
+#s-settings #btn-reset-progress {
+  margin-top:4px; padding:10px 20px; cursor:pointer;
+  background:rgba(229,32,43,.12); border:1px solid var(--st-red); border-radius:6px;
+  color:var(--st-red-hi); font-family:monospace; letter-spacing:2px; text-transform:uppercase; font-size:0.82rem;
+  transition:background .14s, color .14s;
+}
+#s-settings #btn-reset-progress:hover { background:var(--st-red); color:#fff; }
+
+#s-settings #settings-saved { margin-top:14px; color:var(--st-red); font-family:monospace; font-size:0.8rem; letter-spacing:1px; }
+
+/* Close ✕ stays top-right of the box */
+#s-settings #btn-settings-x { position:absolute; top:14px; right:14px; }
+
+/* Narrow screens — keep the sidebar, just tighten it (per design choice) */
+@media (max-width:560px), (max-height:430px) {
+  .st-body { gap:16px; }
+  .st-nav { min-width:96px; }
+  .st-tab { padding:7px 9px; letter-spacing:2px; }
+  #settings-box { padding:16px 18px; }
+}

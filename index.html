@@ -273,76 +273,93 @@
 <!-- ══ SETTINGS ════════════════════════════════════════════════════════════════ -->
 <div id="s-settings" class="screen hidden">
   <div id="settings-box">
-    <button class="modal-x" id="btn-settings-back" type="button" aria-label="Close settings">✕</button>
+    <button class="modal-x" id="btn-settings-x" type="button" aria-label="Close settings">✕</button>
     <h2>SETTINGS</h2>
 
-    <div class="settings-row">
-      <label>PLAYER NAME</label>
-      <input id="settings-name" type="text" maxlength="20" placeholder="Enter your name"/>
-      <button id="btn-save-name">SAVE</button>
-    </div>
+    <div class="st-body">
+      <nav class="st-nav" role="tablist" aria-label="Settings categories">
+        <button class="st-tab is-active" type="button" data-tab="display" role="tab">Video</button>
+        <button class="st-tab" type="button" data-tab="audio" role="tab">Audio</button>
+        <button class="st-tab" type="button" data-tab="controls" role="tab">Controls</button>
+        <button class="st-tab" type="button" data-tab="game" role="tab">Game</button>
+        <button class="st-tab st-back" id="btn-settings-back" type="button">Back</button>
+      </nav>
 
-    <div class="settings-row">
-      <label class="settings-label-line" for="settings-sensitivity">
-        <span>LOOK SENSITIVITY</span>
-        <span id="settings-sensitivity-value">100%</span>
-      </label>
-      <input id="settings-sensitivity" type="range" min="45" max="180" step="5" value="100"/>
-    </div>
+      <div class="st-panels">
+        <!-- VIDEO / DISPLAY -->
+        <section class="st-panel is-active" data-panel="display" role="tabpanel">
+          <div class="settings-row">
+            <label class="settings-label-line" for="settings-brightness">
+              <span>Brightness</span>
+              <span id="settings-brightness-value">100%</span>
+            </label>
+            <input id="settings-brightness" type="range" min="70" max="200" step="5" value="100"/>
+          </div>
+          <div class="settings-row st-inline">
+            <span class="st-inline-label">Fullscreen</span>
+            <button id="btn-settings-fullscreen" class="st-toggle" type="button" aria-pressed="false">Off</button>
+          </div>
+        </section>
 
-    <div class="settings-row">
-      <label class="settings-label-line" for="settings-brightness">
-        <span>BRIGHTNESS</span>
-        <span id="settings-brightness-value">100%</span>
-      </label>
-      <input id="settings-brightness" type="range" min="70" max="200" step="5" value="100"/>
-    </div>
+        <!-- AUDIO -->
+        <section class="st-panel" data-panel="audio" role="tabpanel" hidden>
+          <div class="settings-row">
+            <label class="settings-label-line" for="settings-vol-music">
+              <span>Music Volume</span>
+              <span id="settings-vol-music-value">100%</span>
+            </label>
+            <input id="settings-vol-music" class="settings-vol" data-cat="music" type="range" min="0" max="100" step="5" value="100"/>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label-line" for="settings-vol-footsteps">
+              <span>Footsteps Volume</span>
+              <span id="settings-vol-footsteps-value">100%</span>
+            </label>
+            <input id="settings-vol-footsteps" class="settings-vol" data-cat="footsteps" type="range" min="0" max="100" step="5" value="100"/>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label-line" for="settings-vol-jumpscares">
+              <span>Jumpscare Volume</span>
+              <span id="settings-vol-jumpscares-value">100%</span>
+            </label>
+            <input id="settings-vol-jumpscares" class="settings-vol" data-cat="jumpscares" type="range" min="0" max="100" step="5" value="100"/>
+          </div>
+        </section>
 
-    <div class="settings-row">
-      <label class="settings-label-line" for="settings-vol-music">
-        <span>MUSIC VOLUME</span>
-        <span id="settings-vol-music-value">100%</span>
-      </label>
-      <input id="settings-vol-music" class="settings-vol" data-cat="music" type="range" min="0" max="100" step="5" value="100"/>
-    </div>
+        <!-- CONTROLS -->
+        <section class="st-panel" data-panel="controls" role="tabpanel" hidden>
+          <div class="settings-row">
+            <label class="settings-label-line" for="settings-sensitivity">
+              <span>Look Sensitivity</span>
+              <span id="settings-sensitivity-value">100%</span>
+            </label>
+            <input id="settings-sensitivity" type="range" min="45" max="180" step="5" value="100"/>
+          </div>
+        </section>
 
-    <div class="settings-row">
-      <label class="settings-label-line" for="settings-vol-footsteps">
-        <span>FOOTSTEPS VOLUME</span>
-        <span id="settings-vol-footsteps-value">100%</span>
-      </label>
-      <input id="settings-vol-footsteps" class="settings-vol" data-cat="footsteps" type="range" min="0" max="100" step="5" value="100"/>
-    </div>
+        <!-- GAME / PROFILE -->
+        <section class="st-panel" data-panel="game" role="tabpanel" hidden>
+          <div class="settings-row">
+            <label for="settings-name">Player Name</label>
+            <div class="st-name-row">
+              <input id="settings-name" type="text" maxlength="20" placeholder="Enter your name"/>
+              <button id="btn-save-name" type="button">Save</button>
+            </div>
+          </div>
 
-    <div class="settings-row">
-      <label class="settings-label-line" for="settings-vol-jumpscares">
-        <span>JUMPSCARE VOLUME</span>
-        <span id="settings-vol-jumpscares-value">100%</span>
-      </label>
-      <input id="settings-vol-jumpscares" class="settings-vol" data-cat="jumpscares" type="range" min="0" max="100" step="5" value="100"/>
-    </div>
+          <div id="settings-scores">
+            <h3>Room Scores</h3>
+            <div class="score-row"><span>Room 1 · Easy</span><span class="score-val" id="score-room-0">—</span></div>
+            <div class="score-row"><span>Room 2 · Moderate</span><span class="score-val" id="score-room-1">—</span></div>
+            <div class="score-row"><span>Room 3 · Hard</span><span class="score-val" id="score-room-2">—</span></div>
+            <div class="score-row"><span>Best Time</span><span id="score-best-time" class="score-val">—</span></div>
+          </div>
 
-    <div id="settings-scores">
-      <h3>ROOM SCORES</h3>
-      <div class="score-row">
-        <span>Room 1 · Easy</span>
-        <span class="score-val" id="score-room-0">—</span>
+          <button id="btn-reset-progress" type="button">Reset All Progress</button>
+        </section>
       </div>
-      <div class="score-row">
-        <span>Room 2 · Moderate</span>
-        <span class="score-val" id="score-room-1">—</span>
-      </div>
-      <div class="score-row">
-        <span>Room 3 · Hard</span>
-        <span class="score-val" id="score-room-2">—</span>
-      </div>
-      <div class="score-row">
-        <span>BEST TIME</span>
-        <span id="score-best-time" class="score-val">—</span>
-      </div>
     </div>
 
-    <button id="btn-reset-progress">RESET ALL PROGRESS</button>
     <div id="settings-saved"></div>
   </div>
 </div>
