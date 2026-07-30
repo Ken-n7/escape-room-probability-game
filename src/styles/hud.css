@@ -160,9 +160,10 @@
       content:'';
       position:absolute;
       inset:0;
+      /* Vignette only — scanline layer removed (glared on AMOLED phones, and
+         this rotate prompt is phone-only, so it hit every mobile player). */
       background:
-        radial-gradient(circle at 50% 35%, transparent 0 28%, rgba(0,0,0,.62) 78%),
-        repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 5px);
+        radial-gradient(circle at 50% 35%, transparent 0 28%, rgba(0,0,0,.62) 78%);
       pointer-events:none;
     }
     #rotate-phone-box {

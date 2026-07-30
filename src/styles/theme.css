@@ -31,11 +31,12 @@
       inset:-12%;
       pointer-events:none;
       z-index:0;
+      /* Soft edge vignette. The old CRT scanline layer was dropped — its thin
+         white horizontal lines were fine on desktop LCD but glared over AMOLED
+         black on phones (and only showed on these static overlay screens). */
       background:
-        repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 4px),
-        radial-gradient(circle at 50% 46%, transparent 0 34%, rgba(0,0,0,0.45) 72%, rgba(0,0,0,0.9) 100%);
-      opacity:.72;
-      mix-blend-mode:screen;
+        radial-gradient(circle at 50% 46%, transparent 0 42%, rgba(0,0,0,0.4) 78%, rgba(0,0,0,0.72) 100%);
+      opacity:.7;
     }
     .screen > * { position:relative; z-index:1; }
 
