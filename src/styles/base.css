@@ -6,6 +6,13 @@
       src:url('/assets/fonts/HorrorGameWallScratches-Regular.ttf') format('truetype');
       font-display:swap;
     }
+    /* Dry-brush painted horror title (Butcherman, SIL OFL) — the game wordmark,
+       à la the Allison Road logo. Used via --font-title. */
+    @font-face {
+      font-family:'BrushTitle';
+      src:url('/assets/fonts/Butcherman-Regular.ttf') format('truetype');
+      font-display:swap;
+    }
 
     /* ── Reset ───────────────────────────────────────────────────────────── */
     * { margin:0; padding:0; box-sizing:border-box; }

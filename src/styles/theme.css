@@ -19,7 +19,7 @@
       --green: #5fae72;
       /* Shared type stacks (match Settings) */
       --font-ui: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
-      --font-title: Impact, 'Arial Narrow Bold', 'Arial Black', sans-serif;
+      --font-title: 'BrushTitle', Impact, 'Arial Narrow Bold', 'Arial Black', sans-serif;
     }
 
     body { font-family: var(--font-ui); color:var(--bone); }
