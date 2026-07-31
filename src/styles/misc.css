@@ -23,15 +23,9 @@
       border-color:rgba(231,223,204,.46);
       color:rgba(231,223,204,.9);
     }
-    /* During gameplay: FS btn stacks below the burger, centered under it */
-    body[data-hud-visible="true"] #persistent-fs-btn {
-      top:68px;   /* 48px burger + 10px gap */
-      right:16px; /* (10 + 48/2) - 36/2 = centers 36px btn under 48px burger */
-    }
-    body[data-controls="touch"][data-hud-visible="true"] #persistent-fs-btn {
-      top:74px;   /* 54px burger + 10px gap */
-      right:19px; /* (10 + 54/2) - 36/2 = centers 36px btn under 54px burger */
-    }
+    /* Hidden during gameplay — it's all gameplay in-game; fullscreen lives in
+       Settings. The button stays on the pre-game screens. */
+    body[data-hud-visible="true"] #persistent-fs-btn { display:none; }
 
     /* ═══ AUTH — in-theme restyle + logged-out menu (overrides earlier) ═════ */
     /* Login screen floats over the hallway: translucent veil, no opaque bg. */

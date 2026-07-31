@@ -21,12 +21,6 @@
       0%,100% { box-shadow:0 0 0px #44ff88; border-color:transparent; }
       50%      { box-shadow:0 0 14px #44ff88; border:1px solid #44ff88; }
     }
-    #room-progress { position:absolute; top:16px; left:16px; display:flex; gap:10px; }
-    .room-pip {
-      width:12px; height:12px; border-radius:50%;
-      background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);
-    }
-    .room-pip.done { background:#44ff44; border-color:#44ff44; box-shadow:0 0 6px #44ff44; }
     #hud-q-progress { position:absolute; top:34px; left:16px; color:#ffaa55; font-size:0.65rem; letter-spacing:1px; pointer-events:none; }
     #hud-streak { position:absolute; top:48px; left:16px; color:#66ff99; font-size:0.65rem; letter-spacing:1px; pointer-events:none; }
     #crosshair {

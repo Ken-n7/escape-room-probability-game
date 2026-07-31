@@ -26,6 +26,7 @@ export const screens = {
 
 export const elHud             = $('hud');
 export const elPrompt          = $('interact-prompt');
+export const elPromptLabel     = $('interact-label');   // the text inside the prompt (icon sits beside it on touch)
 export const elVignette        = $('vignette');
 export const elCodeTracker     = $('code-tracker');
 export const elHudPlayer       = $('hud-player');

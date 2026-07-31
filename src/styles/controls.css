@@ -1,0 +1,64 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE CONTROLS — distressed chalk-ring skin (icons in #ctl-defs, index.html).
+   Semi-transparent white with grunge-filtered edges. Style only; positions and
+   behaviour are unchanged. Tuning: baseFrequency (grain) + displacement scale
+   (roughness) live on #ctl-grunge in index.html.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root { --ctl-ink:#ecebe4; }   /* chalk white */
+
+.ctl-svg {
+  display:block; width:100%; height:100%;
+  color:var(--ctl-ink); opacity:.82; overflow:visible;
+}
+
+/* ── Pause / options ───────────────────────────────────────────────────────── */
+#hud-options-btn {
+  width:52px; height:52px; padding:5px;
+  border:none; background:none; box-shadow:none;
+}
+#hud-options-btn:hover { background:none; }
+#hud-options-btn .ctl-svg { transition:opacity .12s, transform .12s; }
+#hud-options-btn:active .ctl-svg { opacity:1; transform:scale(.9); }
+
+/* ── Jump ──────────────────────────────────────────────────────────────────── */
+#mobile-jump {
+  padding:5px;
+  border:none; background:none; box-shadow:none;
+}
+#mobile-jump:active { background:none; }
+#mobile-jump .ctl-svg { transition:opacity .12s, transform .12s; }
+#mobile-jump:active .ctl-svg { opacity:1; transform:scale(.9); }
+
+/* ── Joystick — chalk ring base + solid white knob ─────────────────────────── */
+#mobile-joystick {
+  border:none;
+  background:radial-gradient(circle at center, rgba(0,0,0,.30), rgba(0,0,0,.54) 70%);
+  box-shadow:0 0 22px rgba(0,0,0,.5);
+}
+#mobile-joystick::before,
+#mobile-joystick::after { display:none; }        /* drop the crosshair lines */
+.joy-ring {
+  position:absolute; inset:0; width:100%; height:100%;
+  pointer-events:none; opacity:.8;
+}
+#mobile-joystick-knob {
+  border:none; opacity:.92;
+  background:radial-gradient(circle at 42% 36%, #fbfbf7, #d8d6cd 58%, #bdbbb1);
+  box-shadow:0 4px 14px rgba(0,0,0,.55), inset 0 1px 2px rgba(255,255,255,.5);
+}
+#mobile-joystick.active #mobile-joystick-knob { opacity:1; }
+
+/* ── Interact — [ E ] pill on desktop, hand-ring + caption on touch ────────── */
+.ip-hand { display:none; }
+
+body[data-controls="touch"] #interact-prompt {
+  background:none; border:none; padding:0;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+}
+body[data-controls="touch"] .ip-hand { display:block; width:64px; height:64px; }
+body[data-controls="touch"] .ip-hand .ctl-svg { transition:opacity .12s, transform .12s; }
+body[data-controls="touch"] #interact-prompt:active .ctl-svg { opacity:1; transform:scale(.9); }
+body[data-controls="touch"] #interact-label {
+  font-family:monospace; font-size:.82rem; letter-spacing:1px; color:var(--ctl-ink);
+  background:rgba(0,0,0,.5); padding:3px 12px; border-radius:12px; white-space:nowrap;
+}

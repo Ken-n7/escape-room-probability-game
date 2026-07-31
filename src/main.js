@@ -13,7 +13,7 @@ import {
   MOVE_KEYS, KEY_LOOK_SPEED,
 } from './input/input.js';
 import {
-  screens, elHud, elPrompt, elVignette,
+  screens, elHud, elPrompt, elPromptLabel, elVignette,
   elCodeTracker, elHudPlayer,
   elOptionsConfirm, elOptionsConfirmText,
   elPersistentFsBtn,
@@ -243,9 +243,6 @@ function flashWrongVignette(fearLevel) { flashVignette(fearLevel); }
 function updateHUD() {
   elCodeTracker.textContent = 'CODE: ' + codeDigits.join(' ');
   elCodeTracker.classList.toggle('complete', roomDone.every(Boolean));
-  roomDone.forEach((done, i) => {
-    $('pip-' + i).className = 'room-pip' + (done ? ' done' : '');
-  });
   const qEl = $('hud-q-progress');
   if (qEl) {
     const ri = gState.current === S.QUESTION
@@ -1162,9 +1159,9 @@ function triggerJumpScare() {
 // ── Keypad / code ─────────────────────────────────────────────────────────────
 function openKeypad() {
   if (!roomDone.every(Boolean)) {
-    elPrompt.textContent = '⚠ Solve all rooms first';
+    elPromptLabel.textContent = '⚠ Solve all rooms first';
     elPrompt.style.opacity = '1';
-    setTimeout(() => { elPrompt.style.opacity = '0'; elPrompt.textContent = '[ E ] Examine'; }, 2000);
+    setTimeout(() => { elPrompt.style.opacity = '0'; elPromptLabel.textContent = '[ E ] Examine'; }, 2000);
     return;
   }
   gState.current = S.CODE;
@@ -1696,23 +1693,24 @@ function animate() {
   nearObject = findNearObject();
   setCanInteract(Boolean(nearObject));
   if (_promptOverride && performance.now() < _promptOverride.until) {
-    elPrompt.textContent = _promptOverride.text;
+    elPromptLabel.textContent = _promptOverride.text;
     elPrompt.style.opacity = '1';
   } else {
     _promptOverride = null;
     if (nearObject) {
-      const action = GameDevice.controls === 'touch' ? 'Tap !' : '[ E ]';
-      elPrompt.textContent = nearObject.userData.isKeypad ? `${action} Enter Code`
-        : nearObject.userData.isDoor ? `${action} Open Door`
-        : nearObject.userData.isContainer ? `${action} Open ${nearObject.userData.container.kind === 'cabinet' ? 'Cabinet' : 'Drawer'}`
-        : nearObject.userData.isSearch ? `${action} Search`
-        : `${action} Examine`;
+      // On touch the hand icon conveys "tap", so drop the text prefix.
+      const action = GameDevice.controls === 'touch' ? '' : '[ E ] ';
+      elPromptLabel.textContent = nearObject.userData.isKeypad ? `${action}Enter Code`
+        : nearObject.userData.isDoor ? `${action}Open Door`
+        : nearObject.userData.isContainer ? `${action}Open ${nearObject.userData.container.kind === 'cabinet' ? 'Cabinet' : 'Drawer'}`
+        : nearObject.userData.isSearch ? `${action}Search`
+        : `${action}Examine`;
       elPrompt.style.opacity = '1';
     } else {
       elPrompt.style.opacity = '0';
     }
     if (!nearObject && GameDevice.controls === 'keyboardMouse' && document.pointerLockElement !== renderer.domElement) {
-      elPrompt.textContent   = 'Click Game Area To Look';
+      elPromptLabel.textContent = 'Click Game Area To Look';
       elPrompt.style.opacity = '1';
     }
   }
