@@ -173,11 +173,12 @@
   transition:color .14s ease;
   cursor:pointer;
 }
-.menu-btn { font-size:clamp(1rem,2.6vw,1.24rem); }
-
-/* ◆ bullet on the left (replaces the old right-side .icon glyph) */
+/* Menu buttons: smaller than the tabs, no bullet (just the label) */
+.menu-btn { font-size:clamp(.82rem,2vw,.98rem); padding:8px 14px; gap:0; }
 .menu-btn .icon { display:none; }
-.menu-btn::before,
+.menu-btn::before { content:none; }
+
+/* ◆ bullet on the left of the settings tabs (replaces the old .icon glyph) */
 .st-nav .st-tab:not(.st-back)::before {
   content:'\25C6'; /* ◆ */
   color:var(--st-red); font-size:.62em; line-height:1;
@@ -255,8 +256,15 @@
   #ready-content h2 { font-size:1.9rem; margin-bottom:1rem; }
   #ready-content { padding:20px; }
 
-  /* Menu — tighter buttons + wordmark, less dead space */
-  #menu-content { gap:8px; }
-  .menu-btn { min-height:44px; padding:9px 14px; font-size:1.05rem; }
-  #menu-content::before { margin-bottom:12px; }
+  /* Menu — tighter buttons + smaller wordmark, less dead space */
+  #menu-content { gap:6px; }
+  .menu-btn { min-height:40px; padding:7px 12px; font-size:.92rem; }
+  #menu-content::before { font-size:clamp(1.9rem,8vw,2.8rem); margin-bottom:10px; }
+}
+
+/* Short landscape phones — height is the constraint, so size off vh */
+@media (orientation:landscape) and (max-height:520px) {
+  #menu-content { gap:5px; }
+  #menu-content::before { font-size:clamp(1.7rem,7vh,2.5rem); margin-bottom:8px; }
+  .menu-btn { min-height:36px; padding:6px 12px; font-size:.88rem; }
 }
