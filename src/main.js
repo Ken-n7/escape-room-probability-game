@@ -1333,7 +1333,11 @@ function renderStory() {
   const backBtn = $('btn-story-back');
   const nextBtn = $('btn-story-next');
   if (backBtn) backBtn.disabled = storyIdx === 0;
-  if (nextBtn) nextBtn.textContent = storyIdx === STORY_SLIDES.length - 1 ? 'Ready' : 'Next';
+  if (nextBtn) {
+    const last = storyIdx === STORY_SLIDES.length - 1;
+    nextBtn.textContent = last ? '▶' : '→';
+    nextBtn.setAttribute('aria-label', last ? 'Start' : 'Next');
+  }
 
   const nav = $('story-nav');
   nav.innerHTML = '';
@@ -1453,7 +1457,9 @@ function renderPlearn() {
   else            { noteEl.style.display = 'none'; }
 
   $('btn-plearn-prev').disabled = plearnIdx === 0;
-  $('btn-plearn-next').textContent = plearnIdx === PLEARN_SLIDES.length - 1 ? 'Ready' : 'Next';
+  const plast = plearnIdx === PLEARN_SLIDES.length - 1;
+  $('btn-plearn-next').textContent = plast ? '▶' : '→';
+  $('btn-plearn-next').setAttribute('aria-label', plast ? 'Start' : 'Next');
 
   const nav = $('plearn-nav');
   nav.innerHTML = '';

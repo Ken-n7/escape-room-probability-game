@@ -26,6 +26,26 @@
   <meta name="twitter:description" content="A first-person horror escape room that teaches Grade 8 probability."/>
   <meta name="twitter:image" content="https://oddscape.vercel.app/assets/hallway_bg.jpg"/>
   <link rel="stylesheet" href="/src/styles/index.css">
+
+  <!-- Hold the loading screen on pure black until the title font (BrushTitle)
+       is really loaded, so the ODDSCAPE wordmark never flashes in a fallback
+       font. Reveals via .fonts-ready; a 3s fallback guarantees it always shows. -->
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function reveal() { root.classList.add('fonts-ready'); }
+      function gate() {
+        if (!(document.fonts && document.fonts.load)) { reveal(); return; }
+        Promise.race([
+          document.fonts.load("1em 'BrushTitle'"),
+          new Promise(function (res) { setTimeout(res, 3000); })
+        ]).then(reveal).catch(reveal);
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', gate);
+      } else { gate(); }
+    })();
+  </script>
 </head>
 <body>
 
@@ -106,10 +126,11 @@
     <button class="menu-btn" id="btn-admin" hidden>
       <span>ADMIN</span>
     </button>
-  </div>
-  <div id="menu-auth">
-    <button class="auth-cta" id="btn-menu-login" type="button">LOG IN</button>
-    <button class="auth-cta primary" id="btn-menu-signup" type="button">SIGN UP</button>
+    <!-- Shown only when logged out — same brush buttons, under the title. -->
+    <div id="menu-auth">
+      <button class="menu-btn" id="btn-menu-login" type="button"><span>LOG IN</span></button>
+      <button class="menu-btn" id="btn-menu-signup" type="button"><span>SIGN UP</span></button>
+    </div>
   </div>
 </div>
 
@@ -137,7 +158,7 @@
       <div id="auth-capslock" class="auth-warn" hidden>⚠ Caps Lock is on</div>
     </div>
     <div id="auth-error"></div>
-    <button class="auth-btn primary" id="btn-auth-submit" type="button">SIGN IN</button>
+    <button class="auth-btn primary menu-btn" id="btn-auth-submit" type="button"><span>SIGN IN</span></button>
     <div id="auth-toggle-line">
       <span id="auth-toggle-text">No account yet?</span>
       <button type="button" id="btn-auth-toggle">Create one</button>
@@ -150,8 +171,8 @@
   <div id="confirm-box">
     <p id="confirm-text"></p>
     <div id="confirm-actions">
-      <button class="confirm-btn" id="confirm-cancel" type="button">Cancel</button>
-      <button class="confirm-btn danger" id="confirm-ok" type="button">Confirm</button>
+      <button class="confirm-btn options-btn" id="confirm-cancel" type="button">Cancel</button>
+      <button class="confirm-btn options-btn danger" id="confirm-ok" type="button">Confirm</button>
     </div>
   </div>
 </div>
@@ -185,9 +206,9 @@
   <p id="story-text"></p>
   <div id="story-nav"></div>
   <div id="story-actions">
-    <button class="story-action-btn" id="btn-story-skip" type="button" onclick="storySkip()">Skip</button>
-    <button class="story-action-btn" id="btn-story-back" type="button" onclick="storyStep(-1)">Back</button>
-    <button class="story-action-btn primary" id="btn-story-next" type="button" onclick="storyStep(1)">Next</button>
+    <button class="story-action-btn skip-link" id="btn-story-skip" type="button" onclick="storySkip()">Skip</button>
+    <button class="story-action-btn nav-icon" id="btn-story-back" type="button" aria-label="Back" onclick="storyStep(-1)">←</button>
+    <button class="story-action-btn nav-icon primary" id="btn-story-next" type="button" aria-label="Next" onclick="storyStep(1)">→</button>
   </div>
 </div>
 
@@ -202,8 +223,8 @@
   </div>
   <div id="plearn-nav"></div>
   <div id="plearn-actions">
-    <button class="story-action-btn" id="btn-plearn-prev" type="button" onclick="plearnStep(-1)">Back</button>
-    <button class="story-action-btn primary" id="btn-plearn-next" type="button" onclick="plearnStep(1)">Next</button>
+    <button class="story-action-btn nav-icon" id="btn-plearn-prev" type="button" aria-label="Back" onclick="plearnStep(-1)">←</button>
+    <button class="story-action-btn nav-icon primary" id="btn-plearn-next" type="button" aria-label="Next" onclick="plearnStep(1)">→</button>
   </div>
 </div>
 
@@ -212,8 +233,10 @@
   <span class="nav-home" onclick="goHome()">⌂</span>
   <div id="ready-content">
     <h2>ARE YOU READY?</h2>
-    <button class="ready-btn" id="btn-yes">YES</button>
-    <button class="ready-btn" id="btn-no">NO, I'M SCARED.</button>
+    <div class="ready-actions">
+      <button class="ready-btn options-btn" id="btn-yes">YES</button>
+      <button class="ready-btn options-btn" id="btn-no">NO</button>
+    </div>
   </div>
 </div>
 
