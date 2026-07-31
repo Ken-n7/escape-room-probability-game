@@ -296,27 +296,36 @@
 
 <!-- ══ QUESTION MODAL ══════════════════════════════════════════════════════════ -->
 <div id="s-question" class="screen hidden">
+  <!-- ✕ and timer float on the screen, off the paper -->
+  <button id="btn-question-exit" type="button" aria-label="Return to room">×</button>
+  <div id="question-timer" hidden>
+    <div id="question-timer-bar-wrap"><div id="question-timer-bar"></div></div>
+    <span id="question-timer-num">15</span>
+  </div>
   <div id="question-box">
-    <button id="btn-question-exit" type="button" aria-label="Return to room">×</button>
-    <div id="question-room-label">ROOM 1</div>
-    <div id="question-timer" hidden>
-      <div id="question-timer-bar-wrap"><div id="question-timer-bar"></div></div>
-      <span id="question-timer-num">15</span>
+    <!-- LEFT: the paper note — header + question + hint -->
+    <div id="question-paper">
+      <div id="question-paper-inner">
+        <div id="question-room-label">ROOM 1</div>
+        <div id="question-text">Question goes here.</div>
+        <div id="hint-box"></div>
+      </div>
     </div>
-    <div id="question-text">Question goes here.</div>
-    <div id="hint-box"></div>
-    <div id="scaffold" hidden>
-      <div id="scaffold-help">Complete the solution — tap the value that fills the glowing blank.</div>
-      <div id="scaffold-line"></div>
-      <div id="scaffold-options"></div>
+    <!-- RIGHT: choices floating on their own (no paper) -->
+    <div id="question-answers">
+      <div id="scaffold" hidden>
+        <div id="scaffold-help">Complete the solution — tap the value that fills the glowing blank.</div>
+        <div id="scaffold-line"></div>
+        <div id="scaffold-options"></div>
+      </div>
+      <div id="choices-grid">
+        <button class="choice-btn" data-idx="0"></button>
+        <button class="choice-btn" data-idx="1"></button>
+        <button class="choice-btn" data-idx="2"></button>
+        <button class="choice-btn" data-idx="3"></button>
+      </div>
+      <div id="question-wrong-count"></div>
     </div>
-    <div id="choices-grid">
-      <button class="choice-btn" data-idx="0"></button>
-      <button class="choice-btn" data-idx="1"></button>
-      <button class="choice-btn" data-idx="2"></button>
-      <button class="choice-btn" data-idx="3"></button>
-    </div>
-    <div id="question-wrong-count"></div>
   </div>
 </div>
 
