@@ -141,7 +141,7 @@ function applyBrightness() { renderer.toneMappingExposure = BASE_EXPOSURE * brig
 applyBrightness();
 
 // Sound category volumes (spec 6.3) — 0..1, applied via AudioManager
-const soundVols = { music: 1, footsteps: 1, jumpscares: 1, ..._save.soundVols };
+const soundVols = { music: 1, jumpscares: 1, ..._save.soundVols };
 Object.entries(soundVols).forEach(([cat, v]) => {
   const n = Number(v);
   const clamped = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1;
@@ -503,7 +503,6 @@ function setPromptOverride(text, ms) {
 
 function clearMovementInput() {
   Object.keys(keys).forEach(code => { keys[code] = false; });
-  footstepTimer = 0;
   _jumpY = 0; _jumpVy = 0; _jumpQueued = false;
 }
 
@@ -1584,8 +1583,6 @@ function updateThreatAudio(dt) {
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
 let prevTime = performance.now();
-let footstepTimer = 0;
-const STEP_INTERVAL = 0.42;
 
 // ── Jump + vertical physics (Space / mobile button) ───────────────────────────
 // _jumpY is the player's foot height above the floor; camera.y = eyeH + _jumpY.
@@ -1612,10 +1609,8 @@ function updateVertical(dt) {
     _jumpVy -= GRAVITY * dt;
     _jumpY  += _jumpVy * dt;
     if (_jumpY <= groundY) {                          // landed
-      const hard = _jumpVy < -1.5;
       _jumpY = groundY;
       _jumpVy = 0;
-      if (hard) AudioManager.play('footstep');
     }
   }
 }
@@ -1686,10 +1681,6 @@ function animate() {
     const spd  = CFG.player.speed * dt;
     if (fwd) { camera.position.x -= sinY*fwd*spd; camera.position.z -= cosY*fwd*spd; resolveCollision(camera.position, _jumpY); }
     if (rgt) { camera.position.x += cosY*rgt*spd; camera.position.z -= sinY*rgt*spd; resolveCollision(camera.position, _jumpY); }
-    footstepTimer -= dt;
-    if (footstepTimer <= 0 && _jumpVy === 0) { AudioManager.play('footstep'); footstepTimer = STEP_INTERVAL; }
-  } else {
-    footstepTimer = 0;
   }
 
   updateVertical(dt);
@@ -1843,7 +1834,6 @@ document.querySelectorAll('.settings-vol').forEach(slider => {
     const now = performance.now();
     if (now - _volPreviewAt > 300) {
       _volPreviewAt = now;
-      if (cat === 'footsteps')  AudioManager.play('footstep');
       if (cat === 'jumpscares') AudioManager.play('randomTone');
     }
   });
