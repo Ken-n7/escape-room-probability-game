@@ -281,4 +281,14 @@
   #menu-content { gap:5px; }
   #menu-content::before { font-size:clamp(1.7rem,7vh,2.5rem); margin-bottom:8px; }
   .menu-btn { min-height:36px; padding:6px 12px; font-size:.88rem; }
+
+  /* The tabbed settings uses a flex sidebar layout; undo the legacy
+     two-column grid (from the old settings) that crammed the panels into
+     half the box width. Let the sidebar + panels use the full width. */
+  #settings-box { display:block; max-height:calc(100svh - 20px); overflow-y:auto; }
+  #s-settings .st-body { flex-direction:row; margin-top:12px; }
+  #s-settings .st-panels { max-width:none; }
+  /* Undo the legacy "first row = 1fr + 88px" grid (from the old name+save
+     row) that shortened the first slider of every panel. */
+  #settings-box .settings-row:first-of-type { display:block; grid-template-columns:none; }
 }
