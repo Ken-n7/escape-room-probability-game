@@ -607,6 +607,7 @@
 
 /* ── LEFT: the paper note — always PORTRAIT, text auto-fits (see main.js) ──── */
 #question-paper {
+  position:relative;
   flex:0 0 auto; align-self:center;
   box-sizing:border-box;
   height:min(480px, calc(100dvh - clamp(112px, 21vh, 168px)));
@@ -614,24 +615,63 @@
   display:flex; flex-direction:column; justify-content:center;
   overflow:hidden;
   padding:clamp(20px, 4.5vh, 44px) clamp(20px, 2.6vw, 38px);
-  text-align:center; color:#20211d;
+  text-align:center; color:#241d12;
   font-family:Georgia, 'Times New Roman', serif;
-  background:#e9e1cd;
+  /* old, yellowed, stained paper */
+  background:#d3c095;
   background-image:
-    radial-gradient(circle at 20% 16%, rgba(120,98,58,.10), transparent 42%),
-    radial-gradient(circle at 84% 82%, rgba(92,70,40,.13), transparent 46%),
-    radial-gradient(circle at 62% 42%, rgba(60,50,30,.05), transparent 60%),
-    linear-gradient(180deg, #efe7d3, #e2d9c0);
+    /* water stains / blotches */
+    radial-gradient(circle at 15% 20%, rgba(108,76,34,.28), transparent 34%),
+    radial-gradient(circle at 90% 80%, rgba(78,50,22,.34), transparent 40%),
+    radial-gradient(circle at 42% 90%, rgba(70,46,20,.26), transparent 40%),
+    radial-gradient(circle at 62% 40%, rgba(120,90,46,.16), transparent 46%),
+    /* foxing speckles (little age spots) */
+    radial-gradient(circle at 31% 55%, rgba(86,54,22,.5) 0, transparent 1.4%),
+    radial-gradient(circle at 66% 61%, rgba(86,54,22,.42) 0, transparent 1.2%),
+    radial-gradient(circle at 51% 33%, rgba(86,54,22,.4) 0, transparent 1.1%),
+    radial-gradient(circle at 23% 79%, rgba(86,54,22,.44) 0, transparent 1.3%),
+    radial-gradient(circle at 73% 45%, rgba(86,54,22,.36) 0, transparent 1%),
+    radial-gradient(circle at 38% 24%, rgba(86,54,22,.4) 0, transparent 1.1%),
+    /* uneven aged wash */
+    linear-gradient(150deg, #ddcca3 0%, #cebb8b 50%, #c2ad7c 100%);
   border-radius:2px;
   clip-path:polygon(
     0% 2%, 9% 0.6%, 22% 2.2%, 37% 0.2%, 53% 1.6%, 69% 0.3%, 85% 2.1%, 96% 0.5%, 100% 3%,
     99% 21%, 100% 41%, 98.4% 61%, 100% 80%, 99.2% 97%,
     89% 99.2%, 73% 97.6%, 57% 100%, 41% 98%, 26% 99.8%, 12% 98%, 1% 99.4%,
     0.6% 82%, 2% 62%, 0% 42%, 1.4% 22%);
-  filter:drop-shadow(0 16px 26px rgba(0,0,0,.55));
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)) drop-shadow(0 20px 34px rgba(0,0,0,.55));
   transform:rotate(-1.4deg);
 }
-#question-paper-inner { width:100%; }
+/* Fibre grain — subtle SVG turbulence, multiplied over the paper tone */
+#question-paper::before {
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  background-size:110px 110px;
+  mix-blend-mode:multiply; opacity:.3;
+}
+/* Crumpled look — soft light/shadow facets + sharp wrinkle creases + worn edge.
+   The whole overlay is warped by an SVG turbulence filter so the crease lines
+   come out irregular instead of dead-straight. */
+#question-paper::after {
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+  filter:url(#paper-crumple);
+  background:
+    /* soft facets: where a crumpled sheet catches light vs falls in shadow —
+       warm + dim so it reads matte, not glossy */
+    linear-gradient(43deg,  rgba(246,238,218,.07), transparent 26%, rgba(58,40,16,.12) 52%, transparent 72%, rgba(246,238,218,.04)),
+    linear-gradient(-28deg, rgba(58,40,16,.11), transparent 30%, rgba(246,238,218,.06) 54%, transparent 76%, rgba(58,40,16,.11)),
+    linear-gradient(104deg, transparent 22%, rgba(246,238,218,.05) 40%, transparent 58%, rgba(58,40,16,.11) 78%, transparent),
+    linear-gradient(158deg, rgba(246,238,218,.04), transparent 34%, rgba(58,40,16,.10) 66%, transparent),
+    /* sharp wrinkle creases (dark line + faint warm highlight) at odd angles */
+    linear-gradient(19deg,  transparent calc(30% - 1px), rgba(48,32,12,.22) 30%, rgba(246,238,218,.14) calc(30% + 1px), transparent calc(30% + 2px)),
+    linear-gradient(-13deg, transparent calc(62% - 1px), rgba(48,32,12,.19) 62%, rgba(246,238,218,.12) calc(62% + 1px), transparent calc(62% + 2px)),
+    linear-gradient(74deg,  transparent calc(48% - 1px), rgba(48,32,12,.17) 48%, rgba(246,238,218,.11) calc(48% + 1px), transparent calc(48% + 2px)),
+    linear-gradient(126deg, transparent calc(70% - 1px), rgba(48,32,12,.15) 70%, rgba(246,238,218,.1) calc(70% + 1px), transparent calc(70% + 2px)),
+    /* dirty worn edge vignette */
+    radial-gradient(135% 125% at 50% 44%, transparent 40%, rgba(74,50,22,.2) 72%, rgba(40,26,10,.5) 100%);
+}
+#question-paper-inner { position:relative; z-index:1; width:100%; }
 /* Decoy note — no choices, so centre the paper and drop the empty column */
 #question-box.is-decoy { justify-content:center; }
 #question-box.is-decoy #question-answers { display:none; }
