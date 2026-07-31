@@ -1842,10 +1842,10 @@ document.querySelectorAll('.settings-vol').forEach(slider => {
     }
   });
 });
-$('btn-settings-back').onclick = () => {
+// The ✕ is the only close control now (Back was redundant).
+$('btn-settings-x').onclick = () => {
   if (settingsFrom === 'options') openOptions(false); else showScreen('menu');
 };
-$('btn-settings-x')?.addEventListener('click', () => $('btn-settings-back').click());
 document.querySelectorAll('#s-settings .st-tab[data-tab]').forEach(tab => {
   tab.addEventListener('click', () => { showSettingsTab(tab.dataset.tab); AudioManager.play('uiClick', { vol: 0.3 }); });
 });
