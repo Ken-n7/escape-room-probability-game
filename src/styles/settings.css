@@ -572,3 +572,174 @@
 /* Confirm reads as destructive via red text; hover still gets the paint swipe. */
 #confirm-dialog .confirm-btn.danger { box-shadow:none; color:#ff8b90; }
 #confirm-dialog .confirm-btn.danger:hover { background:none; color:#16181c; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QUESTION MODAL → split layout. LEFT: a torn paper note (pure CSS) holding the
+   header + question + hint. RIGHT: the choices floating on the blurred room, no
+   paper, a vertical light list. Timer + ✕ float on the screen, off the paper.
+   Side-by-side always (the game is landscape-only). Sizes off min(vh,vw).
+   ═════════════════════════════════════════════════════════════════════════ */
+/* Just blur the game scene behind — no dark card/panel over it. */
+#s-question::before {
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:none;
+  backdrop-filter:blur(9px); -webkit-backdrop-filter:blur(9px);
+}
+/* Drop the dark corner vignette (.screen::after) on this screen — that's the
+   "card" darkening; here the content floats on the plain blurred scene. */
+#s-question::after { content:none; }
+/* Reserve a top band for the floating timer so nothing reaches it. */
+#s-question {
+  align-items:center; justify-content:center;
+  box-sizing:border-box;
+  padding:clamp(66px, 13vh, 104px) clamp(12px, 4vw, 40px) clamp(16px, 3vh, 28px);
+}
+/* Two columns: paper | choices */
+#question-box {
+  position:relative; z-index:1;
+  display:flex; flex-direction:row; align-items:center;
+  gap:clamp(20px, 4.5vw, 56px);
+  width:min(900px, 96vw); max-width:none;
+  max-height:calc(100dvh - clamp(88px, 17vh, 136px)); overflow:hidden;
+  background:none; border:none; border-radius:0; box-shadow:none; padding:0;
+  backdrop-filter:none; -webkit-backdrop-filter:none;
+}
+
+/* ── LEFT: the paper note — always PORTRAIT, text auto-fits (see main.js) ──── */
+#question-paper {
+  flex:0 0 auto; align-self:center;
+  box-sizing:border-box;
+  height:min(480px, calc(100dvh - clamp(112px, 21vh, 168px)));
+  aspect-ratio:3 / 4; max-width:46vw;
+  display:flex; flex-direction:column; justify-content:center;
+  overflow:hidden;
+  padding:clamp(20px, 4.5vh, 44px) clamp(20px, 2.6vw, 38px);
+  text-align:center; color:#20211d;
+  font-family:Georgia, 'Times New Roman', serif;
+  background:#e9e1cd;
+  background-image:
+    radial-gradient(circle at 20% 16%, rgba(120,98,58,.10), transparent 42%),
+    radial-gradient(circle at 84% 82%, rgba(92,70,40,.13), transparent 46%),
+    radial-gradient(circle at 62% 42%, rgba(60,50,30,.05), transparent 60%),
+    linear-gradient(180deg, #efe7d3, #e2d9c0);
+  border-radius:2px;
+  clip-path:polygon(
+    0% 2%, 9% 0.6%, 22% 2.2%, 37% 0.2%, 53% 1.6%, 69% 0.3%, 85% 2.1%, 96% 0.5%, 100% 3%,
+    99% 21%, 100% 41%, 98.4% 61%, 100% 80%, 99.2% 97%,
+    89% 99.2%, 73% 97.6%, 57% 100%, 41% 98%, 26% 99.8%, 12% 98%, 1% 99.4%,
+    0.6% 82%, 2% 62%, 0% 42%, 1.4% 22%);
+  filter:drop-shadow(0 16px 26px rgba(0,0,0,.55));
+  transform:rotate(-1.4deg);
+}
+#question-paper-inner { width:100%; }
+/* Decoy note — no choices, so centre the paper and drop the empty column */
+#question-box.is-decoy { justify-content:center; }
+#question-box.is-decoy #question-answers { display:none; }
+#question-room-label {
+  font-family:'HorrorScratch', Impact, sans-serif; color:#3a2a22; opacity:.85;
+  text-transform:uppercase; letter-spacing:2px;
+  font-size:clamp(1rem, min(3vh, 4vw), 1.5rem);
+  margin-bottom:clamp(6px, 1.4vh, 12px);
+}
+#question-text {
+  font-family:Georgia, 'Times New Roman', serif; color:#20211d;
+  background:none; border:none; border-radius:0; padding:0;
+  font-size:clamp(1.1rem, min(3.4vh, 3.4vw), 1.85rem);
+  line-height:1.5; white-space:pre-line; text-align:center;
+  margin:clamp(6px, 1.6vh, 14px) 0 clamp(4px, 1.2vh, 10px);
+}
+#hint-box {
+  font-family:Georgia, 'Times New Roman', serif; font-style:italic; color:#5a2a2a;
+  background:none; border:none; border-radius:0; padding:0;
+  font-size:clamp(.9rem, min(2.4vh, 2.4vw), 1.15rem);
+  margin:clamp(8px, 1.6vh, 14px) 0 0;
+}
+
+/* ── RIGHT: choices floating on their own (light, vertical list) ──────────── */
+#question-answers {
+  flex:1 1 auto; min-width:0; align-self:center;
+  display:flex; flex-direction:column; justify-content:safe center;
+  gap:clamp(8px, 2vh, 16px);
+  color:#e7e2d4; text-align:left;
+  /* Cap to the same band as the paper; scroll only if the (tall) MODERATE
+     scaffold can't fit — 'safe center' keeps the top from clipping. */
+  max-height:min(480px, calc(100dvh - clamp(112px, 21vh, 168px)));
+  overflow-y:auto; overflow-x:hidden;
+  scrollbar-width:thin; scrollbar-color:rgba(231,223,204,.4) transparent;
+}
+#question-answers::-webkit-scrollbar { width:6px; }
+#question-answers::-webkit-scrollbar-thumb { background:rgba(231,223,204,.4); border-radius:3px; }
+#choices-grid { grid-template-columns:1fr; gap:clamp(6px, 1.6vh, 12px); }
+#question-answers .choice-btn {
+  font-family:Georgia, 'Times New Roman', serif; color:#e7e2d4;
+  background:none; border:none; border-radius:0;
+  border-bottom:1px dashed rgba(231,223,204,.22);
+  font-size:clamp(1.02rem, min(3vh, 3.4vw), 1.55rem);
+  line-height:1.35; padding:clamp(7px, 1.6vh, 12px) 4px;
+  text-align:left; cursor:pointer;
+  text-shadow:0 2px 8px rgba(0,0,0,.7);
+  transition:color .12s ease, background .12s ease;
+}
+#question-answers .choice-btn:hover:not(:disabled) {
+  background:rgba(255,255,255,.06); color:#fff; transform:none;
+}
+#question-answers .choice-btn.correct {
+  background:none !important; border-color:rgba(127,213,138,.5); color:#7fd58a !important;
+}
+#question-answers .choice-btn.wrong {
+  background:none !important; border-color:rgba(255,139,144,.4); color:#ff8b90 !important;
+  text-decoration:line-through;
+}
+#question-wrong-count {
+  font-family:Georgia, 'Times New Roman', serif; color:#ff8b90;
+  text-shadow:0 2px 8px rgba(0,0,0,.7);
+  font-size:clamp(.85rem, min(2.1vh, 2.4vw), 1.05rem);
+  margin-top:clamp(6px, 1.4vh, 12px);
+}
+/* Scaffold (tap-to-fill) — light, floats with the choices; sized to fit */
+#scaffold-help {
+  font-family:Georgia, 'Times New Roman', serif; color:#c9cdd2;
+  font-size:clamp(.72rem, min(1.9vh, 2.1vw), .86rem);
+  margin-bottom:clamp(6px, 1.4vh, 10px);
+}
+#scaffold-line {
+  font-family:Georgia, 'Times New Roman', serif; color:#e7e2d4;
+  background:none; border:none; border-radius:0;
+  font-size:clamp(.95rem, min(2.5vh, 2.7vw), 1.25rem);
+  padding:clamp(6px, 1.4vh, 12px); margin-bottom:clamp(8px, 1.8vh, 16px);
+  gap:clamp(6px, 1.4vh, 10px);
+}
+#scaffold .scaffold-slot {
+  border:1px dashed rgba(231,223,204,.4); color:rgba(231,223,204,.6);
+  min-width:clamp(46px, 12vw, 64px); height:clamp(32px, 5vh, 40px);
+}
+#scaffold .scaffold-slot.filled { border-style:solid; color:#7fd58a; border-color:#7fd58a; }
+#scaffold .scaffold-slot.current { border-color:#ff8b90; color:#ff8b90; box-shadow:none; }
+#scaffold-options { grid-template-columns:1fr; gap:clamp(6px, 1.6vh, 12px); }
+
+/* Exit ✕ — takes the fullscreen toggle's corner (that toggle is hidden during
+   questions; fullscreen lives in Settings). Bare glyph like the login ✕. */
+#s-question:not(.hidden) ~ #persistent-fs-btn { display:none; }
+#btn-question-exit {
+  position:fixed; z-index:3;
+  top:10px; right:10px; width:36px; height:36px; padding:0;
+  background:none; border:none; border-radius:6px; box-shadow:none;
+  color:var(--muted); font-size:1.25rem;
+}
+#btn-question-exit:hover {
+  background:rgba(255,255,255,.06); box-shadow:none; transform:none;
+  color:var(--bone);
+}
+/* Timer — floating white grunge number countdown (no bar), top of screen */
+#question-timer {
+  position:fixed; z-index:3; margin:0;
+  top:clamp(10px, 2.6vh, 18px); left:50%; transform:translateX(-50%);
+  width:auto; display:flex; justify-content:center;
+}
+#question-timer-bar-wrap { display:none; }
+#question-timer-num {
+  color:#f2f3f5; font-family:Impact, 'Arial Black', sans-serif; font-weight:800;
+  font-size:clamp(1.8rem, min(5.5vh, 9vw), 3rem); min-width:auto; text-align:center;
+  filter:url(#ctl-grunge); text-shadow:0 2px 10px rgba(0,0,0,.75);
+}
+#question-timer.low #question-timer-num { color:#ff5a5a; }

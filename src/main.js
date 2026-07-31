@@ -813,14 +813,38 @@ function openDecoyNote() {
   $('scaffold').hidden = true;
   $('choices-grid').style.display = 'none';
   $('question-wrong-count').textContent = '';
+  $('question-box').classList.add('is-decoy');   // no choices → centre the note
   showScreen('question');
+  fitQuestionText();
   AudioManager.play('randomScareWhisper');
+}
+
+// The paper is a fixed portrait sheet, so long questions must scale down to
+// fit rather than overflow. Shrink #question-text until the content fits.
+function fitQuestionText() {
+  const paper = $('question-paper');
+  const inner = $('question-paper-inner');
+  const text  = $('question-text');
+  if (!paper || !inner || !text) return;
+  text.style.fontSize = '';   // back to the CSS clamp (largest) before measuring
+  requestAnimationFrame(() => {
+    const cs    = getComputedStyle(paper);
+    const avail = paper.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    let size = parseFloat(getComputedStyle(text).fontSize) || 28;
+    let guard = 0;
+    while (inner.scrollHeight > avail && size > 11 && guard < 80) {
+      size -= 1;
+      text.style.fontSize = size + 'px';
+      guard++;
+    }
+  });
 }
 
 function showQuestionUI() {
   const room = ROOMS[activeRoomIdx];
   const q    = shuffledQuestions[activeRoomIdx][activeQIdx];
   updateHUD();
+  $('question-box').classList.remove('is-decoy');   // real question → two columns
 
   $('question-room-label').textContent =
     room.name + ' · ' + room.label + '  —  ' + (activeQIdx+1) + ' / ' + shuffledQuestions[activeRoomIdx].length;
@@ -861,6 +885,7 @@ function showQuestionUI() {
   }
 
   showScreen('question');
+  fitQuestionText();
   startQuestionCountdown();
   _attemptStartAt = performance.now();
   logEvent('note_found', { room: room.id, difficulty: room.label, qid: q.qid, q: activeQIdx + 1 });
