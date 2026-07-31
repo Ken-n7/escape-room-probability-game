@@ -7,11 +7,6 @@ export const AUDIO_ASSETS = {
     loop: true,
     vol: 0.7,
   },
-  footstep: {
-    src: `${AUDIO_DIR}footstep_thud.wav`,
-    loop: false,
-    vol: 0.9,
-  },
   pickup: {
     src: `${AUDIO_DIR}pickup_chime.wav`,
     loop: false,
