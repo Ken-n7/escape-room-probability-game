@@ -51,18 +51,27 @@
 /* ── Interact — [ E ] pill on desktop, hand-ring + caption on touch ────────── */
 .ip-hand { display:none; }
 
+/* On touch the hand button and the caption are decoupled: the parent stays an
+   invisible passthrough (it only carries the show/hide opacity toggle + the tap
+   listener), while the hand and caption are each fixed-positioned on their own,
+   so the button never drifts with the caption's length. */
 body[data-controls="touch"] #interact-prompt {
-  background:none; border:none; padding:0;
-  /* Sit up-and-left of the jump button (bottom-right thumb cluster) so it
-     stays out of the centre view. column-reverse keeps the hand lowest
-     (nearest the thumb) with the caption above it. */
-  left:auto; right:104px; bottom:120px; transform:none;
-  display:flex; flex-direction:column-reverse; align-items:center; gap:6px;
+  background:none; border:none; padding:0; transform:none;
+  display:block; pointer-events:none;
 }
-body[data-controls="touch"] .ip-hand { display:block; width:64px; height:64px; }
+/* Hand — pinned to the upper-left of the jump button (thumb cluster). */
+body[data-controls="touch"] .ip-hand {
+  display:block; position:fixed;
+  right:110px; bottom:140px; width:64px; height:64px;
+  pointer-events:none;
+}
+body[data-controls="touch"][data-can-interact="true"] .ip-hand { pointer-events:auto; }
 body[data-controls="touch"] .ip-hand .ctl-svg { transition:opacity .12s, transform .12s; }
 body[data-controls="touch"] #interact-prompt:active .ctl-svg { opacity:1; transform:scale(.9); }
+/* Caption — pinned to the lower-middle of the screen, non-tappable. */
 body[data-controls="touch"] #interact-label {
+  position:fixed; left:50%; bottom:92px; transform:translateX(-50%);
   font-family:monospace; font-size:.82rem; letter-spacing:1px; color:var(--ctl-ink);
-  background:rgba(0,0,0,.5); padding:3px 12px; border-radius:12px; white-space:nowrap;
+  background:rgba(0,0,0,.5); padding:4px 14px; border-radius:12px; white-space:nowrap;
+  pointer-events:none;
 }

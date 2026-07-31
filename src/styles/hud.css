@@ -102,7 +102,7 @@
     }
     #mobile-jump {
       position:absolute;
-      right:22px;
+      right:48px;
       bottom:52px;
       width:72px;
       height:72px;
@@ -164,7 +164,7 @@
       position:relative;
       width:min(330px, 88vw);
       border:1px solid rgba(231,223,204,.2);
-      border-left:4px solid rgba(181,31,35,.82);
+      border-left:4px solid rgba(255,255,255,.82);
       background:rgba(4,6,7,.78);
       border-radius:8px;
       padding:24px 22px;
@@ -177,7 +177,7 @@
       border:3px solid rgba(231,223,204,.78);
       border-radius:12px;
       position:relative;
-      box-shadow:0 0 24px rgba(181,31,35,.42);
+      box-shadow:0 0 24px rgba(255,255,255,.42);
     }
     .rotate-phone-icon::after {
       content:'';
@@ -195,7 +195,7 @@
       font-size:2.1rem;
       line-height:1;
       color:#e7dfcc;
-      text-shadow:0 0 24px rgba(181,31,35,.72);
+      text-shadow:0 0 24px rgba(255,255,255,.72);
       margin-bottom:12px;
     }
     #rotate-phone p {
@@ -335,7 +335,7 @@
     .scaffold-slot.filled { border-style:solid; color:#aaffcc; border-color:rgba(143,211,189,.8); }
     .scaffold-slot.current {
       border-color:var(--amber); color:var(--amber);
-      box-shadow:0 0 10px rgba(212,155,69,.35);
+      box-shadow:0 0 10px rgba(255,255,255,.35);
       animation:slotPulse 0.9s infinite alternate;
     }
     @keyframes slotPulse { from { opacity:1; } to { opacity:.55; } }

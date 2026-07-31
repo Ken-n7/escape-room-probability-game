@@ -19,7 +19,7 @@
       transition:background .15s, border-color .15s, color .15s;
     }
     #persistent-fs-btn:hover {
-      background:rgba(181,31,35,.25);
+      background:rgba(255,255,255,.25);
       border-color:rgba(231,223,204,.46);
       color:rgba(231,223,204,.9);
     }
@@ -46,7 +46,7 @@
       font-family:'HorrorScratch', Impact, 'Arial Black', sans-serif;
       color:var(--amber); font-size:clamp(1.35rem, 4.6vh, 2rem);
       letter-spacing:3px; margin-bottom:clamp(2px, 0.6vh, 6px);
-      text-shadow:0 0 20px rgba(212,155,69,0.35);
+      text-shadow:0 0 20px rgba(255,255,255,0.35);
     }
     #auth-subtitle { color:var(--muted); font-family:Georgia,serif; font-style:italic; font-size:clamp(0.7rem, 1.7vh, 0.82rem); margin-bottom:clamp(10px, 2.6vh, 22px); }
     .auth-row { margin-bottom:clamp(8px, 2.2vh, 16px); }
@@ -78,17 +78,28 @@
     .auth-row input {
       background:rgba(5,7,8,0.85); border:1px solid var(--line); color:var(--bone);
     }
-    .auth-row input:focus { border-color:var(--amber); box-shadow:0 0 0 2px rgba(212,155,69,0.16); }
+    .auth-row input:focus { border-color:var(--amber); box-shadow:0 0 0 2px rgba(255,255,255,0.16); }
+    /* Kill Chrome/Safari autofill's forced light background + text colour. */
+    .auth-row input:-webkit-autofill,
+    .auth-row input:-webkit-autofill:hover,
+    .auth-row input:-webkit-autofill:focus,
+    .auth-row input:-webkit-autofill:active {
+      -webkit-text-fill-color:var(--bone);
+      caret-color:var(--bone);
+      -webkit-box-shadow:0 0 0 1000px rgba(5,7,8,0.95) inset;
+      box-shadow:0 0 0 1000px rgba(5,7,8,0.95) inset;
+      transition:background-color 9999s ease-in-out 0s;
+    }
     .auth-row input.invalid { border-color:var(--blood); box-shadow:0 0 0 2px rgba(181,31,35,0.18); }
     .auth-hint { color:var(--muted); opacity:0.75; }
     .auth-btn {
       background:rgba(5,7,8,0.72); border:1px solid rgba(231,223,204,0.2); color:var(--bone);
       border-radius:8px; min-height:46px; letter-spacing:2px;
-      box-shadow:inset 4px 0 0 rgba(181,31,35,0.75); transition:background 0.15s, transform 0.12s;
+      box-shadow:inset 4px 0 0 rgba(255,255,255,0.75); transition:background 0.15s, transform 0.12s;
     }
-    .auth-btn:hover { background:rgba(181,31,35,0.25); transform:translateX(2px); }
+    .auth-btn:hover { background:rgba(255,255,255,0.25); transform:translateX(2px); }
     .auth-btn.primary { box-shadow:inset 4px 0 0 var(--amber); }
-    .auth-btn.primary:hover { background:rgba(212,155,69,0.16); }
+    .auth-btn.primary:hover { background:rgba(255,255,255,0.16); }
     #auth-toggle-line { color:var(--muted); }
     #btn-auth-toggle { color:var(--amber); }
     .auth-eye { color:var(--muted); }
@@ -96,28 +107,21 @@
     #auth-error { color:#e8908f; }
     .auth-warn { color:var(--amber); }
 
-    /* Lower-right Log In / Sign Up (shown only when logged out). */
+    /* Log In / Sign Up — brush menu buttons, in the title column (logged out). */
     #menu-auth {
-      position:fixed; right:22px; bottom:22px; z-index:6;
-      display:none; flex-direction:column; gap:10px; align-items:stretch;
+      display:none; flex-direction:column;
+      gap:inherit; align-items:flex-start;
     }
-    .auth-cta {
-      min-width:190px; padding:13px 20px; cursor:pointer;
-      font-family:monospace; font-size:0.9rem; letter-spacing:2px; text-align:left;
-      background:rgba(5,7,8,0.82); border:1px solid var(--line); color:var(--bone);
-      border-radius:8px; box-shadow:inset 4px 0 0 rgba(181,31,35,0.75);
-      transition:background 0.15s, transform 0.12s;
-    }
-    .auth-cta:hover { background:rgba(181,31,35,0.25); transform:translateX(3px); }
-    .auth-cta.primary { box-shadow:inset 4px 0 0 var(--amber); }
-    .auth-cta.primary:hover { background:rgba(212,155,69,0.18); }
 
-    /* Auth-state toggles: what the menu shows before vs after sign-in. */
-    #s-menu[data-authed="false"] #menu-content,
-    #s-menu[data-authed="false"] #icon-logout,
-    #s-menu[data-authed="false"] #icon-settings,
+    /* Auth-state toggles: what the menu shows before vs after sign-in.
+       Logged out keeps the ODDSCAPE title but swaps the game buttons for auth. */
+    #s-menu[data-authed="false"] #btn-play,
+    #s-menu[data-authed="false"] #btn-plearn,
+    #s-menu[data-authed="false"] #btn-leaderboard,
+    #s-menu[data-authed="false"] #btn-settings,
+    #s-menu[data-authed="false"] #btn-admin,
     #s-menu[data-authed="false"] #menu-player-name { display:none !important; }
-    #s-menu[data-authed="false"] #menu-auth  { display:flex; }
+    #s-menu[data-authed="false"] #menu-auth { display:flex; }
 
     /* Top-right close ✕ (settings panel — replaces the bottom back button). */
     .modal-x {

@@ -3,7 +3,7 @@
    game. Loaded LAST so it overrides the older amber #settings-box rules.
    Accent colour is a placeholder red (--st-red) — swap later for the real theme.
    ═══════════════════════════════════════════════════════════════════════════ */
-:root { --st-red:#e5202b; --st-red-hi:#ff3644; --st-ink:#c9ced5; --st-dim:#868c94; }
+:root { --st-red:#f2f3f5; --st-red-hi:#ffffff; --st-ink:#c9ced5; --st-dim:#868c94; }
 
 /* Background = the live game, blurred, with a dark scrim (not the static image) */
 #s-settings { background:none; }
@@ -53,16 +53,16 @@
 }
 .st-tab:hover { color:#e2e6ea; }
 .st-tab.is-active {
-  color:#fff; background:var(--st-red);
-  box-shadow:0 0 18px rgba(229,32,43,.45);
+  color:#0a0b0d; background:var(--st-red);
+  box-shadow:0 0 18px rgba(255,255,255,.35);
 }
 /* Two-ID specificity to beat the legacy #btn-settings-back rule (from when this
    id was the top-right ✕), which absolutely-positions it on small screens. */
 #s-settings #btn-settings-back.st-back {
   position:static; float:none; top:auto; right:auto; left:auto; bottom:auto; width:auto;
-  margin-top:clamp(18px,5vh,44px); color:#c06b4c; letter-spacing:3px;
+  margin-top:clamp(18px,5vh,44px); color:var(--st-dim); letter-spacing:3px;
 }
-#s-settings #btn-settings-back.st-back:hover { color:#ff9d7d; }
+#s-settings #btn-settings-back.st-back:hover { color:#e2e6ea; }
 /* About — opens Case Notes; sits in the sidebar footer under Back. */
 #s-settings #btn-settings-about.st-back {
   position:static; float:none; top:auto; right:auto; left:auto; bottom:auto; width:auto;
@@ -107,14 +107,14 @@
   color:var(--st-red); font-family:monospace; letter-spacing:2px; text-transform:uppercase;
   font-size:0.82rem; transition:background .14s, color .14s;
 }
-.st-toggle:hover { background:rgba(229,32,43,.14); }
-.st-toggle[aria-pressed="true"] { background:var(--st-red); color:#fff; }
+.st-toggle:hover { background:rgba(255,255,255,.12); }
+.st-toggle[aria-pressed="true"] { background:var(--st-red); color:#0a0b0d; }
 
 /* Player name row */
 .st-name-row { display:flex; gap:10px; align-items:center; }
 #s-settings #settings-name {
   flex:1 1 auto; min-width:0; padding:10px 14px;
-  background:rgba(0,0,0,.35); border:1px solid rgba(229,32,43,.4); border-radius:5px;
+  background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.34); border-radius:5px;
   color:#fff; font-family:monospace; font-size:0.95rem; letter-spacing:1px; outline:none;
 }
 #s-settings #settings-name:focus { border-color:var(--st-red); }
@@ -124,12 +124,12 @@
   color:var(--st-red); font-family:monospace; letter-spacing:2px; text-transform:uppercase; font-size:0.8rem;
   transition:background .14s, color .14s;
 }
-#s-settings #btn-save-name:hover { background:var(--st-red); color:#fff; }
+#s-settings #btn-save-name:hover { background:var(--st-red); color:#0a0b0d; }
 
 /* Scores */
 #s-settings #settings-scores {
   clear:both; margin:6px 0 18px; padding:14px 16px;
-  background:rgba(0,0,0,.32); border:1px solid rgba(229,32,43,.28); border-radius:7px;
+  background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.24); border-radius:7px;
 }
 #s-settings #settings-scores h3 {
   color:var(--st-dim); font-family:monospace; font-size:0.78rem;
@@ -145,11 +145,11 @@
 /* Reset */
 #s-settings #btn-reset-progress {
   margin-top:4px; padding:10px 20px; cursor:pointer;
-  background:rgba(229,32,43,.12); border:1px solid var(--st-red); border-radius:6px;
+  background:rgba(255,255,255,.10); border:1px solid var(--st-red); border-radius:6px;
   color:var(--st-red-hi); font-family:monospace; letter-spacing:2px; text-transform:uppercase; font-size:0.82rem;
   transition:background .14s, color .14s;
 }
-#s-settings #btn-reset-progress:hover { background:var(--st-red); color:#fff; }
+#s-settings #btn-reset-progress:hover { background:var(--st-red); color:#0a0b0d; }
 
 #s-settings #settings-saved { margin-top:14px; color:var(--st-red); font-family:monospace; font-size:0.8rem; letter-spacing:1px; }
 
@@ -189,7 +189,8 @@
 /* Menu buttons: smaller than the tabs, no bullet, sized to their label so the
    paint-swipe hugs the text (not the full column). No backdrop blur. */
 .menu-btn {
-  font-size:clamp(.82rem,2vw,.98rem); padding:8px 14px; gap:0;
+  font-family:'HorrorScratch', Impact, 'Arial Black', sans-serif;
+  font-size:clamp(1rem,2.6vw,1.28rem); padding:8px 14px; gap:0;
   width:fit-content; align-self:flex-start;
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
@@ -420,3 +421,154 @@
   font-size:clamp(.8rem, min(2.2vh, 2.6vw), .95rem); line-height:1.45; margin-bottom:12px;
 }
 .options-confirm-actions { grid-template-columns:auto auto; justify-content:center; gap:16px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOGIN SCREEN — dressed like the main menu: ODDSCAPE wordmark, a left-anchored
+   frameless column over the blurred scene, and the same brush buttons.
+   (Loaded last, so these win over the old boxed #auth-box rules.)
+   ═════════════════════════════════════════════════════════════════════════ */
+#s-login {
+  background:transparent;
+  align-items:center; justify-content:center;
+  padding:clamp(22px,4vw,42px);
+}
+#s-login::before {
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.74), rgba(0,0,0,.22) 46%, rgba(0,0,0,.62)),
+    radial-gradient(circle at 18% 58%, transparent 0 30%, rgba(0,0,0,.72) 100%);
+}
+/* Everything below sizes off min(vh, vw) so the whole form scales to the screen
+   and fits without scrolling on short/narrow phones. clamp = min / fit / max. */
+#s-login #auth-box {
+  position:relative; z-index:1;
+  left:auto; top:auto; transform:none; right:auto; bottom:auto;
+  width:min(360px, calc(100vw - 40px));
+  max-height:none; overflow:hidden;
+  background:none; border:none; box-shadow:none; border-radius:0;
+  padding:0; text-align:center; backdrop-filter:none; -webkit-backdrop-filter:none;
+}
+/* Big painted wordmark, identical to the menu's title slot */
+#s-login #auth-box::before {
+  content:'ODDSCAPE'; display:block; white-space:nowrap;
+  color:var(--bone); font-family:var(--font-title); font-weight:400;
+  font-size:clamp(1.6rem, min(7vh, 8vw), 3.2rem); line-height:.92;
+  letter-spacing:.01em; text-transform:uppercase;
+  text-shadow:0 3px 18px rgba(0,0,0,.85);
+  margin-bottom:clamp(8px, 2.4vh, 20px);
+}
+/* "SIGN IN" becomes a small section label under the wordmark, not a big title */
+#s-login #auth-title {
+  font-family:monospace; font-weight:400;
+  color:var(--st-red); font-size:clamp(.62rem, min(1.7vh, 2.2vw), .82rem);
+  letter-spacing:3px; text-transform:uppercase;
+  margin:0 0 clamp(8px, 2.4vh, 20px); padding-bottom:clamp(6px, 1.4vh, 10px);
+  border-bottom:1px solid var(--line); text-shadow:none;
+}
+#s-login #auth-subtitle { display:none; }
+/* Form fields scale with the viewport too */
+#s-login .auth-row { margin-bottom:clamp(6px, 1.8vh, 16px); text-align:left; }
+#s-login .auth-row label {
+  font-size:clamp(.6rem, min(1.5vh, 1.9vw), .75rem);
+  margin-bottom:clamp(2px, .7vh, 6px);
+}
+#s-login .auth-row input {
+  padding:clamp(6px, 1.4vh, 10px) 14px;
+  font-size:clamp(.8rem, min(1.9vh, 2.4vw), .95rem);
+}
+#s-login .auth-hint  { font-size:clamp(.56rem, min(1.4vh, 1.7vw), .68rem); margin-top:clamp(2px, .7vh, 6px); }
+#s-login .auth-warn  { font-size:clamp(.58rem, min(1.4vh, 1.8vw), .7rem); margin-top:clamp(2px, .7vh, 6px); }
+#s-login #auth-error {
+  min-height:clamp(12px, 1.8vh, 20px); margin:clamp(2px, .6vh, 8px) 0;
+  font-size:clamp(.64rem, min(1.6vh, 2vw), .75rem);
+}
+#s-login #auth-toggle-line {
+  margin-top:clamp(6px, 1.8vh, 16px);
+  font-size:clamp(.64rem, min(1.6vh, 2vw), .78rem);
+}
+/* Submit — same brush swipe as the menu buttons, centered + scaling */
+#s-login #btn-auth-submit { margin:clamp(6px, 1.6vh, 14px) auto 0; align-self:center; }
+#s-login #btn-auth-submit.menu-btn {
+  font-size:clamp(.78rem, min(2vh, 2.3vw), 1.02rem);
+  min-height:clamp(34px, 6vh, 50px);
+  padding:clamp(6px, 1.3vh, 10px) clamp(12px, 3vw, 20px);
+}
+/* Close ✕ pinned top-LEFT so it clears the fullscreen toggle (top-right) */
+#s-login .auth-close {
+  position:fixed; top:clamp(12px, 3vh, 20px);
+  left:clamp(14px, 4vw, 26px); right:auto;
+}
+
+@media (max-width:720px) {
+  #s-login #auth-box { width:min(400px, calc(100vw - 36px)); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ARE YOU READY — same floating look as the pause/settings modals: blurred
+   scene behind, frameless, white-underlined title, uniform brush buttons.
+   ═════════════════════════════════════════════════════════════════════════ */
+#s-ready { background:none; }
+#s-ready::before {
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background:rgba(4,5,7,.5);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+#ready-content {
+  position:relative; z-index:1;
+  display:flex; flex-direction:column; align-items:center;
+  gap:clamp(6px, 1.6vh, 12px);
+  width:min(440px, 90vw); max-width:none;
+  background:none; border:none; box-shadow:none; border-radius:0;
+  backdrop-filter:none; -webkit-backdrop-filter:none;
+  padding:clamp(8px, 2vw, 20px) clamp(12px, 2.4vw, 24px);
+  text-align:center;
+}
+#ready-content h2 {
+  margin:0 0 clamp(12px, 2.8vh, 24px);
+  padding-bottom:clamp(6px, 1.4vh, 12px);
+  font-family:'HorrorScratch', Impact, 'Arial Black', sans-serif;
+  font-weight:400; letter-spacing:2px; text-transform:uppercase;
+  font-size:clamp(2rem, min(7.5vh, 11vw), 3.6rem);
+  color:#fff; text-shadow:none; text-align:center;
+  border-bottom:2px solid var(--st-red);
+}
+/* YES / NO side by side, uniform brush buttons (no box, no green) */
+#ready-content .ready-actions {
+  display:flex; flex-direction:row; justify-content:center;
+  gap:clamp(20px, 6vw, 44px);
+}
+#ready-content .options-btn {
+  width:fit-content; min-width:0; margin:0;
+  font-size:clamp(.9rem, min(2.8vh, 3.4vw), 1.15rem);
+  padding:9px 18px; gap:0; justify-content:center; text-align:center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONFIRM DIALOG (Cancel / Confirm) — floating frameless with brush buttons,
+   to match the settings/pause look (was an old boxed serif panel).
+   ═════════════════════════════════════════════════════════════════════════ */
+#confirm-dialog {
+  background:rgba(4,5,7,.5);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+#confirm-box {
+  background:none; border:none; box-shadow:none; border-radius:0;
+  width:min(440px, 90vw);
+  padding:clamp(10px, 3vh, 24px) clamp(14px, 4vw, 28px);
+  text-align:center;
+}
+#confirm-text {
+  color:var(--st-ink); font-family:monospace;
+  font-size:clamp(.9rem, min(2.4vh, 3vw), 1.05rem); line-height:1.5;
+  letter-spacing:1px; margin-bottom:clamp(14px, 3vh, 24px);
+}
+#confirm-actions { justify-content:center; gap:clamp(18px, 5vw, 36px); }
+#confirm-dialog .confirm-btn {
+  flex:0 0 auto; width:fit-content; min-width:0;
+  padding:9px 18px; justify-content:center; text-align:center;
+  font-size:clamp(.86rem, min(2.4vh, 3vw), 1.02rem);
+}
+#confirm-dialog .confirm-btn::before { content:none; }
+/* Confirm reads as destructive via red text; hover still gets the paint swipe. */
+#confirm-dialog .confirm-btn.danger { box-shadow:none; color:#ff8b90; }
+#confirm-dialog .confirm-btn.danger:hover { background:none; color:#16181c; }
