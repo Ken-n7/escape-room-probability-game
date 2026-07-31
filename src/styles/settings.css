@@ -171,6 +171,7 @@
    tabs so both read the same. Loaded last → wins over the older card styling.
    ═══════════════════════════════════════════════════════════════════════════ */
 .menu-btn,
+.options-btn,
 .st-nav .st-tab:not(.st-back) {
   position:relative; z-index:0;
   display:flex; align-items:center; gap:14px;
@@ -205,6 +206,7 @@
 
 /* The torn white paint swipe — a pseudo layer behind the text */
 .menu-btn::after,
+.options-btn::after,
 .st-nav .st-tab:not(.st-back)::after {
   content:''; position:absolute; inset:0 -6px; z-index:-1;
   background:#f2f0ea; opacity:0;
@@ -218,6 +220,8 @@
 /* Active / hover / keyboard-focus → paint swipe, dark ink, no bullet */
 .menu-btn:hover,
 .menu-btn:focus-visible,
+.options-btn:hover,
+.options-btn:focus-visible,
 .st-nav .st-tab.is-active,
 .st-nav .st-tab:not(.st-back):hover,
 .st-nav .st-tab:not(.st-back):focus-visible {
@@ -226,6 +230,8 @@
 }
 .menu-btn:hover::after,
 .menu-btn:focus-visible::after,
+.options-btn:hover::after,
+.options-btn:focus-visible::after,
 .st-nav .st-tab.is-active::after,
 .st-nav .st-tab:not(.st-back):hover::after,
 .st-nav .st-tab:not(.st-back):focus-visible::after { opacity:1; }
@@ -372,3 +378,45 @@
 /* About is the first footer item now — give it the gap Back used to provide */
 #s-settings #btn-settings-about.st-back { margin-top:clamp(14px, 3.4vh, 30px); }
 #settings-box #settings-saved { font-size:clamp(.64rem, min(1.7vh, 2.2vw), .8rem); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PAUSE MODAL — same floating treatment as Settings: no box, blurred game
+   behind, red-underlined title, menu-brush action buttons (uniform).
+   ═══════════════════════════════════════════════════════════════════════════ */
+#s-options::before {
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background:rgba(4,5,7,.5);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+#options-box {
+  position:relative; z-index:1;
+  width:min(440px, 90vw); max-width:none;
+  background:none; border:none; box-shadow:none; border-radius:0;
+  backdrop-filter:none; -webkit-backdrop-filter:none;
+  padding:clamp(8px, 2vw, 20px) clamp(12px, 2.4vw, 24px);
+  max-height:94vh; overflow:hidden;
+}
+#options-box .case-stamp { display:none; }
+#options-box h2 {
+  margin:0 0 clamp(10px, 2.4vh, 20px);
+  padding-bottom:clamp(6px, 1.4vh, 12px);
+  font-family:Impact, 'Arial Narrow Bold', 'Arial Black', sans-serif;
+  font-weight:800; letter-spacing:3px; text-transform:uppercase;
+  font-size:clamp(1.5rem, min(5.4vh, 8vw), 2.6rem);
+  color:#fff; text-shadow:none; text-align:center;
+  border-bottom:2px solid var(--st-red);
+}
+.options-actions { grid-template-columns:1fr; justify-items:center; gap:clamp(4px, 1.4vh, 10px); }   /* always 1×4, centred */
+.options-btn {
+  font-size:clamp(.86rem, min(2.6vh, 3vw), 1.06rem);
+  padding:9px 14px; gap:0; width:fit-content;
+  justify-content:center; text-align:center;
+}
+.options-btn::before { content:none; }
+/* Confirm sub-dialog — plain, centred label + buttons */
+#options-confirm { margin-top:clamp(10px, 2.2vh, 18px); border:none; background:none; padding:0; }
+#options-confirm-text {
+  color:var(--st-ink); font-family:monospace; text-align:center;
+  font-size:clamp(.8rem, min(2.2vh, 2.6vw), .95rem); line-height:1.45; margin-bottom:12px;
+}
+.options-confirm-actions { grid-template-columns:auto auto; justify-content:center; gap:16px; }
