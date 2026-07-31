@@ -10,4 +10,5 @@
 @import './theme.css';
 @import './pregame.css';
 @import './misc.css';
-@import './settings.css';   /* last — the tabbed settings redesign overrides older #settings-box rules */
+@import './settings.css';   /* the tabbed settings redesign overrides older #settings-box rules */
+@import './controls.css';   /* last — distressed chalk-ring skin for the mobile controls */
