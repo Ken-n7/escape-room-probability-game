@@ -63,6 +63,18 @@
   margin-top:clamp(18px,5vh,44px); color:#c06b4c; letter-spacing:3px;
 }
 #s-settings #btn-settings-back.st-back:hover { color:#ff9d7d; }
+/* About — opens Case Notes; sits in the sidebar footer under Back. */
+#s-settings #btn-settings-about.st-back {
+  position:static; float:none; top:auto; right:auto; left:auto; bottom:auto; width:auto;
+  margin-top:8px; color:var(--st-dim); letter-spacing:3px;
+}
+#s-settings #btn-settings-about.st-back:hover { color:#e2e6ea; }
+/* Log Out — account action pinned in the sidebar footer, just under Back. */
+#s-settings #btn-settings-logout.st-back {
+  position:static; float:none; top:auto; right:auto; left:auto; bottom:auto; width:auto;
+  margin-top:8px; color:var(--st-red-hi); letter-spacing:3px;
+}
+#s-settings #btn-settings-logout.st-back:hover { color:#ff8b90; }
 
 /* ── Right panels ──────────────────────────────────────────────────────────── */
 .st-panels { flex:1 1 auto; min-width:0; max-width:540px; }
@@ -235,6 +247,8 @@
   }
   .st-nav .st-tab:not(.st-back) { width:auto; flex:0 0 auto; padding:8px 12px; }
   #s-settings #btn-settings-back.st-back { margin:0 0 0 auto; }
+  #s-settings #btn-settings-about.st-back,
+  #s-settings #btn-settings-logout.st-back { margin:0; }
   .st-panels { width:100%; max-width:none; }
   #s-settings .settings-row { max-width:none; }
 

@@ -605,6 +605,14 @@ function groundHeightAt(x, z, feetY) {
 // ── Settings ──────────────────────────────────────────────────────────────────
 let settingsFrom = 'menu';
 
+// About / Case Notes is reached from inside Settings — remember where to
+// return so its Back button goes to the right place.
+let aboutFrom = 'settings';
+function openAbout(from = 'settings') {
+  aboutFrom = from;
+  showScreen('about');
+}
+
 function openSettings(from = 'menu') {
   settingsFrom = from;
   $('settings-name').value = playerName;
@@ -615,6 +623,7 @@ function openSettings(from = 'menu') {
   updateFullscreenLabel();
   updateSettingsFullscreenBtn();
   updateSettingsScores();
+  $('btn-settings-logout').hidden = !isLoggedIn();   // account action, only when signed in
   showSettingsTab('display');        // always open on the first tab
   showScreen('settings');
 }
@@ -1731,7 +1740,7 @@ window.AudioManager = AudioManager;
 // ── Pre-game UI click sound ───────────────────────────────────────────────────
 // Note: 'admin' is intentionally excluded — the dashboard is a silent, non-game UI.
 const PRE_GAME_SCREENS   = ['title', 'menu', 'story', 'plearn', 'ready', 'settings', 'about', 'login', 'leaderboard'];
-const PRE_GAME_CONTROLS  = ['button','.nav-back','.nav-fwd','.nav-home','#title-arrow','#icon-settings','#icon-about'].join(',');
+const PRE_GAME_CONTROLS  = ['button','.nav-back','.nav-fwd','.nav-home','#title-arrow'].join(',');
 
 document.addEventListener('click', e => {
   if (!PRE_GAME_SCREENS.some(name => !screens[name].classList.contains('hidden'))) return;
@@ -1844,9 +1853,9 @@ document.querySelectorAll('#s-settings .st-tab[data-tab]').forEach(tab => {
 });
 $('btn-settings-fullscreen')?.addEventListener('click', () => { toggleFullscreen(); AudioManager.play('uiClick'); });
 document.addEventListener('fullscreenchange', updateSettingsFullscreenBtn);
-$('icon-settings').onclick   = () => openSettings('menu');
-$('icon-about').onclick      = () => showScreen('about');
-$('btn-about-back').onclick  = () => showScreen('menu');
+$('btn-settings').onclick        = () => openSettings('menu');
+$('btn-settings-about').onclick  = () => openAbout('settings');
+$('btn-about-back').onclick      = () => showScreen(aboutFrom);
 $('persistent-fs-btn')?.addEventListener('click', () => {
   toggleFullscreen(); AudioManager.play('uiClick');
 });
@@ -2152,7 +2161,7 @@ $('btn-auth-close').onclick  = () => { applyMenuAuthState(); showScreen('menu');
 // Menu's lower-right Log In / Sign Up buttons open the modal in the right mode.
 $('btn-menu-login').onclick  = () => openAuth('signin');
 $('btn-menu-signup').onclick = () => openAuth('signup');
-$('icon-logout').onclick = () => openConfirm({
+$('btn-settings-logout').onclick = () => openConfirm({
   text: `Log out of "${displayName()}"?`,
   okLabel: 'Log Out',
   onConfirm: async () => {

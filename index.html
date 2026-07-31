@@ -52,23 +52,21 @@
 
 <!-- ══ MAIN MENU ══════════════════════════════════════════════════════════════ -->
 <div id="s-menu" class="screen hidden">
-  <div id="menu-icons">
-    <span title="Settings" id="icon-settings">⚙</span>
-    <span title="About Us" id="icon-about">?</span>
-    <span title="Log out" id="icon-logout">⎋</span>
-  </div>
   <div id="menu-content">
     <button class="menu-btn" id="btn-play">
-      <span>PLAY</span><span class="icon">▶</span>
+      <span>PLAY</span>
     </button>
     <button class="menu-btn" id="btn-plearn">
-      <span>P-LEARN</span><span class="icon">◆</span>
+      <span>P-LEARN</span>
     </button>
     <button class="menu-btn" id="btn-leaderboard">
-      <span>LEADERBOARD</span><span class="icon">🏆</span>
+      <span>LEADERBOARD</span>
+    </button>
+    <button class="menu-btn" id="btn-settings">
+      <span>SETTINGS</span>
     </button>
     <button class="menu-btn" id="btn-admin" hidden>
-      <span>ADMIN</span><span class="icon">★</span>
+      <span>ADMIN</span>
     </button>
   </div>
   <div id="menu-auth">
@@ -282,6 +280,8 @@
         <button class="st-tab" type="button" data-tab="controls" role="tab">Controls</button>
         <button class="st-tab" type="button" data-tab="game" role="tab">Game</button>
         <button class="st-tab st-back" id="btn-settings-back" type="button">Back</button>
+        <button class="st-tab st-back" id="btn-settings-about" type="button">About</button>
+        <button class="st-tab st-back" id="btn-settings-logout" type="button" hidden>Log Out</button>
       </nav>
 
       <div class="st-panels">
@@ -404,7 +404,7 @@
       <p>Additional sound effects from <a href="https://freesound.org" target="_blank" rel="noopener">freesound.org</a> (Creative Commons 0) and <a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a>.</p>
     </div>
 
-    <button class="modal-back-btn" id="btn-about-back">← BACK TO MENU</button>
+    <button class="modal-back-btn" id="btn-about-back">← BACK</button>
   </div>
 </div>
 
