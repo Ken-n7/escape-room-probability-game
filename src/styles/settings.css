@@ -224,6 +224,20 @@
    landscape) only. Reading text, headings, paddings and the menu all tighten.
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width:560px) {
+  /* Settings: stack the categories as a top tab-row so the panels get the
+     full width instead of being crammed beside a short sidebar. */
+  #settings-box { width:min(560px,94vw); }
+  .st-body { flex-direction:column; gap:16px; margin-top:14px; }
+  .st-nav {
+    flex-direction:row; flex-wrap:wrap; align-items:center;
+    width:100%; min-width:0; gap:6px;
+    padding-bottom:12px; border-bottom:1px solid rgba(229,32,43,.28);
+  }
+  .st-nav .st-tab:not(.st-back) { width:auto; flex:0 0 auto; padding:8px 12px; }
+  #s-settings #btn-settings-back.st-back { margin:0 0 0 auto; }
+  .st-panels { width:100%; max-width:none; }
+  #s-settings .settings-row { max-width:none; }
+
   /* Reading copy — was 1rem / 1.72 line-height, too airy and overflowed */
   #about-box p,
   #plearn-body { font-size:.84rem; line-height:1.55; }
