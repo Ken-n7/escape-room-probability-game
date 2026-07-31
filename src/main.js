@@ -58,7 +58,13 @@ const {
       if (!m.dithering) { m.dithering = true; m.needsUpdate = true; }
       for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap']) {
         const t = m[key];
-        if (t && !seen.has(t)) { seen.add(t); t.anisotropy = aniso; t.needsUpdate = true; }
+        if (t && !seen.has(t)) {
+          seen.add(t);
+          t.anisotropy = aniso;
+          // Only re-upload textures that already have pixels; flagging an
+          // imageless/late-loading texture makes Three warn every frame.
+          if (t.image) t.needsUpdate = true;
+        }
       }
     }
   });
