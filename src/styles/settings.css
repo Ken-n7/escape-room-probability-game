@@ -423,7 +423,7 @@
 .options-confirm-actions { grid-template-columns:auto auto; justify-content:center; gap:16px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   LOGIN SCREEN — dressed like the main menu: ODDSCAPE wordmark, a left-anchored
+   LOGIN SCREEN — dressed like the main menu: PROBXCAPE wordmark, a left-anchored
    frameless column over the blurred scene, and the same brush buttons.
    (Loaded last, so these win over the old boxed #auth-box rules.)
    ═════════════════════════════════════════════════════════════════════════ */
@@ -450,7 +450,7 @@
 }
 /* Big painted wordmark, identical to the menu's title slot */
 #s-login #auth-box::before {
-  content:'ODDSCAPE'; display:block; white-space:nowrap;
+  content:'PROBXCAPE'; display:block; white-space:nowrap;
   color:var(--bone); font-family:var(--font-title); font-weight:400;
   font-size:clamp(1.6rem, min(7vh, 8vw), 3.2rem); line-height:.92;
   letter-spacing:.01em; text-transform:uppercase;
@@ -604,15 +604,18 @@
 #s-question {
   align-items:center; justify-content:center;
   box-sizing:border-box;
-  padding:clamp(66px, 13vh, 104px) clamp(12px, 4vw, 40px) clamp(16px, 3vh, 28px);
+  /* Small top pad only — the timer is centred and the paper/choices sit in the
+     side halves, so they can grow up into the timer's row without colliding. */
+  padding:clamp(14px, 3vh, 26px) clamp(12px, 4vw, 40px) clamp(14px, 2.6vh, 24px);
 }
-/* Two columns: paper | choices */
+/* Two equal halves: paper (left) | choices (right). A 50/50 grid so the columns
+   never cross — each centres its own content within its half. */
 #question-box {
   position:relative; z-index:1;
-  display:flex; flex-direction:row; align-items:center;
-  gap:clamp(20px, 4.5vw, 56px);
-  width:min(900px, 96vw); max-width:none;
-  max-height:calc(100dvh - clamp(88px, 17vh, 136px)); overflow:hidden;
+  display:grid; grid-template-columns:1fr 1fr; align-items:center;
+  gap:clamp(14px, 2.5vw, 34px);
+  width:min(1440px, 98vw); max-width:none;
+  max-height:calc(100dvh - clamp(24px, 5vh, 44px)); overflow:hidden;
   background:none; border:none; border-radius:0; box-shadow:none; padding:0;
   backdrop-filter:none; -webkit-backdrop-filter:none;
 }
@@ -620,10 +623,10 @@
 /* ── LEFT: the paper note — always PORTRAIT, text auto-fits (see main.js) ──── */
 #question-paper {
   position:relative;
-  flex:0 0 auto; align-self:center;
+  justify-self:center; align-self:center;
   box-sizing:border-box;
-  height:min(480px, calc(100dvh - clamp(112px, 21vh, 168px)));
-  aspect-ratio:3 / 4; max-width:46vw;
+  height:min(1000px, calc(100dvh - clamp(30px, 6vh, 52px)));
+  aspect-ratio:3 / 4; max-width:min(52vw, 100%);
   display:flex; flex-direction:column; justify-content:center;
   overflow:hidden;
   padding:clamp(20px, 4.5vh, 44px) clamp(20px, 2.6vw, 38px);
@@ -684,8 +687,8 @@
     radial-gradient(135% 125% at 50% 44%, transparent 40%, rgba(74,50,22,.2) 72%, rgba(40,26,10,.5) 100%);
 }
 #question-paper-inner { position:relative; z-index:1; width:100%; }
-/* Decoy note — no choices, so centre the paper and drop the empty column */
-#question-box.is-decoy { justify-content:center; }
+/* Decoy note — no choices, so collapse to one column and centre the paper */
+#question-box.is-decoy { grid-template-columns:1fr; }
 #question-box.is-decoy #question-answers { display:none; }
 #question-room-label {
   font-family:'HorrorScratch', Impact, sans-serif; color:#3a2a22; opacity:.85;
@@ -709,13 +712,14 @@
 
 /* ── RIGHT: choices floating on their own (light, vertical list) ──────────── */
 #question-answers {
-  flex:1 1 auto; min-width:0; align-self:center;
+  justify-self:center; align-self:center;
+  width:min(460px, 100%); min-width:0;              /* stay inside the right half */
   display:flex; flex-direction:column; justify-content:safe center;
   gap:clamp(8px, 2vh, 16px);
   color:#e7e2d4; text-align:left;
   /* Cap to the same band as the paper; scroll only if the (tall) MODERATE
      scaffold can't fit — 'safe center' keeps the top from clipping. */
-  max-height:min(480px, calc(100dvh - clamp(112px, 21vh, 168px)));
+  max-height:min(1000px, calc(100dvh - clamp(30px, 6vh, 52px)));
   overflow-y:auto; overflow-x:hidden;
   scrollbar-width:thin; scrollbar-color:rgba(231,223,204,.4) transparent;
 }
@@ -774,9 +778,9 @@
 #s-question:not(.hidden) ~ #persistent-fs-btn { display:none; }
 #btn-question-exit {
   position:fixed; z-index:3;
-  top:10px; right:10px; width:36px; height:36px; padding:0;
+  top:10px; right:10px; width:48px; height:48px; padding:0;
   background:none; border:none; border-radius:6px; box-shadow:none;
-  color:var(--muted); font-size:1.25rem;
+  color:var(--muted); font-size:1.7rem;
 }
 #btn-question-exit:hover {
   background:rgba(255,255,255,.06); box-shadow:none; transform:none;
