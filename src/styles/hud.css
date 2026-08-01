@@ -11,18 +11,18 @@
     }
     #hud-options-btn:hover { background:rgba(80,0,0,0.7); }
     #code-tracker {
-      position:absolute; top:10px; right:66px;
-      color:#ffdd44; font-family:monospace; font-size:1rem;
-      letter-spacing:4px; text-shadow:0 0 8px gold;
-      background:rgba(0,0,0,0.5); padding:6px 14px; border-radius:6px;
+      position:absolute; top:10px; left:16px;
+      color:#f2f3f5; font-family:monospace; font-size:1rem;
+      letter-spacing:4px; text-shadow:0 2px 8px rgba(0,0,0,0.8);
+      filter:url(#grunge-soft);
     }
     #code-tracker.complete { animation:codePulse 1.4s ease-in-out infinite; }
     @keyframes codePulse {
       0%,100% { box-shadow:0 0 0px #44ff88; border-color:transparent; }
       50%      { box-shadow:0 0 14px #44ff88; border:1px solid #44ff88; }
     }
-    #hud-q-progress { position:absolute; top:34px; left:16px; color:#ffaa55; font-size:0.65rem; letter-spacing:1px; pointer-events:none; }
-    #hud-streak { position:absolute; top:48px; left:16px; color:#66ff99; font-size:0.65rem; letter-spacing:1px; pointer-events:none; }
+    #hud-q-progress { position:absolute; top:40px; left:16px; color:#ffaa55; font-size:0.65rem; letter-spacing:1px; pointer-events:none; }
+    #hud-streak { position:absolute; top:54px; left:16px; color:#66ff99; font-size:0.65rem; letter-spacing:1px; pointer-events:none; }
     #crosshair {
       position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
       color:rgba(255,255,255,0.5); font-size:0.9rem; line-height:1;
@@ -132,7 +132,8 @@
     }
     body[data-controls="touch"] #code-tracker {
       top:10px;
-      right:72px;
+      left:14px;
+      right:auto;
     }
     #rotate-phone {
       display:none;
