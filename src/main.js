@@ -24,7 +24,7 @@ import { updateAmbientScares, resetAmbientScares, clearScareSprite, triggerBlack
 import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
-import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut, onPasswordRecovery, requestPasswordReset, updatePassword } from './net/auth.js';
+import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut, onPasswordRecovery, requestPasswordReset, updatePassword, updateUsername, usernameLocked } from './net/auth.js';
 import { submitRun, fetchLeaderboard, invalidateLeaderboardCache } from './net/scores.js';
 import { startPlay, endPlay, hasActivePlay, flushAbandonBeacon, logAttempt, logEvent } from './net/analytics.js';
 import { mountDashboard } from './ui/dashboard.js';
@@ -619,6 +619,11 @@ function openSettings(from = 'menu') {
   settingsFrom = from;
   $('settings-name').value = playerName;
   $('settings-saved').textContent = '';
+  // A signed-in user gets one name change only — lock the field once it's used.
+  const locked = isLoggedIn() && usernameLocked();
+  $('settings-name').disabled = locked;
+  $('btn-save-name').disabled = locked;
+  if (locked) { $('settings-saved').style.color = ''; $('settings-saved').textContent = 'Name can only be changed once — already used.'; }
   updateSensitivityUI();
   updateBrightnessUI();
   updateVolumeUI();
@@ -722,7 +727,9 @@ function startQuestionCountdown() {
   stopQuestionCountdown();
   if (CFG.gameplay.pLearnMode) return; // learning mode is untimed
 
-  const limitMs = CFG.gameplay.answerTimeSeconds * 1000;
+  const times = CFG.gameplay.answerTimeSeconds;
+  const secs  = (Array.isArray(times) ? (times[activeRoomIdx] ?? times[0]) : times) || 15;
+  const limitMs = secs * 1000;
   _countdownDeadline = performance.now() + limitMs;
 
   const timerEl = $('question-timer');
@@ -731,7 +738,7 @@ function startQuestionCountdown() {
   timerEl.hidden = false;
   timerEl.classList.remove('low');
   barEl.style.width = '100%';
-  numEl.textContent = String(CFG.gameplay.answerTimeSeconds);
+  numEl.textContent = String(secs);
 
   _countdownTimer = setInterval(() => {
     const left = _countdownDeadline - performance.now();
@@ -1825,13 +1832,47 @@ $('btn-code-cancel').onclick   = () => {
   lockPointer();
 };
 $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-code-submit').click(); });
-$('btn-save-name').onclick     = () => {
+let _nameBusy = false;
+$('btn-save-name').onclick = async () => {
   const n = $('settings-name').value.trim();
-  if (n) {
+  const saved = $('settings-saved');
+  if (!n || _nameBusy) return;
+  const ok = (msg) => { saved.style.color = ''; saved.textContent = msg; setTimeout(() => { saved.textContent = ''; }, 1800); };
+  const err = (msg) => { saved.style.color = '#ff8b90'; saved.textContent = msg; };
+
+  // Guest (not signed in): local display name only — nothing to sync.
+  if (!isLoggedIn()) {
     playerName = n; persistSave(); updateMenuName();
     elHudPlayer.textContent = playerName;
-    $('settings-saved').textContent = '✓ Saved';
-    setTimeout(() => { $('settings-saved').textContent = ''; }, 1800);
+    return ok('✓ Saved');
+  }
+
+  // Signed in: validate + persist to the account so it also shows on the leaderboard.
+  if (!USERNAME_RE.test(n)) return err('3–20 chars: letters, numbers, spaces, _ or -.');
+  if (n === displayName()) return;   // unchanged
+
+  _nameBusy = true;
+  const btn = $('btn-save-name'); btn.disabled = true;
+  saved.style.color = ''; saved.textContent = 'Saving…';
+  try {
+    await updateUsername(n);
+    playerName = displayName(); persistSave(); updateMenuName();
+    elHudPlayer.textContent = playerName;
+    invalidateLeaderboardCache();     // so the leaderboard shows the new name next open
+    ok('✓ Saved');
+  } catch (e) {
+    const m = (e?.message || '').toLowerCase();
+    if (m.includes('username_already_changed') || m.includes('already changed')) err('You can only change your name once.');
+    else if (m.includes('duplicate') || m.includes('unique')) err('That name is already taken — pick another.');
+    else if (m.includes('violates') || m.includes('check') || m.includes('constraint')) err('3–20 chars: letters, numbers, spaces, _ or -.');
+    else if (m.includes('row-level') || m.includes('policy')) err('Renaming isn\'t enabled yet — the profiles update policy is missing.');
+    else err('Could not save name. Try again.');
+  } finally {
+    // After a successful change the profile flag flips, so this re-locks the field.
+    _nameBusy = false;
+    const locked = usernameLocked();
+    btn.disabled = locked;
+    $('settings-name').disabled = locked;
   }
 };
 $('btn-reset-progress').onclick = () => openConfirm({

@@ -16,11 +16,13 @@
 
 -- ── profiles: one row per account, linked to the auth user ──────────────────
 create table if not exists public.profiles (
-  id         uuid primary key references auth.users on delete cascade,
-  username   text unique not null,
-  role       text not null default 'student',   -- 'student' | 'admin'
-  created_at timestamptz not null default now()
+  id               uuid primary key references auth.users on delete cascade,
+  username         text unique not null,
+  role             text not null default 'student',   -- 'student' | 'admin'
+  username_changed boolean not null default false,    -- one-time rename guard
+  created_at       timestamptz not null default now()
 );
+alter table public.profiles add column if not exists username_changed boolean not null default false;
 
 -- Username rules enforced by the DB (not just the UI): 3–20 chars, letters/
 -- digits/space/underscore/hyphen only. Guarded so re-running is safe.
@@ -115,6 +117,34 @@ drop policy if exists "profiles_insert" on public.profiles;   -- removed: trigge
 drop policy if exists "profiles_select" on public.profiles;
 create policy "profiles_select" on public.profiles
   for select using ( id = auth.uid() or public.is_admin() );
+
+-- Let a user rename themselves (change username) — own row only. The column's
+-- format check + case-insensitive unique index still guard bad/duplicate names.
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own" on public.profiles
+  for update using ( id = auth.uid() ) with check ( id = auth.uid() );
+
+-- One-time rename: a user may change their username only ONCE. Enforced in a
+-- trigger so it can't be bypassed from the client, and the flag is trigger-
+-- controlled (a client can't reset it to false).
+create or replace function public.enforce_username_change_once()
+returns trigger language plpgsql as $$
+begin
+  if new.username is distinct from old.username then
+    if old.username_changed then
+      raise exception 'username_already_changed';
+    end if;
+    new.username_changed := true;
+  else
+    new.username_changed := old.username_changed;   -- ignore any client-supplied value
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_username_change_once on public.profiles;
+create trigger trg_username_change_once
+  before update on public.profiles
+  for each row execute function public.enforce_username_change_once();
 
 -- runs: insert only your own; read your own, admins read all.
 drop policy if exists "runs_insert" on public.runs;

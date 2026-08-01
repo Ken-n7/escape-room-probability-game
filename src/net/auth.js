@@ -108,6 +108,19 @@ export async function updatePassword(password) {
   return authState.user;
 }
 
+// Change the signed-in user's display name. Requires the profiles UPDATE policy
+// (see schema.sql). The DB enforces 3–20 chars, the charset, and case-insensitive
+// uniqueness, so a malformed or taken name surfaces here as an error.
+export async function updateUsername(name) {
+  if (!authState.user) throw new AuthError('not_signed_in', 'You must be signed in to change your name.');
+  const { data, error } = await supabase
+    .from('profiles').update({ username: name.trim() }).eq('id', authState.user.id)
+    .select().maybeSingle();
+  if (error) throw error;
+  if (data) authState.profile = data;
+  return authState.profile;
+}
+
 export async function signOut() {
   await supabase.auth.signOut();
   authState.user = null;
@@ -115,5 +128,6 @@ export async function signOut() {
 }
 
 export const isLoggedIn  = () => Boolean(authState.user);
+export const usernameLocked = () => Boolean(authState.profile?.username_changed);   // already used their one rename
 export const isAdmin     = () => authState.profile?.role === 'admin';
 export const displayName = () => authState.profile?.username || 'Student';

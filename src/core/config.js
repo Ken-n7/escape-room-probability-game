@@ -73,7 +73,8 @@ export const CFG = {
   gameplay: {
     maxWrongAnswers: 5,     // wrong answers allowed per room before the chase penalty
     pLearnMode:      false, // toggled from menu — shows hint before each question
-    answerTimeSeconds: 15,  // per-question time limit (PLAY mode only); timeout resets
-                            // the room to Q1 with freshly drawn problems
+    answerTimeSeconds: [15, 25, 30],  // per-level time limit by room index
+                            // (Easy / Moderate / Hard); PLAY mode only. Timeout
+                            // resets the room to Q1 with freshly drawn problems.
   },
 };
