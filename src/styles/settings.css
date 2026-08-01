@@ -486,6 +486,18 @@
   margin-top:clamp(6px, 1.8vh, 16px);
   font-size:clamp(.64rem, min(1.6vh, 2vw), .78rem);
 }
+/* "Forgot password?" — quiet underlined link under the password field */
+#s-login #btn-auth-forgot {
+  display:block; margin:clamp(2px, .8vh, 8px) 0 0 auto;
+  background:none; border:none; padding:0; cursor:pointer;
+  color:var(--bone, #cbcbc4); text-decoration:underline; text-underline-offset:2px;
+  font-family:inherit; font-size:clamp(.6rem, min(1.5vh, 1.9vw), .74rem);
+  opacity:.82; transition:opacity .15s;
+}
+#s-login #btn-auth-forgot:hover { opacity:1; color:#fff; }
+#s-login #btn-auth-forgot[hidden] { display:none; }
+/* Success / info state for the shared auth message line (reset-link sent, etc.) */
+#s-login #auth-error.ok { color:var(--accent-hi, #fff); opacity:.9; }
 /* Submit — same brush swipe as the menu buttons, centered + scaling */
 #s-login #btn-auth-submit { margin:clamp(6px, 1.6vh, 14px) auto 0; align-self:center; }
 #s-login #btn-auth-submit.menu-btn {

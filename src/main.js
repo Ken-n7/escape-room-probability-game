@@ -24,7 +24,7 @@ import { updateAmbientScares, resetAmbientScares, clearScareSprite, triggerBlack
 import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
-import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut } from './net/auth.js';
+import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut, onPasswordRecovery, requestPasswordReset, updatePassword } from './net/auth.js';
 import { submitRun, fetchLeaderboard, invalidateLeaderboardCache } from './net/scores.js';
 import { startPlay, endPlay, hasActivePlay, flushAbandonBeacon, logAttempt, logEvent } from './net/analytics.js';
 import { initPerf, samplePerf, flushPerfBeacon } from './net/perf.js';
@@ -2050,11 +2050,19 @@ const authReady = initAuth().catch(err => { console.warn('[auth] init failed:', 
 
 // Always land on the menu (players see the hallway first). The menu shows the
 // full file list when signed in, or just Log In / Sign Up when not.
+// Set when the user arrives via a password-reset link. A recovery session counts
+// as "logged in", so without this the boot path would walk them straight into the
+// menu — instead we hold them on the "set a new password" form until it's done.
+// Seed it from the link's URL synchronously (before Supabase strips the hash) so
+// the boot check is reliable even if the PASSWORD_RECOVERY event lands late.
+let recoveryPending = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
+
 async function enterFromAuth() {
   // Warm the ghost once now (behind the menu overlay): compiles its shaders and
   // uploads its textures/geometry during the menu, not on the first scare.
   warmUpScare();
   await authReady;
+  if (recoveryPending) { openAuth('recover'); return; }
   applyMenuAuthState();
   showScreen('menu');
 }
@@ -2080,32 +2088,46 @@ let authBusy = false;
 
 function setAuthMode(mode) {
   authMode = mode;
-  const signup = mode === 'signup';
-  $('auth-title').textContent       = signup ? 'CREATE ACCOUNT' : 'SIGN IN';
+  const signup = mode === 'signup', forgot = mode === 'forgot', recover = mode === 'recover';
+  const TITLE  = { signin: 'SIGN IN', signup: 'CREATE ACCOUNT', forgot: 'RESET PASSWORD', recover: 'NEW PASSWORD' };
+  const SUBMIT = { signin: 'SIGN IN', signup: 'CREATE ACCOUNT', forgot: 'SEND RESET LINK', recover: 'SET PASSWORD' };
+  $('auth-title').textContent       = TITLE[mode];
+  $('btn-auth-submit').textContent  = SUBMIT[mode];
+  $('auth-email-row').hidden         = recover;                 // recovery already knows the account
   $('auth-username-row').hidden      = !signup;
-  $('btn-auth-submit').textContent   = signup ? 'CREATE ACCOUNT' : 'SIGN IN';
-  $('auth-toggle-text').textContent  = signup ? 'Already have an account?' : 'No account yet?';
-  $('btn-auth-toggle').textContent   = signup ? 'Sign in' : 'Create one';
-  $('auth-password').setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
-  $('auth-password').placeholder     = signup ? `At least ${MIN_PASSWORD} characters` : 'Your password';
+  $('auth-password-row').hidden      = forgot;                  // forgot needs only the email
+  $('auth-confirm-row').hidden       = !recover;
+  $('btn-auth-forgot').hidden        = mode !== 'signin';
+  $('auth-toggle-line').hidden       = recover;
+  $('auth-toggle-text').textContent  = signup ? 'Already have an account?' : forgot ? 'Remembered it?' : 'No account yet?';
+  $('btn-auth-toggle').textContent   = (signup || forgot) ? 'Sign in' : 'Create one';
+  $('auth-password').setAttribute('autocomplete', (signup || recover) ? 'new-password' : 'current-password');
+  $('auth-password').placeholder     = (signup || recover) ? `At least ${MIN_PASSWORD} characters` : 'Your password';
+  $('auth-password').closest('.auth-row').querySelector('label').textContent = recover ? 'NEW PASSWORD' : 'PASSWORD';
   clearAuthError();
+  // If a reset cooldown is still running, re-show the countdown on return to forgot.
+  if (forgot && resetCooldownUntil > Date.now()) resumeResetCooldownUI();
 }
 function clearAuthError() {
-  $('auth-error').textContent = '';
-  ['auth-email', 'auth-password', 'auth-username'].forEach(id => $(id).classList.remove('invalid'));
+  const err = $('auth-error'); err.textContent = ''; err.classList.remove('ok');
+  ['auth-email', 'auth-password', 'auth-username', 'auth-confirm'].forEach(id => $(id).classList.remove('invalid'));
 }
 function showAuthError(msg, fieldId) {
-  $('auth-error').textContent = msg;
+  const err = $('auth-error'); err.textContent = msg; err.classList.remove('ok');
   if (fieldId) { const el = $(fieldId); el.classList.add('invalid'); el.focus(); }
+}
+function showAuthInfo(msg) {
+  const err = $('auth-error'); err.textContent = msg; err.classList.add('ok');
 }
 // Open the auth modal in the given mode ('signin' | 'signup'). Called from the
 // menu's Log In / Sign Up buttons — the modal never appears on its own.
 function openAuth(mode = 'signin') {
   setAuthMode(mode);
-  $('auth-email').value = ''; $('auth-password').value = ''; $('auth-username').value = '';
+  $('auth-email').value = ''; $('auth-password').value = ''; $('auth-username').value = ''; $('auth-confirm').value = '';
   setPasswordVisible(false);
   showScreen('login');
-  setTimeout(() => $('auth-email').focus(), 50);
+  const first = mode === 'recover' ? 'auth-password' : 'auth-email';
+  setTimeout(() => $(first).focus(), 50);
 }
 
 // Map every plausible failure to a clear, specific message.
@@ -2128,27 +2150,79 @@ function friendlyAuthError(e) {
   return e?.message || 'Something went wrong. Please try again.';
 }
 
+const SUBMIT_LABEL = { signin: 'SIGN IN', signup: 'CREATE ACCOUNT', forgot: 'SEND RESET LINK', recover: 'SET PASSWORD' };
+const SUBMIT_BUSY  = { signin: 'Signing in…', signup: 'Creating…', forgot: 'Sending…', recover: 'Saving…' };
+
+// Cooldown after a reset request so the button can't be spammed (Supabase also
+// enforces a 60s per-user interval server-side; this just makes it visible).
+const RESET_COOLDOWN = 60;
+let resetCooldownUntil = 0, resetCooldownTimer = null;
+function refreshResetCooldownUI() {
+  const btn = $('btn-auth-submit');
+  const left = Math.ceil((resetCooldownUntil - Date.now()) / 1000);
+  if (left <= 0 || authMode !== 'forgot') {
+    clearInterval(resetCooldownTimer); resetCooldownTimer = null;
+    if (authMode === 'forgot') { btn.disabled = false; btn.textContent = SUBMIT_LABEL.forgot; }
+    return;
+  }
+  btn.disabled = true; btn.textContent = `Wait ${left}s`;
+}
+function resumeResetCooldownUI() {   // restart the ticking display without touching the deadline
+  clearInterval(resetCooldownTimer);
+  resetCooldownTimer = setInterval(refreshResetCooldownUI, 250);
+  refreshResetCooldownUI();
+}
+function startResetCooldown() {
+  resetCooldownUntil = Date.now() + RESET_COOLDOWN * 1000;
+  resumeResetCooldownUI();
+}
+
 async function submitAuth() {
   if (authBusy) return;
   const email    = $('auth-email').value.trim();
   const password = $('auth-password').value;
+  const confirm  = $('auth-confirm').value;
   const username = $('auth-username').value.trim();
-  const signup   = authMode === 'signup';
+  const signup   = authMode === 'signup', forgot = authMode === 'forgot', recover = authMode === 'recover';
+
+  // Reset-link cooldown — block repeat sends (covers the Enter key too, since the
+  // button is disabled but the field still submits on Enter).
+  if (forgot && resetCooldownUntil > Date.now())
+    return showAuthError(`Please wait ${Math.ceil((resetCooldownUntil - Date.now()) / 1000)}s before requesting another link.`);
   clearAuthError();
 
   // Client-side validation — fail fast with a pointed message before any request.
-  if (!email)                       return showAuthError('Enter your email.', 'auth-email');
-  if (!EMAIL_RE.test(email))        return showAuthError('That doesn\'t look like a valid email.', 'auth-email');
+  if (!recover) {
+    if (!email)                return showAuthError('Enter your email.', 'auth-email');
+    if (!EMAIL_RE.test(email)) return showAuthError('That doesn\'t look like a valid email.', 'auth-email');
+  }
   if (signup && !USERNAME_RE.test(username))
     return showAuthError('Display name must be 3–20 characters (letters, numbers, spaces, _ or -).', 'auth-username');
-  if (!password)                    return showAuthError('Enter your password.', 'auth-password');
-  if (signup && password.length < MIN_PASSWORD)
-    return showAuthError(`Password must be at least ${MIN_PASSWORD} characters.`, 'auth-password');
+  if (!forgot) {
+    if (!password)             return showAuthError('Enter your password.', 'auth-password');
+    if ((signup || recover) && password.length < MIN_PASSWORD)
+      return showAuthError(`Password must be at least ${MIN_PASSWORD} characters.`, 'auth-password');
+    if (recover && confirm !== password)
+      return showAuthError('Passwords don\'t match.', 'auth-confirm');
+  }
 
   const btn = $('btn-auth-submit');
   authBusy = true;
-  btn.disabled = true; btn.textContent = signup ? 'Creating…' : 'Signing in…';
+  btn.disabled = true; btn.textContent = SUBMIT_BUSY[authMode];
   try {
+    if (forgot) {
+      await requestPasswordReset(email);
+      showAuthInfo('If that email has an account, a reset link is on its way. Check your inbox (and spam).');
+      startResetCooldown();
+      return;
+    }
+    if (recover) {
+      await updatePassword(password);
+      recoveryPending = false;
+      AudioManager.play('uiClick');
+      await enterFromAuth();
+      return;
+    }
     if (signup) {
       if (!(await isUsernameAvailable(username)))
         return showAuthError('That name is already taken — pick another.', 'auth-username');
@@ -2162,17 +2236,24 @@ async function submitAuth() {
     showAuthError(friendlyAuthError(e));
   } finally {
     authBusy = false;
-    btn.disabled = false;
-    // Restore just the button label — NOT setAuthMode(), which would clearAuthError()
-    // and wipe the message we just showed.
-    btn.textContent = authMode === 'signup' ? 'CREATE ACCOUNT' : 'SIGN IN';
+    // Keep the button locked while a reset cooldown is running; otherwise restore
+    // just the label — NOT setAuthMode(), which would clearAuthError() and wipe the
+    // message we just showed.
+    if (authMode === 'forgot' && resetCooldownUntil > Date.now()) {
+      refreshResetCooldownUI();
+    } else {
+      btn.disabled = false;
+      btn.textContent = SUBMIT_LABEL[authMode];
+    }
   }
 }
 
 // Show/hide password
 function setPasswordVisible(show) {
-  const input = $('auth-password'), btn = $('btn-auth-showpw');
-  input.type = show ? 'text' : 'password';
+  const btn = $('btn-auth-showpw');
+  // One toggle governs both the password and the confirm field (recover mode).
+  $('auth-password').type = show ? 'text' : 'password';
+  $('auth-confirm').type  = show ? 'text' : 'password';
   btn.textContent = show ? 'Hide' : 'Show';
   btn.setAttribute('aria-pressed', String(show));
 }
@@ -2188,14 +2269,20 @@ $('auth-password').addEventListener('keyup',   updateCapsLock);
 $('auth-password').addEventListener('blur',    () => { $('auth-capslock').hidden = true; });
 
 // Submit on Enter; clear errors as the user edits
-['auth-email', 'auth-password', 'auth-username'].forEach(id => {
+['auth-email', 'auth-password', 'auth-username', 'auth-confirm'].forEach(id => {
   const el = $(id);
   el.addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
   el.addEventListener('input', clearAuthError);
 });
 $('btn-auth-submit').onclick = submitAuth;
-$('btn-auth-toggle').onclick = () => setAuthMode(authMode === 'signup' ? 'signin' : 'signup');
+// From signin/signup the toggle flips between them; from forgot/recover it returns to signin.
+$('btn-auth-toggle').onclick = () => setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
+$('btn-auth-forgot').onclick = () => setAuthMode('forgot');
 $('btn-auth-close').onclick  = () => { applyMenuAuthState(); showScreen('menu'); };
+// Returning from a reset email: Supabase decodes the recovery token and fires
+// PASSWORD_RECOVERY → drop the user straight into the "set new password" form
+// (and flag it so the boot path doesn't treat the recovery session as a login).
+onPasswordRecovery(() => { recoveryPending = true; openAuth('recover'); });
 // Menu's lower-right Log In / Sign Up buttons open the modal in the right mode.
 $('btn-menu-login').onclick  = () => openAuth('signin');
 $('btn-menu-signup').onclick = () => openAuth('signup');
