@@ -157,7 +157,7 @@
     <button class="auth-close" id="btn-auth-close" type="button" aria-label="Back to menu">✕</button>
     <h2 id="auth-title">SIGN IN</h2>
     <p id="auth-subtitle">Only the named may enter.</p>
-    <div class="auth-row">
+    <div class="auth-row" id="auth-email-row">
       <label for="auth-email">EMAIL</label>
       <input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com"/>
     </div>
@@ -166,7 +166,7 @@
       <input id="auth-username" type="text" maxlength="20" placeholder="Shown on the leaderboard"/>
       <div class="auth-hint">3–20 characters · letters, numbers, spaces, _ or -</div>
     </div>
-    <div class="auth-row">
+    <div class="auth-row" id="auth-password-row">
       <label for="auth-password">PASSWORD</label>
       <div class="auth-input-wrap">
         <input id="auth-password" type="password" autocomplete="current-password" placeholder="At least 8 characters"/>
@@ -174,6 +174,11 @@
       </div>
       <div id="auth-capslock" class="auth-warn" hidden>⚠ Caps Lock is on</div>
     </div>
+    <div class="auth-row" id="auth-confirm-row" hidden>
+      <label for="auth-confirm">CONFIRM PASSWORD</label>
+      <input id="auth-confirm" type="password" autocomplete="new-password" placeholder="Re-enter new password"/>
+    </div>
+    <button type="button" id="btn-auth-forgot" class="auth-link">Forgot password?</button>
     <div id="auth-error"></div>
     <button class="auth-btn primary menu-btn" id="btn-auth-submit" type="button"><span>SIGN IN</span></button>
     <div id="auth-toggle-line">

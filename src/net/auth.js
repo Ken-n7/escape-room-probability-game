@@ -26,6 +26,12 @@ let _onSignedOut = null;
 // a sign-out in another tab) so the app can drop back to the login screen.
 export function onSignedOut(cb) { _onSignedOut = cb; }
 
+let _onRecovery = null;
+// Fired when the user returns from a password-reset email (Supabase decodes the
+// recovery token in the URL and raises PASSWORD_RECOVERY). The app shows the
+// "set a new password" form in response.
+export function onPasswordRecovery(cb) { _onRecovery = cb; }
+
 // Call once on boot. Restores an existing session (localStorage) and returns the
 // signed-in user, or null. Keeps authState fresh across refresh / cross-tab.
 export async function initAuth() {
@@ -37,6 +43,7 @@ export async function initAuth() {
   supabase.auth.onAuthStateChange((event, session) => {
     authState.user = session?.user ?? null;
     authState.accessToken = session?.access_token ?? null;   // kept fresh for the unload beacon
+    if (event === 'PASSWORD_RECOVERY') { loadProfile(); _onRecovery?.(); return; }
     if (!authState.user) {
       authState.profile = null;
       if (event === 'SIGNED_OUT') _onSignedOut?.();
@@ -76,6 +83,25 @@ export async function signIn({ email, password }) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email: normEmail(email), password,
   });
+  if (error) throw error;
+  authState.user = data.user;
+  await loadProfile();
+  return authState.user;
+}
+
+// Send a password-reset email. The link brings the user back to the app with a
+// recovery session (see onPasswordRecovery). redirectTo must be allow-listed in
+// Supabase → Authentication → URL Configuration.
+export async function requestPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(normEmail(email), {
+    redirectTo: window.location.origin + window.location.pathname,
+  });
+  if (error) throw error;
+}
+
+// Set a new password for the current (recovery or signed-in) session.
+export async function updatePassword(password) {
+  const { data, error } = await supabase.auth.updateUser({ password });
   if (error) throw error;
   authState.user = data.user;
   await loadProfile();
