@@ -32,8 +32,8 @@
 /* ── Joystick — chalk ring base + solid white knob ─────────────────────────── */
 #mobile-joystick {
   border:none;
-  background:radial-gradient(circle at center, rgba(0,0,0,.30), rgba(0,0,0,.54) 70%);
-  box-shadow:0 0 22px rgba(0,0,0,.5);
+  background:none;
+  box-shadow:none;
 }
 #mobile-joystick::before,
 #mobile-joystick::after { display:none; }        /* drop the crosshair lines */
