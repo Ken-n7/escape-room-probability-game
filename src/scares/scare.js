@@ -23,9 +23,9 @@ const BLACKOUT_CHANCE = 0.22;  // total light failure (rest of the roll = noise)
 const BLACKOUT_SOUNDS = ['randomKnock', 'randomWhisper2', 'randomCrying2', 'randomRunning'];
 const BLACKOUT_GHOST_CHANCE = 0.25; // ghost standing there when the lights return
 
-const _cooldownRng = () => 34 + Math.random() * 28;
-const _initialCooldownRng = () => 18 + Math.random() * 14;
-const _noiseCooldownRng = () => 8 + Math.random() * 13;
+const _cooldownRng = () => 45 + Math.random() * 30;         // 45–75s between tension scares (was 34–62)
+const _initialCooldownRng = () => 25 + Math.random() * 15;  // 25–40s before the first (was 18–32)
+const _noiseCooldownRng = () => 24 + Math.random() * 26;    // 24–50s between random noises (was a spammy 8–21)
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const _state = {
