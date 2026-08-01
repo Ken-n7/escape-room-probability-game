@@ -8,7 +8,7 @@ const {
   roomW, roomH, doorW, doorH, classrooms, vacants, vacantDepth,
 } = CFG.world;
 const HALF_W = hallW / 2;
-const VACANT_DOOR_H = 2.6;
+const VACANT_DOOR_H = doorH;   // match classroom doorway proportions (open, no panel)
 const ROOM_LIGHT_COLORS = [0xffaa44, 0x4488ff, 0x44ff88];
 const FLUORESCENT_MODEL_PATH = '/assets/3D/fluorescent/mounted_fluorescent_lights_1k.gltf';
 // Leg-1 fixtures sit at x=0 along z; leg-2 fixtures at z=49 along x (rotated 90°)
@@ -121,15 +121,23 @@ function ceilTex() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 256;
   const ctx = cv.getContext('2d');
-  ctx.fillStyle = '#2b2c26'; ctx.fillRect(0, 0, 256, 256);            // grimier panel base
-  for (let i = 0; i < 450; i++) {                                     // panel noise
-    const g = 34 + Math.floor(Math.random() * 16);
-    ctx.fillStyle = `rgba(${g},${g},${g-4},0.32)`;
-    ctx.fillRect(Math.random()*256, Math.random()*256, Math.random()*4+1, Math.random()*3+1);
+  const CELL = 64;
+  ctx.fillStyle = '#5b5b52'; ctx.fillRect(0, 0, 256, 256);            // pale acoustic-tile base
+  // Per-tile face: slightly varied shade so panels read as separate, plus the
+  // pinhole/fissure speckle real ceiling tiles have.
+  for (let ty = 0; ty < 256; ty += CELL) for (let tx = 0; tx < 256; tx += CELL) {
+    const s = 82 + (Math.random()*16 - 8) | 0;
+    ctx.fillStyle = `rgb(${s},${s},${s - 5})`;
+    ctx.fillRect(tx + 2, ty + 2, CELL - 4, CELL - 4);
+    for (let i = 0; i < 90; i++) {                                    // fissure pinholes
+      const d = Math.random() < 0.5 ? 0.18 : 0.1;
+      ctx.fillStyle = `rgba(30,30,26,${d})`;
+      ctx.fillRect(tx + 3 + Math.random()*(CELL-6), ty + 3 + Math.random()*(CELL-6), 1, Math.random()*3+1);
+    }
   }
   // a couple of whole panels browned/sagging from water damage
-  ctx.fillStyle = 'rgba(60,44,22,0.5)'; ctx.fillRect(68, 4, 56, 56);
-  ctx.fillStyle = 'rgba(52,38,18,0.42)'; ctx.fillRect(132, 132, 56, 56);
+  ctx.fillStyle = 'rgba(74,54,26,0.55)'; ctx.fillRect(68, 4, 56, 56);
+  ctx.fillStyle = 'rgba(64,46,22,0.5)';  ctx.fillRect(132, 132, 56, 56);
   // missing / collapsed tiles → dark holes into the ceiling void
   [[4, 128], [192, 4]].forEach(([tx, ty]) => {
     ctx.fillStyle = '#0a0b08'; ctx.fillRect(tx + 3, ty + 3, 58, 58);
@@ -137,18 +145,22 @@ function ceilTex() {
     ctx.strokeStyle = 'rgba(46,40,30,0.5)'; ctx.lineWidth = 1;        // a batten crossing the gap
     ctx.beginPath(); ctx.moveTo(tx + 8, ty + 18); ctx.lineTo(tx + 56, ty + 24); ctx.stroke();
   });
-  ctx.strokeStyle = '#191a16'; ctx.lineWidth = 3;                     // tile grid (drawn over so gaps keep their frame)
-  for (let i = 0; i <= 256; i += 64) {
-    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
-  }
   for (let i = 0; i < 8; i++) {                                       // irregular water stains
-    ctx.fillStyle = `rgba(58,44,22,${0.16 + Math.random()*0.2})`;
+    ctx.fillStyle = `rgba(58,44,22,${0.14 + Math.random()*0.18})`;
     _blob(ctx, Math.random()*256, Math.random()*256, 12 + Math.random()*26, 0.5);
   }
   for (let i = 0; i < 6; i++) {                                       // mold blooms
-    ctx.fillStyle = `rgba(${26+Math.random()*16|0},${34+Math.random()*16|0},${22+Math.random()*10|0},0.32)`;
+    ctx.fillStyle = `rgba(${26+Math.random()*16|0},${34+Math.random()*16|0},${22+Math.random()*10|0},0.3)`;
     _blob(ctx, Math.random()*256, Math.random()*256, 6 + Math.random()*14, 0.55);
+  }
+  // Suspended-grid T-bar — light dirty aluminium, drawn last so gaps keep frames.
+  for (let i = 0; i <= 256; i += CELL) {
+    ctx.strokeStyle = 'rgba(150,150,140,0.85)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+    ctx.strokeStyle = 'rgba(20,20,18,0.5)'; ctx.lineWidth = 1;        // grime line down the bar centre
+    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
   }
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -394,7 +406,11 @@ function roomWallTex() {
   const W = 480, H = 144;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
-  ctx.fillStyle = '#2f2c27'; ctx.fillRect(0, 0, W, H);
+  // Institutional painted plaster — muted sage-grey, dirtied. Lighter than the
+  // old near-black so it reads as a school corridor wall, not raw concrete.
+  const base = ctx.createLinearGradient(0, 0, 0, H);
+  base.addColorStop(0, '#575a4f'); base.addColorStop(1, '#494b41');
+  ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
   for (let i = 0; i < 900; i++) {                                   // grime speckle
     const g = Math.floor(Math.random() * 30);
     ctx.fillStyle = `rgba(${g},${Math.max(0,g-4)},${Math.max(0,g-8)},0.5)`;
@@ -429,26 +445,71 @@ function roomWallTex() {
   return t;
 }
 
-// Filthy classroom floor — grime, brown stains, cracked and broken tiles.
+// Lower-wall wainscot — beige institutional panelling with vertical seams and
+// scuffs. Sits under the chair rail on the bare (non-locker) corridor walls.
+function wainscotTex() {
+  const W = 256, H = 96;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#8a7d63'); g.addColorStop(1, '#6f6047');   // dirtier toward the floor
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 400; i++) {                               // grime speckle
+    const v = Math.floor(Math.random() * 26);
+    ctx.fillStyle = `rgba(${v},${v - 4},${v - 10},0.4)`;
+    ctx.fillRect(Math.random()*W, Math.random()*H, Math.random()*4+1, Math.random()*3+1);
+  }
+  for (let x = 0; x <= W; x += 64) {                            // vertical panel seams
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    ctx.strokeStyle = 'rgba(180,168,140,0.18)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + 2, 0); ctx.lineTo(x + 2, H); ctx.stroke();
+  }
+  for (let i = 0; i < 14; i++) {                                // scuffs + kick marks near the floor
+    ctx.strokeStyle = `rgba(0,0,0,${0.1 + Math.random()*0.2})`; ctx.lineWidth = 1 + Math.random()*2;
+    const y = H - Math.random()*32, x = Math.random()*W, w = 8 + Math.random()*30;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y + (Math.random()-.5)*4); ctx.stroke();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// Scuffed VCT (vinyl-composition tile) floor — mottled chip speckle in a 12"-ish
+// grid, grimed and cracked with a few tiles missing.
 function roomFloorTex() {
   const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const ctx = cv.getContext('2d');
-  ctx.fillStyle = '#242320'; ctx.fillRect(0, 0, 256, 256);
-  ctx.strokeStyle = '#161512'; ctx.lineWidth = 2;                  // tile grid
-  for (let i = 0; i <= 256; i += 64) {
+  const CELL = 32;
+  const CHIPS = ['#565246', '#4b473c', '#615c4e', '#6d6656', '#3d3a31'];
+  // Per-tile mottled base — each tile a slightly different waxed grey so the
+  // grid reads as laid squares, not one flat sheet.
+  for (let ty = 0; ty < 256; ty += CELL) for (let tx = 0; tx < 256; tx += CELL) {
+    const b = 66 + (Math.random()*14 - 7) | 0;
+    ctx.fillStyle = `rgb(${b},${b - 2},${b - 8})`;
+    ctx.fillRect(tx, ty, CELL, CELL);
+    for (let i = 0; i < 40; i++) {                                 // vinyl chip speckle
+      ctx.fillStyle = CHIPS[Math.random()*CHIPS.length | 0];
+      ctx.globalAlpha = 0.5 + Math.random()*0.4;
+      ctx.fillRect(tx + Math.random()*CELL, ty + Math.random()*CELL, Math.random()*2+1, Math.random()*2+1);
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(20,18,14,0.7)'; ctx.lineWidth = 1;       // tile seams
+  for (let i = 0; i <= 256; i += CELL) {
     ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
   }
-  ctx.fillStyle = '#141311'; [[0,128],[192,64]].forEach(([x,y]) => ctx.fillRect(x+3, y+3, 58, 58));  // missing tiles
-  for (let i = 0; i < 26; i++) {                                   // grime blotches
-    ctx.fillStyle = `rgba(0,0,0,${0.2+Math.random()*0.25})`;
-    ctx.beginPath(); ctx.arc(Math.random()*256, Math.random()*256, Math.random()*20+4, 0, 7); ctx.fill();
+  ctx.fillStyle = '#151410'; [[0,128],[192,64]].forEach(([x,y]) => ctx.fillRect(x+2, y+2, CELL*2-4, CELL*2-4));  // missing tiles → dark
+  for (let i = 0; i < 22; i++) {                                   // grime blotches
+    ctx.fillStyle = `rgba(0,0,0,${0.16+Math.random()*0.22})`;
+    ctx.beginPath(); ctx.arc(Math.random()*256, Math.random()*256, Math.random()*18+4, 0, 7); ctx.fill();
   }
   for (let i = 0; i < 8; i++) {                                    // brown stains
-    ctx.fillStyle = 'rgba(50,36,20,0.3)';
+    ctx.fillStyle = 'rgba(50,36,20,0.28)';
     ctx.beginPath(); ctx.ellipse(Math.random()*256, Math.random()*256, 10+Math.random()*24, 8+Math.random()*18, Math.random()*3, 0, 7); ctx.fill();
   }
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1;         // cracks
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;          // cracks
   for (let i = 0; i < 6; i++) {
     let x = Math.random()*256, y = Math.random()*256; ctx.beginPath(); ctx.moveTo(x, y);
     for (let j = 0; j < 5; j++) { x += (Math.random()-.5)*70; y += (Math.random()-.5)*70; ctx.lineTo(x, y); }
@@ -617,7 +678,19 @@ const bagMats      = [0x7a2a2a, 0x243a6a, 0x35521f].map(c =>
 const handleMat    = new THREE.MeshLambertMaterial({ color: 0x6a5a38, emissive: 0x161206, emissiveIntensity: 0.4 });  // tarnished pull
 // Classroom-only abandoned surfaces + blood decals (corridors keep the plainer look)
 const roomWallMat  = new THREE.MeshLambertMaterial({ map: roomWallTex(), emissive: 0x060505, emissiveIntensity: 0.2, side: THREE.DoubleSide });
+const wainscotMat  = new THREE.MeshLambertMaterial({ map: wainscotTex(), emissive: 0x080703, emissiveIntensity: 0.22 });
 const roomFloorMat = new THREE.MeshLambertMaterial({ map: roomFloorTex(), emissive: 0x060606, emissiveIntensity: 0.24 });
+// Worn walk-path — a darker track polished into the wax down the middle of the
+// hall. Soft-edged (gradient fades to nothing) so it reads as wear, not a rug.
+const wornPathMat = (() => {
+  const cv = document.createElement('canvas'); cv.width = 8; cv.height = 64;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 8, 0);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, 'rgba(0,0,0,0.32)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 8, 64);
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
+})();
 // Blood decals — transparent PNGs from public/assets/blood1. Textures load async;
 // each decal appears once its image arrives. Aspect kept per-image so the
 // handprint / smears aren't stretched.
@@ -821,6 +894,10 @@ function buildCorridors(scene) {
   _tiledPlane(leg2Len, hallW, HALF_W + leg2Len/2, 0, (leg2Z0+leg2Z1)/2, -Math.PI/2, 0, roomFloorMat);
   _tiledPlane(leg2Len, hallW, HALF_W + leg2Len/2, hallH, (leg2Z0+leg2Z1)/2, Math.PI/2, 0, ceilMat);
 
+  // Worn walk-path down each leg's centre (gradient runs across the strip width).
+  pl(2.6, leg1Len, 0, 0.011, leg1Len/2, -Math.PI/2, 0, wornPathMat);
+  pl(2.6, leg2Len, HALF_W + leg2Len/2, 0.011, (leg2Z0+leg2Z1)/2, -Math.PI/2, Math.PI/2, wornPathMat);
+
   // Walls (visual + collision), segmented around the door openings
   segmentedWall('z', -HALF_W, 0, leg1Len, doorGapsFor('W'),  Math.PI/2);          // leg1 west
   segmentedWall('z',  HALF_W, 0, leg2Z0,  doorGapsFor('E'), -Math.PI/2);          // leg1 east (open past corner)
@@ -832,15 +909,27 @@ function buildCorridors(scene) {
   // Lockers — leg1 west wall + leg2 south wall, gaps at doorways.
   // Box depth goes INTO the wall so the wide textured door faces the corridor.
   const lW = 0.9, lH = 2.5, lD = 0.35, lGap = 0.04;   // lGap keeps the locker
-  const wGaps = doorGapsFor('W'), sGaps = doorGapsFor('S');   // back off the wall
-  for (let z = 0.5; z < leg1Len - 1; z += lW + 0.05) {
-    if (wGaps.some(g => z + lW > g.a0 - 0.15 && z < g.a1 + 0.15)) continue;
-    bxr(lD, lH, lW, -HALF_W + lGap + lD/2, lH/2, z + lW/2, 0, 0, lockerMat);
-  }
-  for (let x = HALF_W + 1; x < leg2EndX - 1; x += lW + 0.05) {
-    if (sGaps.some(g => x + lW > g.a0 - 0.15 && x < g.a1 + 0.15)) continue;
-    bxr(lD, lH, lW, x + lW/2, lH/2, leg2Z0 + lGap + lD/2, 0, Math.PI/2, lockerMat);
-  }
+  const pitch = lW + 0.05, mgn = 0.15;                 // back off the wall
+  const wGaps = doorGapsFor('W'), sGaps = doorGapsFor('S');
+  // Fill a wall run with lockers, laid per segment BETWEEN door gaps and stretched
+  // to fill each segment edge-to-edge — so lockers butt symmetrically up to every
+  // doorway (real, fake, or empty) instead of the old fixed grid landing anywhere.
+  const fillLockers = (from, to, gaps, place) => {
+    const segs = []; let p = from, ld = false;   // ld/rd = end abuts a door gap
+    [...gaps].sort((a, b) => a.a0 - b.a0).forEach(g => { segs.push([p, g.a0 - mgn, ld, true]); p = g.a1 + mgn; ld = true; });
+    segs.push([p, to, ld, false]);
+    segs.forEach(([a, b, aDoor, bDoor]) => {
+      const a2 = a + (aDoor ? pitch : 0), b2 = b - (bDoor ? pitch : 0);   // drop a locker next to each door
+      const len = b2 - a2, n = Math.floor(len / pitch);
+      if (n < 1) return;
+      const step = len / n;
+      for (let i = 0; i < n; i++) place(a2 + step * (i + 0.5));
+    });
+  };
+  fillLockers(0.4, leg1Len - 0.1, wGaps, c =>
+    bxr(lD, lH, lW, -HALF_W + lGap + lD/2, lH/2, c, 0, 0, lockerMat));           // leg1 west
+  fillLockers(HALF_W + 0.4, leg2EndX - 0.1, sGaps, c =>
+    bxr(lD, lH, lW, c, lH/2, leg2Z0 + lGap + lD/2, 0, Math.PI/2, lockerMat));    // leg2 south
   // Locker protrusion collision strips
   let p = 0;
   wGaps.sort((a,b)=>a.a0-b.a0).forEach(g => { _addBox(-HALF_W-0.3, -HALF_W+0.5, p, g.a0-0.15); p = g.a1+0.15; });
@@ -882,6 +971,104 @@ function buildCorridors(scene) {
   scrawlDecal(scene, HALF_W - 0.05, 1.7, 31, -Math.PI/2, 2.4, randScrawl(), 0.55);  // leg1 east
   scrawlDecal(scene, 30, 1.7, leg2Z1 - 0.05, Math.PI, 2.4, randScrawl(), 0.55);     // leg2 north
   scrawlDecal(scene, 41, 1.7, leg2Z1 - 0.05, Math.PI, 2.4, ['NO WAY OUT'], 0.6);    // at the exit — no relief
+
+  dressCorridors(scene);
+}
+
+// Small enamel room-number plate (light number on a dark, edged plate).
+function placardTex(label) {
+  const cv = document.createElement('canvas'); cv.width = 160; cv.height = 72;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#17140f'; x.fillRect(0, 0, 160, 72);
+  x.strokeStyle = '#3a3222'; x.lineWidth = 5; x.strokeRect(4, 4, 152, 64);
+  x.fillStyle = '#b9b1a0'; x.font = 'bold 44px Georgia';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(label, 80, 40);
+  return new THREE.CanvasTexture(cv);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CORRIDOR DRESSING — the walls without lockers (leg1-east, leg2-north) read
+//  flat, so add architectural relief (chair-rail + baseboard trim, a ceiling
+//  conduit) and a few focal props + decals to catch the eye as you walk.
+// ═══════════════════════════════════════════════════════════════════════════════
+function dressCorridors(scene) {
+  // Chair-rail + baseboard, protruding into the corridor, broken at door gaps.
+  const trim = (runAxis, at, from, to, gaps, inward) => {
+    const railY = 0.95, baseY = 0.1, railH = 0.07, baseH = 0.2, proj = 0.05;
+    const wsTop = railY - railH / 2, wsBot = baseY + baseH / 2;   // wainscot field, floor→rail
+    const wsY = (wsTop + wsBot) / 2, wsH = wsTop - wsBot, wsOff = 0.05, st = 0.03;
+    // Beige wainscot panel proud of the wall, seams tiled every ~1.2m.
+    const wainscot = (len, x, y, z, ry) => {
+      const g = new THREE.PlaneGeometry(len, wsH);
+      const uv = g.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * len / 1.2, uv.getY(i));
+      _push(g, wainscotMat, x, y, z, 0, ry);
+    };
+    const seg = (a, b) => {
+      if (b - a < 0.3) return;
+      const len = b - a, mid = (a + b) / 2;
+      if (runAxis === 'z') {
+        const cx = at + inward * (st + proj / 2);   // stand off the wall so the box back face isn't coincident
+        bxr(proj, railH, len, cx, railY, mid, 0, 0, doorTrimMat);
+        bxr(proj, baseH, len, cx, baseY, mid, 0, 0, doorTrimMat);
+        wainscot(len, at + inward * wsOff, wsY, mid, inward < 0 ? -Math.PI/2 : Math.PI/2);
+      } else {
+        const cz = at + inward * (st + proj / 2);
+        bxr(len, railH, proj, mid, railY, cz, 0, 0, doorTrimMat);
+        bxr(len, baseH, proj, mid, baseY, cz, 0, 0, doorTrimMat);
+        wainscot(len, mid, wsY, at + inward * wsOff, inward < 0 ? Math.PI : 0);
+      }
+    };
+    let p = from;
+    [...gaps].sort((a, b) => a.a0 - b.a0).forEach(g => { seg(p, g.a0); p = g.a1; });
+    seg(p, to);
+  };
+  trim('z', HALF_W, 0, leg2Z0, doorGapsFor('E'), -1);           // leg1 east wall
+  trim('x', leg2Z1, -HALF_W, leg2EndX, doorGapsFor('N'), -1);   // leg2 north wall
+  trim('x', 0, -HALF_W, HALF_W, [], 1);                         // spawn back wall
+  trim('z', -HALF_W, 0, leg1Len, doorGapsFor('W'), 1);          // leg1 west (behind lockers, fills gaps)
+  trim('x', leg2Z0, HALF_W, leg2EndX, doorGapsFor('S'), 1);     // leg2 south (behind lockers, fills gaps)
+
+  // Rusted conduit running along the top of the bare walls, above the doors.
+  const pipeY = 3.25;
+  bxr(0.1, 0.1, leg2Z0, HALF_W - 0.09, pipeY, leg2Z0 / 2, 0, 0, darkMat);                   // east run
+  bxr(leg2EndX + HALF_W, 0.1, 0.1, (leg2EndX - HALF_W) / 2, pipeY, leg2Z1 - 0.09, 0, 0, darkMat); // north run
+  [8, 20, 34, 44].forEach(z => bxr(0.18, 0.05, 0.05, HALF_W - 0.12, pipeY + 0.1, z, 0, 0, darkMat)); // brackets
+
+  // Focal props on the east wall's bare stretches (both in verified door-free gaps).
+  const cabMat = new THREE.MeshLambertMaterial({ color: 0x6f1512, emissive: 0x25070a, emissiveIntensity: 0.32 });
+  bxr(0.12, 0.85, 0.42, HALF_W - 0.09, 1.35, 15, 0, 0, cabMat);      // fire-extinguisher cabinet (stood off the wall)
+  pl(0.58, 0.58, HALF_W - 0.04, 2.35, 29, 0, -Math.PI / 2, clockMat); // cracked wall clock
+
+  // Extra scrawls + grime on the freshly-bared wall.
+  scrawlDecal(scene, HALF_W - 0.05, 1.6, 26, -Math.PI / 2, 2.2, randScrawl(), 0.5);
+  scrawlDecal(scene, 6, 1.7, leg2Z1 - 0.05, Math.PI, 2.2, randScrawl(), 0.5);
+  bloodDecal(scene, HALF_W - 0.05, 1.5, 18, 0, -Math.PI / 2, 1.6);
+  bloodDecal(scene, 36, 1.4, leg2Z1 - 0.05, 0, Math.PI, 1.6);
+
+  // Room-number placards above every classroom door — real + decoy alike, so the
+  // number never gives away which rooms are real. A repeating landmark over each door.
+  classrooms.forEach((c, i) => {
+    const pmat = new THREE.MeshLambertMaterial({
+      map: placardTex(String(101 + i)), emissive: 0x060608, emissiveIntensity: 0.35, side: THREE.DoubleSide });
+    const cen = (c.door[0] + c.door[1]) / 2, py = doorH + 0.16;
+    if      (c.orient === 'E') pl(0.5, 0.2, HALF_W - 0.04,  py, cen, 0, -Math.PI / 2, pmat);
+    else if (c.orient === 'W') pl(0.5, 0.2, -HALF_W + 0.04, py, cen, 0,  Math.PI / 2, pmat);
+    else if (c.orient === 'N') pl(0.5, 0.2, cen, py, leg2Z1 - 0.04, 0,  Math.PI, pmat);
+    else if (c.orient === 'S') pl(0.5, 0.2, cen, py, leg2Z0 + 0.04, 0,  0,       pmat);
+  });
+
+  // Faded posters + torn notices taped to the bare stretches.
+  pl(0.66, 0.92, HALF_W - 0.04, 1.62, 4,  0, -Math.PI / 2, posterMats[0]);   // east, near spawn
+  pl(0.66, 0.92, 32, 1.62, leg2Z1 - 0.04, 0,  Math.PI,    posterMats[1]);    // north
+  pl(0.24, 0.3,  HALF_W - 0.04, 1.9,  11, 0, -Math.PI / 2, paperMat);
+  pl(0.24, 0.3,  HALF_W - 0.04, 1.78, 33, 0, -Math.PI / 2, paperMat);
+  pl(0.24, 0.3,  18, 1.9, leg2Z1 - 0.04, 0, Math.PI, paperMat);
+
+  // A little more toppled clutter against the bare walls.
+  deskTippedW(2.2, 26, 0.4);  chairTippedW(1.5, 27, -0.6);   // east bare stretch
+  chairTippedW(16, 50.6, 0.8);                               // north bare stretch
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1421,11 +1608,13 @@ function buildVacantRoom(scene, def, i) {
 
   // Door-side wall omitted — provided by the corridor wall (avoids z-fighting).
 
-  // Doorway trim: jambs through the wall + header spanning the opening
-  const vfT = 0.12, vdCv = (dLoc[0] + dLoc[1]) / 2;
-  BX(0.32, VACANT_DOOR_H + 0.04, vfT, 0, (VACANT_DOOR_H + 0.04)/2, dLoc[0] - vfT/2, doorTrimMat);
-  BX(0.32, VACANT_DOOR_H + 0.04, vfT, 0, (VACANT_DOOR_H + 0.04)/2, dLoc[1] + vfT/2, doorTrimMat);
-  BX(0.32, 0.16, (dLoc[1] - dLoc[0]) + 2*vfT, 0, VACANT_DOOR_H + 0.1, vdCv, doorTrimMat);
+  // Doorway trim — same casing as the classroom doors (jambs + header +
+  // threshold), just no door panel filling the opening.
+  const vfT = 0.14, vdCv = (dLoc[0] + dLoc[1]) / 2, vW = dLoc[1] - dLoc[0];
+  BX(0.34, VACANT_DOOR_H + 0.04, vfT, 0, (VACANT_DOOR_H + 0.04)/2, dLoc[0] - vfT/2, doorTrimMat);
+  BX(0.34, VACANT_DOOR_H + 0.04, vfT, 0, (VACANT_DOOR_H + 0.04)/2, dLoc[1] + vfT/2, doorTrimMat);
+  BX(0.34, 0.2, vW + 2*vfT, 0, VACANT_DOOR_H + 0.12, vdCv, doorTrimMat);
+  BX(0.36, 0.03, vW, 0, 0.015, vdCv, doorTrimMat);   // threshold
 
   // Shell collision
   const r1 = rect(0, D + 0.3, -0.3, 0);    _addBox(r1.minX, r1.maxX, r1.minZ, r1.maxZ);
@@ -1468,24 +1657,26 @@ function buildVacantRoom(scene, def, i) {
 function buildExitDoor(scene, interactiveObjects) {
   const cz = (leg2Z0 + leg2Z1) / 2;      // 49
   const exDW = 2.4;
+  const exH  = 3.0;   // the grand escape door stays tall (independent of the
+                      // narrower classroom doorH)
   const d0 = cz - exDW/2, d1 = cz + exDW/2;
 
   // End wall segments around the opening
   _wallTiled(d0 - leg2Z0, hallH, leg2EndX, hallH/2, (leg2Z0 + d0)/2, 0, -Math.PI/2, roomWallMat);
   _wallTiled(leg2Z1 - d1, hallH, leg2EndX, hallH/2, (d1 + leg2Z1)/2, 0, -Math.PI/2, roomWallMat);
-  const exTopH = hallH - doorH;
+  const exTopH = hallH - exH;
   if (exTopH > 0) _wallTiled(exDW, exTopH, leg2EndX, hallH - exTopH/2, cz, 0, -Math.PI/2, roomWallMat);
   _addBox(leg2EndX, leg2EndX + 0.3, leg2Z0, leg2Z1);   // whole end wall blocks (door never opens)
 
-  bxr(0.15, doorH, 0.15, leg2EndX, doorH/2, d0 - 0.1, 0, 0, doorFrameMat);
-  bxr(0.15, doorH, 0.15, leg2EndX, doorH/2, d1 + 0.1, 0, 0, doorFrameMat);
-  bxr(exDW + 0.4, 0.15, 0.15, leg2EndX, doorH + 0.08, cz, 0, Math.PI/2, doorFrameMat);
+  bxr(0.15, exH, 0.15, leg2EndX, exH/2, d0 - 0.1, 0, 0, doorFrameMat);
+  bxr(0.15, exH, 0.15, leg2EndX, exH/2, d1 + 0.1, 0, 0, doorFrameMat);
+  bxr(exDW + 0.4, 0.15, 0.15, leg2EndX, exH + 0.08, cz, 0, Math.PI/2, doorFrameMat);
 
   const doorFill = new THREE.Mesh(
-    new THREE.PlaneGeometry(exDW, doorH),
+    new THREE.PlaneGeometry(exDW, exH),
     new THREE.MeshBasicMaterial({ color: 0x050510, transparent: true, opacity: 0.92 })
   );
-  doorFill.position.set(leg2EndX - 0.01, doorH/2, cz);
+  doorFill.position.set(leg2EndX - 0.01, exH/2, cz);
   doorFill.rotation.y = -Math.PI/2;
   scene.add(doorFill);
 
