@@ -25,7 +25,7 @@ import { initLoseCanvas, updateLoseCanvas } from './scares/lose-canvas.js';
 import { initChase, triggerChase, update as updateChase, cleanup as cleanupChase } from './scares/chase.js';
 import { preloadAssets } from './loaders/preload.js';
 import { initAuth, signUp, signIn, signOut, isLoggedIn, isAdmin, displayName, isUsernameAvailable, onSignedOut } from './net/auth.js';
-import { submitRun, fetchLeaderboard } from './net/scores.js';
+import { submitRun, fetchLeaderboard, invalidateLeaderboardCache } from './net/scores.js';
 import { startPlay, endPlay, hasActivePlay, flushAbandonBeacon, logAttempt, logEvent } from './net/analytics.js';
 import { initPerf, samplePerf, flushPerfBeacon } from './net/perf.js';
 import { mountDashboard } from './ui/dashboard.js';
@@ -1221,7 +1221,10 @@ function triggerWin({ recordRun = true } = {}) {
     // P-Learn is untimed practice — never submit it to the competitive boards.
     const rooms = bestScores.map(v => v || 0);
     const total = Math.round(rooms.reduce((s, v) => s + v, 0) / rooms.length);
-    if (!CFG.gameplay.pLearnMode) submitRun({ roomScores: rooms, totalScore: total, bestTime: elapsed });
+    if (!CFG.gameplay.pLearnMode) {
+      submitRun({ roomScores: rooms, totalScore: total, bestTime: elapsed });
+      invalidateLeaderboardCache();   // player's new score should show on next open
+    }
     logEvent('escaped', { time: elapsed, total });
     endPlay({ outcome: 'won', roomsCompleted: 3, totalScore: total, bestTime: elapsed });
   } else {

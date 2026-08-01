@@ -30,11 +30,29 @@ function weekStartISO() {
 // player while exposing only a username + one metric. Returns raw rows; the
 // caller sorts/limits per board.
 const LB_FN = { escape: 'lb_escape', speed: 'lb_speed', accuracy: 'lb_accuracy' };
-export async function fetchLeaderboard(board = 'escape', window = 'all') {
+
+// Short client-side cache so flipping tabs / reopening the board doesn't hit the
+// DB every time. Each board:window is fetched at most once per TTL; a new score
+// submission clears the cache so the player sees their result immediately.
+const _lbCache = new Map();          // 'board:window' -> { ts, data }
+const LB_TTL   = 60_000;             // 60s
+
+export function invalidateLeaderboardCache() { _lbCache.clear(); }
+
+export async function fetchLeaderboard(board = 'escape', window = 'all', { force = false } = {}) {
+  const key = `${board}:${window}`;
+  const hit = _lbCache.get(key);
+  if (!force && hit && Date.now() - hit.ts < LB_TTL) return hit.data;
+
   const p_since = window === 'week' ? weekStartISO() : null;
   const { data, error } = await supabase.rpc(LB_FN[board] ?? 'lb_escape', { p_since });
-  if (error) { console.warn(`[scores] ${board} board failed:`, error.message); return []; }
-  return data ?? [];
+  if (error) {
+    console.warn(`[scores] ${board} board failed:`, error.message);
+    return hit?.data ?? [];          // fall back to stale data on error
+  }
+  const rows = data ?? [];
+  _lbCache.set(key, { ts: Date.now(), data: rows });
+  return rows;
 }
 
 // ── Server-side dashboard aggregates (small results, correct at any scale) ─────
