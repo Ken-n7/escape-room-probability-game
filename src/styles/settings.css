@@ -783,3 +783,94 @@
   filter:url(#ctl-grunge); text-shadow:0 2px 10px rgba(0,0,0,.75);
 }
 #question-timer.low #question-timer-num { color:#ff5a5a; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEADERBOARD — reworked to match the frameless theme: floating on the blurred
+   scene, white-underlined title, brush paint-swipe tabs, clean separator rows.
+   ═════════════════════════════════════════════════════════════════════════ */
+#s-leaderboard { background:none; }
+#s-leaderboard::before {
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background:rgba(4,5,7,.55);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+}
+#leaderboard-box {
+  position:relative; z-index:1;
+  background:none; border:none; box-shadow:none; border-radius:0;
+  width:min(560px, 94vw); max-width:none;
+  /* Stable height so the box never collapses while loading then pops open —
+     the list fills the reserved space and scrolls inside it. */
+  height:min(660px, 90vh); max-height:90vh;
+  padding:clamp(10px, 2.4vh, 24px) clamp(14px, 3.2vw, 30px);
+  display:flex; flex-direction:column; text-align:center;
+}
+#leaderboard-box h2 {
+  margin:0 0 clamp(10px, 2vh, 18px); padding-bottom:clamp(6px, 1.2vh, 10px);
+  font-family:Impact, 'Arial Narrow Bold', 'Arial Black', sans-serif;
+  font-weight:800; letter-spacing:3px; text-transform:uppercase;
+  font-size:clamp(1.6rem, min(5.4vh, 8vw), 2.8rem);
+  color:#fff; text-shadow:none; border-bottom:2px solid var(--st-red);
+}
+/* Board tabs — brush paint-swipe on the active one (like the menu/settings) */
+#lb-tabs { display:flex; gap:clamp(4px, 1.6vw, 14px); justify-content:center; margin-bottom:clamp(6px, 1.4vh, 12px); }
+.lb-tab {
+  position:relative; z-index:0; flex:1 1 auto;
+  background:none; border:none; border-radius:0; cursor:pointer;
+  font-family:monospace; text-transform:uppercase; font-weight:700; letter-spacing:2px;
+  font-size:clamp(.6rem, min(1.7vh, 2.3vw), .8rem);
+  color:var(--st-dim); padding:8px 6px;
+  text-shadow:0 1px 3px rgba(0,0,0,.7);
+  transition:color .14s ease;
+}
+.lb-tab::after {
+  content:''; position:absolute; inset:0 -4px; z-index:-1;
+  background:#f2f0ea; opacity:0;
+  clip-path:polygon(2% 20%, 7% 4%, 21% 13%, 41% 3%, 63% 11%, 83% 1%, 96% 15%,
+    99% 42%, 98% 72%, 93% 94%, 77% 83%, 55% 97%, 32% 87%, 13% 98%, 4% 76%, 1% 48%);
+  transition:opacity .14s ease;
+}
+.lb-tab:hover { color:#e2e6ea; }
+.lb-tab.active { color:#16181c; text-shadow:none; background:none; border-color:transparent; }
+.lb-tab.active::after { opacity:1; }
+/* All-time / This week — plain text toggle with a white underline when active */
+#lb-window { display:flex; justify-content:center; gap:clamp(12px, 4vw, 26px); margin-bottom:clamp(10px, 2vh, 18px); }
+.lb-win {
+  background:none; border:none; border-radius:0; cursor:pointer;
+  font-family:monospace; text-transform:uppercase; letter-spacing:1px;
+  font-size:clamp(.58rem, min(1.6vh, 2.1vw), .72rem);
+  color:var(--st-dim); padding:4px 2px;
+  transition:color .14s ease;
+}
+.lb-win:hover { color:#e2e6ea; }
+.lb-win.active { color:#f2f3f5; background:none; border:none; border-bottom:1px solid var(--st-red); }
+/* List — only scroll region; rows are separators, not boxes */
+#lb-list {
+  flex:1 1 auto; overflow-y:auto; min-height:100px; margin:0;
+  padding:0 clamp(2px, 1vw, 8px);
+  scrollbar-width:thin; scrollbar-color:rgba(231,223,204,.4) transparent;
+}
+#lb-list::-webkit-scrollbar { width:6px; }
+#lb-list::-webkit-scrollbar-thumb { background:rgba(231,223,204,.4); border-radius:3px; }
+#lb-list::-webkit-scrollbar-track { background:transparent; }
+.lb-row {
+  display:grid; grid-template-columns:34px 1fr auto; gap:12px; align-items:center;
+  padding:clamp(7px, 1.4vh, 11px) 8px; margin:0; text-align:left;
+  background:none; border:none; border-radius:0;
+  border-bottom:1px solid rgba(231,223,204,.14);
+  color:#c9ced5; font-family:monospace; font-size:clamp(.78rem, min(2vh, 2.5vw), .9rem);
+}
+.lb-row .lb-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lb-row .lb-rank { color:#868c94; font-weight:bold; text-align:center; }
+.lb-row .lb-val  { color:#f2f3f5; letter-spacing:1px; }
+.lb-row.me { background:rgba(255,255,255,.07); border-bottom-color:rgba(255,255,255,.42); color:#fff; }
+.lb-row.me .lb-rank { color:#fff; }
+.lb-row.top1 .lb-rank { color:#fff; text-shadow:0 0 8px rgba(255,255,255,.6); }
+.lb-empty {
+  color:var(--st-dim); font-family:monospace; font-size:.85rem; letter-spacing:1px;
+  min-height:100%; display:flex; align-items:center; justify-content:center;
+}
+/* Rows fade in so loaded data appears smoothly instead of snapping in */
+#lb-list .lb-row { animation:lbRowIn .28s ease both; }
+@keyframes lbRowIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+/* ✕ stays the shared modal-x, pinned top-right of the frameless column */
+#leaderboard-box .modal-x { top:2px; right:2px; }
