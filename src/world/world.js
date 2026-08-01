@@ -101,17 +101,76 @@ function floorTex() {
   return t;
 }
 
-function chalkboardTex(lines) {
+function chalkboardTex(lines = []) {
   const cv = document.createElement('canvas');
   cv.width = 512; cv.height = 256;
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#152e15'; ctx.fillRect(0, 0, 512, 256);
-  ctx.fillStyle = '#2a1a0a';
+  for (let i = 0; i < 40; i++) {                                    // faint chalk-dust smudges
+    ctx.fillStyle = `rgba(210,214,196,${0.02 + Math.random() * 0.04})`;
+    ctx.beginPath(); ctx.ellipse(Math.random()*512, Math.random()*256, 20+Math.random()*40, 6+Math.random()*14, Math.random()*3, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = '#2a1a0a';                                        // wooden frame
   ctx.fillRect(0, 0, 512, 16); ctx.fillRect(0, 240, 512, 16);
   ctx.fillRect(0, 0, 16, 256); ctx.fillRect(496, 0, 16, 256);
-  ctx.fillStyle = 'rgba(225,220,200,0.85)';
-  ctx.font = 'bold 34px monospace'; ctx.textAlign = 'center';
-  lines.forEach((l, i) => ctx.fillText(l, 256, 95 + i * 50));
+
+  const ch = (a = 0.8) => `rgba(228,224,206,${a})`;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  // Legacy path: explicit lines (kept for any caller that still passes text).
+  if (lines.length) {
+    ctx.fillStyle = ch(0.85); ctx.font = 'bold 34px monospace'; ctx.textAlign = 'center';
+    lines.forEach((l, i) => ctx.fillText(l, 256, 95 + i * 50));
+    return new THREE.CanvasTexture(cv);
+  }
+
+  // Ambient probability lesson — GENERIC and identical in kind on every board
+  // (real + decoy) so nothing here distinguishes a real room. Randomised motifs
+  // add variety but never correlate with room identity or answer any question.
+  ctx.fillStyle = ch(0.85); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.font = 'italic 30px Georgia, serif';
+  ctx.fillText('P(E) = n(E) / n(S)', 40, 58);
+  ctx.strokeStyle = ch(0.35); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(40, 68); ctx.lineTo(292, 71); ctx.stroke();
+  if (Math.random() < 0.6) { ctx.font = '20px Georgia, serif'; ctx.fillStyle = ch(0.75); ctx.fillText('S = { 1, 2, 3, 4, 5, 6 }', 300, 55); }
+
+  const die = (x, y) => {
+    ctx.strokeStyle = ch(0.8); ctx.lineWidth = 2; ctx.strokeRect(x - 26, y - 26, 52, 52);
+    ctx.fillStyle = ch(0.85);
+    [[-1,-1],[1,-1],[0,0],[-1,1],[1,1]].forEach(([dx,dy]) => { ctx.beginPath(); ctx.arc(x+dx*15, y+dy*15, 3.4, 0, 7); ctx.fill(); });
+  };
+  const coin = (x, y) => {
+    ctx.strokeStyle = ch(0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 26, 0, 7); ctx.stroke();
+    ctx.fillStyle = ch(0.85); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 24px Georgia'; ctx.fillText('H', x, y);
+    ctx.font = '15px Georgia'; ctx.fillText('P = 1/2', x, y + 42);
+    ctx.textBaseline = 'alphabetic';
+  };
+  const spinner = (x, y) => {
+    ctx.strokeStyle = ch(0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 28, 0, 7); ctx.stroke();
+    for (let a = 0; a < 4; a++) { const g = a * Math.PI / 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 28*Math.cos(g), y + 28*Math.sin(g)); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 18, y - 12); ctx.stroke();
+  };
+  const tree = (x, y) => {
+    ctx.strokeStyle = ch(0.78); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x-28, y); ctx.lineTo(x+18, y-24); ctx.moveTo(x-28, y); ctx.lineTo(x+18, y+24); ctx.stroke();
+    ctx.fillStyle = ch(0.8); ctx.font = '15px Georgia'; ctx.textAlign = 'left';
+    ctx.fillText('1/2', x-18, y-14); ctx.fillText('1/2', x-18, y+22);
+  };
+  const numline = (x, y) => {
+    ctx.strokeStyle = ch(0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x-46, y); ctx.lineTo(x+46, y); ctx.stroke();
+    ctx.fillStyle = ch(0.8); ctx.font = '14px Georgia'; ctx.textAlign = 'center';
+    [[-46,'0'],[0,'1/2'],[46,'1']].forEach(([dx,t]) => { ctx.beginPath(); ctx.moveTo(x+dx, y-5); ctx.lineTo(x+dx, y+5); ctx.stroke(); ctx.fillText(t, x+dx, y+20); });
+  };
+  const fraction = (x, y) => {
+    ctx.fillStyle = ch(0.82); ctx.font = 'bold 26px Georgia'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('3/6 = 1/2', x, y); ctx.textBaseline = 'alphabetic';
+  };
+
+  const motifs = [die, coin, spinner, tree, numline, fraction];
+  for (let i = motifs.length - 1; i > 0; i--) { const j = Math.random()*(i+1)|0; [motifs[i], motifs[j]] = [motifs[j], motifs[i]]; }
+  motifs[0](150, 168);
+  motifs[1](362, 168);
   return new THREE.CanvasTexture(cv);
 }
 
