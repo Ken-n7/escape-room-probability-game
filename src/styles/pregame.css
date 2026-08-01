@@ -46,7 +46,7 @@
     #menu-content::before { white-space:nowrap; }
     /* Big painted wordmark above the buttons (the mockup's title slot). */
     #menu-content::before {
-      content:'ODDSCAPE';
+      content:'PROBXCAPE';
       color:var(--bone);
       font-family:var(--font-title);
       font-weight:400;
