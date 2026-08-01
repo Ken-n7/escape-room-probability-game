@@ -38,29 +38,29 @@ export const CFG = {
     roomW:   12,    // classroom width & depth
     roomH:   3.6,   // room height
     wallT:   0.25,  // wall thickness (visual only)
-    doorW:   2.8,   // classroom door opening
-    doorH:   3.0,
+    doorW:   1.6,   // classroom door opening — single door (was a 2.8 square)
+    doorH:   2.9,
 
     // Classrooms in walking order: 3 real levels + 2 decoys that look real.
     // idx = level index (0 Easy / 1 Moderate / 2 Hard), null = decoy.
     // Chalkboards are blank everywhere, so nothing labels a room as real.
     classrooms: [
-      { key: 'room1',  idx: 0,    orient: 'E', v0:  4, v1: 16, door: [ 6.6,  9.4] },
-      { key: 'decoy1', idx: null, orient: 'E', v0: 18, v1: 30, door: [20.6, 23.4] },
-      { key: 'room2',  idx: 1,    orient: 'E', v0: 32, v1: 44, door: [34.6, 37.4] },
-      { key: 'decoy2', idx: null, orient: 'S', v0: 17, v1: 29, door: [19.6, 22.4] },
-      { key: 'room3',  idx: 2,    orient: 'N', v0: 19, v1: 31, door: [21.6, 24.4] },
+      { key: 'room1',  idx: 0,    orient: 'E', v0:  4, v1: 16, door: [ 7.2,  8.8] },
+      { key: 'decoy1', idx: null, orient: 'E', v0: 18, v1: 30, door: [21.2, 22.8] },
+      { key: 'room2',  idx: 1,    orient: 'E', v0: 32, v1: 44, door: [35.2, 36.8] },
+      { key: 'decoy2', idx: null, orient: 'S', v0: 17, v1: 29, door: [20.2, 21.8] },
+      { key: 'room3',  idx: 2,    orient: 'N', v0: 19, v1: 31, door: [22.2, 23.8] },
     ],
 
     // Vacant abandoned rooms (open dark doorways, no doors).
     // The 'N' one at v0:-4 sits dead ahead at the corner — the black doorway
     // the player walks straight toward before the corridor bends right.
     vacants: [
-      { orient: 'W', v0:  8, v1: 16, door: [11, 13] },
-      { orient: 'W', v0: 24, v1: 32, door: [27, 29] },
-      { orient: 'N', v0: -4, v1:  4, door: [-1,  1] },
-      { orient: 'N', v0:  7, v1: 15, door: [10, 12] },
-      { orient: 'S', v0: 33, v1: 41, door: [36, 38] },
+      { orient: 'W', v0:  8, v1: 16, door: [11.2, 12.8] },
+      { orient: 'W', v0: 24, v1: 32, door: [27.2, 28.8] },
+      { orient: 'N', v0: -4, v1:  4, door: [-0.8,  0.8] },
+      { orient: 'N', v0:  7, v1: 15, door: [10.2, 11.8] },
+      { orient: 'S', v0: 33, v1: 41, door: [36.2, 37.8] },
     ],
     vacantDepth: 7,
   },
