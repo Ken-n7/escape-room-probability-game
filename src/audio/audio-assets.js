@@ -7,6 +7,11 @@ export const AUDIO_ASSETS = {
     loop: true,
     vol: 0.7,
   },
+  footstep: {
+    src: `${AUDIO_DIR}footstep_tiles.ogg`,
+    loop: false,
+    vol: 1,
+  },
   pickup: {
     src: `${AUDIO_DIR}pickup_chime.wav`,
     loop: false,
