@@ -987,6 +987,36 @@ function placardTex(label) {
   return new THREE.CanvasTexture(cv);
 }
 
+// Illuminated EXIT sign face — red plate, worn white letters. Drawn on a
+// MeshBasic material so it self-glows in the dark corridor.
+function exitSignTex() {
+  const cv = document.createElement('canvas'); cv.width = 160; cv.height = 64;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#8f1610'; x.fillRect(0, 0, 160, 64);
+  x.fillStyle = '#1a0503'; x.fillRect(0, 0, 160, 5); x.fillRect(0, 59, 160, 5);   // dark top/bottom edge
+  x.fillStyle = '#f2e9e0'; x.font = 'bold 40px Arial';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('EXIT', 80, 35);
+  return new THREE.CanvasTexture(cv);
+}
+
+// Wired safety glass for the classroom-door lites — dark glass crossed by a faint
+// diagonal wire mesh, with a slight sheen streak.
+function wireGlassTex() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#0c0e11'; c.fillRect(0, 0, 64, 64);
+  c.strokeStyle = 'rgba(120,130,140,0.26)'; c.lineWidth = 1;
+  for (let i = -64; i < 64; i += 8) {
+    c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 64, 64); c.stroke();
+    c.beginPath(); c.moveTo(i + 64, 0); c.lineTo(i, 64); c.stroke();
+  }
+  c.strokeStyle = 'rgba(200,205,210,0.10)'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(8, 0); c.lineTo(22, 64); c.stroke();
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 3);
+  return t;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CORRIDOR DRESSING — the walls without lockers (leg1-east, leg2-north) read
 //  flat, so add architectural relief (chair-rail + baseboard trim, a ceiling
@@ -1069,6 +1099,35 @@ function dressCorridors(scene) {
   // A little more toppled clutter against the bare walls.
   deskTippedW(2.2, 26, 0.4);  chairTippedW(1.5, 27, -0.6);   // east bare stretch
   chairTippedW(16, 50.6, 0.8);                               // north bare stretch
+
+  // ── School fixtures — the props that only exist in a school ─────────────────
+  // Self-lit EXIT signs (MeshBasic glows in the dark), hung near the ceiling to
+  // guide the eye toward the exit and add a dim red beat. DoubleSide = readable
+  // from either approach; a short stem ties each to the ceiling.
+  const exitMat = new THREE.MeshBasicMaterial({ map: exitSignTex(), side: THREE.DoubleSide });
+  const exitSign = (x, z, ry) => {
+    pl(0.62, 0.26, x, hallH - 0.42, z, 0, ry, exitMat);
+    bxr(0.04, 0.18, 0.04, x, hallH - 0.18, z, 0, 0, darkMat);
+  };
+  exitSign(40, (leg2Z0 + leg2Z1) / 2, Math.PI / 2);          // on the run toward the exit
+
+  // Wall-mounted water fountain on an east bare stretch (z=25 is door-free; stood
+  // off the wall so nothing bleeds into the room behind).
+  const fountainMat = new THREE.MeshLambertMaterial({ map: _metalTex, color: 0x9aa1a6, emissive: 0x0a0c0d, emissiveIntensity: 0.25 });
+  bxr(0.26, 0.52, 0.44, HALF_W - 0.16, 0.98, 25, 0, 0, fountainMat);   // body
+  bxr(0.34, 0.07, 0.50, HALF_W - 0.19, 1.22, 25, 0, 0, fountainMat);   // basin lip
+  bxr(0.05, 0.05, 0.05, HALF_W - 0.30, 1.16, 25, 0, 0, darkMat);       // bubbler
+
+  // Fire-alarm pull station — small red box near the room-1 door (z=10, door-free).
+  bxr(0.10, 0.20, 0.13, HALF_W - 0.08, 1.45, 10, 0, 0, cabMat);
+
+  // Bulletin board with pinned flyers on a north bare stretch (x∈[12,22] is clear).
+  const corkMat = new THREE.MeshLambertMaterial({ color: 0x6b5836, emissive: 0x0e0b06, emissiveIntensity: 0.3 });
+  bxr(1.50, 1.06, 0.06, 16, 1.65, leg2Z1 - 0.05, 0, 0, doorFrameMat);   // frame (stood off wall)
+  pl(1.36, 0.92, 16, 1.65, leg2Z1 - 0.09, 0, Math.PI, corkMat);         // cork face
+  pl(0.34, 0.44, 15.5, 1.80, leg2Z1 - 0.11, 0,  Math.PI, posterMats[2]); // flyers, proud + tilted
+  pl(0.30, 0.40, 16.4, 1.74, leg2Z1 - 0.11, 0.06, Math.PI, paperMat);
+  pl(0.28, 0.36, 16.0, 1.46, leg2Z1 - 0.11, -0.05, Math.PI, paperMat);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1465,6 +1524,9 @@ export function relocateNote(roomIdx, noteIdx, px, pz, minDist = 4.5) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export const DOOR_OPEN_ANGLE = 1.92;   // ~110°, swings into the room
 
+const doorLiteMat = new THREE.MeshLambertMaterial({ map: wireGlassTex(), emissive: 0x0a0d10, emissiveIntensity: 0.3 });
+const kickMat     = new THREE.MeshLambertMaterial({ map: _metalTex, color: 0x8a8f94, emissive: 0x090a0b, emissiveIntensity: 0.28 });
+
 function buildDoor(scene, def, doorIndex, interactiveObjects) {
   const { f, P, dLoc, rect } = frameHelpers(def);
   const w = dLoc[1] - dLoc[0];
@@ -1485,18 +1547,30 @@ function buildDoor(scene, def, doorIndex, interactiveObjects) {
   group.add(panel);
   interactiveObjects.push(panel);
 
-  // Round knob + backplate on both faces, latch side
+  // Lever handle + backplate on both faces, latch side
   const knobMat  = new THREE.MeshLambertMaterial({ color: 0x5f5438, emissive: 0x1c180f, emissiveIntensity: 0.45 });   // tarnished brass
   const plateGeo = new THREE.BoxGeometry(0.015, 0.24, 0.08);
-  const knobGeo  = new THREE.SphereGeometry(0.045, 10, 8);
+  const leverGeo = new THREE.BoxGeometry(0.05, 0.035, 0.17);
   [-1, 1].forEach(side => {
     const plate = new THREE.Mesh(plateGeo, darkMat);
     plate.position.set(side * 0.052, 1.05, w - 0.32);
     group.add(plate);
-    const knob = new THREE.Mesh(knobGeo, knobMat);
-    knob.position.set(side * 0.1, 1.05, w - 0.32);
-    knob.scale.set(1, 1, 1.25);
-    group.add(knob);
+    const lever = new THREE.Mesh(leverGeo, knobMat);           // lever bar pointing toward the hinge
+    lever.position.set(side * 0.085, 1.05, w - 0.32 - 0.06);
+    group.add(lever);
+  });
+
+  // Wire-glass lite window (upper door) + steel kick plate (bottom), on both faces.
+  const litW = 0.24, litH = 0.85, litY = doorH * 0.62;
+  const kickW = w - 0.14, kickH = 0.26, kickY = 0.16;
+  [-1, 1].forEach(side => {
+    const ry = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(litW, litH), doorLiteMat);
+    glass.position.set(side * 0.047, litY, w / 2); glass.rotation.y = ry;
+    group.add(glass);
+    const kick = new THREE.Mesh(new THREE.PlaneGeometry(kickW, kickH), kickMat);
+    kick.position.set(side * 0.047, kickY, w / 2); kick.rotation.y = ry;
+    group.add(kick);
   });
 
   scene.add(group);
