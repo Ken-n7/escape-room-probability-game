@@ -865,6 +865,9 @@ const _wallTiled = (w, h, x, y, z, rx, ry, mat) => {
 //  CORRIDORS — two legs + corner, walls segmented around door openings
 // ═══════════════════════════════════════════════════════════════════════════════
 const _collision = [];
+// Same array reference for the whole session (reset via .length = 0, never
+// reassigned), so importers like the scare system can hold onto it.
+export { _collision as collisionBoxes };
 // Collision boxes now carry a `top` (obstacle top height) so the player can
 // step/jump over low things and only tall things block. Walls default to a big
 // top (always block); furniture passes its real height via extra.top.

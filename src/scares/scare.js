@@ -3,7 +3,7 @@ import { makeGLTFLoader } from '../loaders/gltf-loader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { gState, look, keys, S } from '../core/game-state.js';
 import { scene, camera, renderer } from '../core/renderer.js';
-import { flickerLights } from '../world/world.js';
+import { flickerLights, collisionBoxes } from '../world/world.js';
 import { AudioManager } from '../audio/audio.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -215,17 +215,44 @@ export function triggerBlackout() {
   });
 }
 
+// March the ray (ox,oz)+t·(dx,dz) against the tall wall boxes and return the
+// distance to the nearest one ahead (Infinity if clear). Only real walls block
+// placement — low furniture (short `top`) is ignored so she can loom behind a desk.
+function _forwardWallDist(ox, oz, dx, dz) {
+  let best = Infinity;
+  for (const b of collisionBoxes) {
+    if ((b.top ?? 5) < 2) continue;                        // skip short obstacles
+    let tmin = -Infinity, tmax = Infinity;
+    if (Math.abs(dx) < 1e-8) { if (ox < b.minX || ox > b.maxX) continue; }
+    else { let t1 = (b.minX - ox) / dx, t2 = (b.maxX - ox) / dx; if (t1 > t2) [t1, t2] = [t2, t1]; tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2); }
+    if (Math.abs(dz) < 1e-8) { if (oz < b.minZ || oz > b.maxZ) continue; }
+    else { let t1 = (b.minZ - oz) / dz, t2 = (b.maxZ - oz) / dz; if (t1 > t2) [t1, t2] = [t2, t1]; tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2); }
+    if (tmax < Math.max(tmin, 0)) continue;                // no hit ahead
+    const t = tmin > 0 ? tmin : tmax;
+    if (t < best) best = t;
+  }
+  return best;
+}
+
+// Returns false if there's no room to show her un-clipped (caller falls back to
+// a noise). Otherwise she's placed this side of the nearest wall.
 function _spawnScare(turnDir) {
-  if (_state.sprite || _blackout.active) return;
-  if (!_gltf) { _loadModel(() => {}); return; }   // not preloaded yet — skip this one
+  if (_state.sprite || _blackout.active) return false;
+  if (!_gltf) { _loadModel(() => {}); return false; }   // not preloaded yet — skip this one
   _buildGhost();
-  if (!_ghost) return;
+  if (!_ghost) return false;
 
   const sinY = Math.sin(look.yaw), cosY = Math.cos(look.yaw);
-  const dist    = 3.2;
+  const fx = -sinY, fz = -cosY;                    // camera forward (xz)
+  const CLEARANCE = 0.6, MIN_DIST = 1.15;          // keep her body off the wall
+  let dist = 3.2;
+  const wall = _forwardWallDist(camera.position.x, camera.position.z, fx, fz);
+  if (wall - CLEARANCE < dist) dist = wall - CLEARANCE;
+  if (dist < MIN_DIST) return false;               // too cramped → let the caller make noise instead
+
   const lateral = -turnDir * 1.0;
-  const px = camera.position.x + (-sinY * dist) + (cosY  * lateral);
-  const pz = camera.position.z + (-cosY * dist) + (-sinY * lateral);
+  const px = camera.position.x + (fx * dist) + (cosY  * lateral);
+  const pz = camera.position.z + (fz * dist) + (-sinY * lateral);
 
   _ghost.position.set(px, Y_OFFSET, pz);
   _ghost.rotation.y = Math.atan2(camera.position.x - px, camera.position.z - pz);
@@ -262,6 +289,7 @@ function _spawnScare(turnDir) {
     }
   };
   _state.fadeTimer = setTimeout(tick, 16);
+  return true;
 }
 
 function _playRandomNoise() {
@@ -270,7 +298,7 @@ function _playRandomNoise() {
 
 function _resolveTensionTrigger(turnDir) {
   const roll = Math.random();
-  if (roll < VISUAL_CHANCE)                         _spawnScare(turnDir);
+  if (roll < VISUAL_CHANCE)                         { if (!_spawnScare(turnDir)) _playRandomNoise(); }
   else if (roll < VISUAL_CHANCE + BLACKOUT_CHANCE)  triggerBlackout();
   else                                              _playRandomNoise();
   _state.cooldown  = _cooldownRng();
