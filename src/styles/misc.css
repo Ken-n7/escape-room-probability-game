@@ -114,7 +114,7 @@
     }
 
     /* Auth-state toggles: what the menu shows before vs after sign-in.
-       Logged out keeps the ODDSCAPE title but swaps the game buttons for auth. */
+       Logged out keeps the PROBXCAPE title but swaps the game buttons for auth. */
     #s-menu[data-authed="false"] #btn-play,
     #s-menu[data-authed="false"] #btn-plearn,
     #s-menu[data-authed="false"] #btn-leaderboard,

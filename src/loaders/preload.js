@@ -13,7 +13,7 @@ const MODELS = [
 
 const FLAVOR_TEXTS = [
   'Scanning encrypted case files...',
-  'The ghost student never left Oddscape...',
+  'The ghost student never left ProbXcape...',
   'Something is already inside.',
   'Initializing probability engine...',
   'Entity detected in east corridor.',
