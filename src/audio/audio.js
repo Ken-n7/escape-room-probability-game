@@ -17,6 +17,7 @@ const SOUNDS = AUDIO_ASSETS;
 // ── Volume categories (Settings sliders, spec 6.3) ─────────────────────────────
 const SOUND_CATEGORY = {
   ambient:            'music',
+  footstep:           'footsteps',
   jumpscare:          'jumpscares',
   ghostScream:        'jumpscares',
   randomScareWhisper: 'jumpscares',
@@ -36,7 +37,7 @@ const SOUND_CATEGORY = {
   ambientSwell:       'music',
   // uiClick / pageTurn / pickup / win stay unscaled
 };
-const _catVols = { music: 1, jumpscares: 1 };
+const _catVols = { music: 1, footsteps: 1, jumpscares: 1 };
 const _catOf   = name => SOUND_CATEGORY[name] || null;
 const _catVol  = name => { const c = _catOf(name); return c ? _catVols[c] : 1; };
 const _rawTargets = {};   // last requested (pre-category) volume per loop sound
@@ -179,7 +180,7 @@ export const AudioManager = {
 
   /**
    * Set a category volume (0–1) from the Settings sliders.
-   * Categories: 'music' (background drone), 'jumpscares'
+   * Categories: 'music' (background drone), 'footsteps', 'jumpscares'
    * (scare stings, screams, whispers, tension breathing).
    */
   setCategoryVolume(cat, vol) {
