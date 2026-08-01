@@ -125,6 +125,10 @@
   transition:background .14s, color .14s;
 }
 #s-settings #btn-save-name:hover { background:var(--st-red); color:#0a0b0d; }
+/* One-time rename already spent — greyed but still clickable (shows the message) */
+#s-settings #settings-name.is-locked,
+#s-settings #btn-save-name.is-locked { opacity:.45; cursor:not-allowed; }
+#s-settings #btn-save-name.is-locked:hover { background:none; color:var(--st-red); }
 
 /* Scores */
 #s-settings #settings-scores {

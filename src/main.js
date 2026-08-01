@@ -619,11 +619,9 @@ function openSettings(from = 'menu') {
   settingsFrom = from;
   $('settings-name').value = playerName;
   $('settings-saved').textContent = '';
-  // A signed-in user gets one name change only — lock the field once it's used.
-  const locked = isLoggedIn() && usernameLocked();
-  $('settings-name').disabled = locked;
-  $('btn-save-name').disabled = locked;
-  if (locked) { $('settings-saved').style.color = ''; $('settings-saved').textContent = 'Name can only be changed once — already used.'; }
+  // A signed-in user gets one name change only. Show the locked style; the
+  // "already used" message appears only when they try to interact.
+  applyNameLock(isLoggedIn() && usernameLocked());
   updateSensitivityUI();
   updateBrightnessUI();
   updateVolumeUI();
@@ -1832,48 +1830,76 @@ $('btn-code-cancel').onclick   = () => {
   lockPointer();
 };
 $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-code-submit').click(); });
-let _nameBusy = false;
-$('btn-save-name').onclick = async () => {
-  const n = $('settings-name').value.trim();
+// Locked style (used once, when a signed-in user has spent their one rename).
+// Kept interactive (readOnly, not disabled) so clicks/focus still fire and can
+// surface the "already used" message.
+function applyNameLock(locked) {
+  $('settings-name').readOnly = locked;
+  $('settings-name').classList.toggle('is-locked', locked);
+  $('btn-save-name').classList.toggle('is-locked', locked);
+}
+let _nameMsgTimer = null;
+function showNameLockedMsg() {
   const saved = $('settings-saved');
-  if (!n || _nameBusy) return;
-  const ok = (msg) => { saved.style.color = ''; saved.textContent = msg; setTimeout(() => { saved.textContent = ''; }, 1800); };
-  const err = (msg) => { saved.style.color = '#ff8b90'; saved.textContent = msg; };
+  saved.style.color = '#ff8b90';
+  saved.textContent = 'You already used your one name change.';
+  clearTimeout(_nameMsgTimer);
+  _nameMsgTimer = setTimeout(() => { saved.textContent = ''; }, 4000);
+}
+// Interacting with the locked field/button explains why nothing happens.
+const _nameLocked = () => isLoggedIn() && usernameLocked();
+$('settings-name').addEventListener('pointerdown', () => { if (_nameLocked()) showNameLockedMsg(); });
 
-  // Guest (not signed in): local display name only — nothing to sync.
-  if (!isLoggedIn()) {
-    playerName = n; persistSave(); updateMenuName();
-    elHudPlayer.textContent = playerName;
-    return ok('✓ Saved');
-  }
+const _nameSaved = (msg) => { const s = $('settings-saved'); s.style.color = ''; s.textContent = msg; setTimeout(() => { s.textContent = ''; }, 1800); };
+const _nameErr   = (msg) => { const s = $('settings-saved'); s.style.color = '#ff8b90'; s.textContent = msg; };
 
-  // Signed in: validate + persist to the account so it also shows on the leaderboard.
-  if (!USERNAME_RE.test(n)) return err('3–20 chars: letters, numbers, spaces, _ or -.');
-  if (n === displayName()) return;   // unchanged
-
+// Persist a signed-in user's new name to their account (leaderboard included).
+async function persistNameChange(n) {
+  if (_nameBusy) return;
   _nameBusy = true;
   const btn = $('btn-save-name'); btn.disabled = true;
-  saved.style.color = ''; saved.textContent = 'Saving…';
+  const s = $('settings-saved'); s.style.color = ''; s.textContent = 'Saving…';
   try {
     await updateUsername(n);
     playerName = displayName(); persistSave(); updateMenuName();
     elHudPlayer.textContent = playerName;
     invalidateLeaderboardCache();     // so the leaderboard shows the new name next open
-    ok('✓ Saved');
+    _nameSaved('✓ Saved');
   } catch (e) {
     const m = (e?.message || '').toLowerCase();
-    if (m.includes('username_already_changed') || m.includes('already changed')) err('You can only change your name once.');
-    else if (m.includes('duplicate') || m.includes('unique')) err('That name is already taken — pick another.');
-    else if (m.includes('violates') || m.includes('check') || m.includes('constraint')) err('3–20 chars: letters, numbers, spaces, _ or -.');
-    else if (m.includes('row-level') || m.includes('policy')) err('Renaming isn\'t enabled yet — the profiles update policy is missing.');
-    else err('Could not save name. Try again.');
+    if (m.includes('username_already_changed') || m.includes('already changed')) _nameErr('You can only change your name once.');
+    else if (m.includes('duplicate') || m.includes('unique')) _nameErr('That name is already taken — pick another.');
+    else if (m.includes('violates') || m.includes('check') || m.includes('constraint')) _nameErr('3–20 chars: letters, numbers, spaces, _ or -.');
+    else if (m.includes('row-level') || m.includes('policy')) _nameErr('Renaming isn\'t enabled yet — the profiles update policy is missing.');
+    else _nameErr('Could not save name. Try again.');
   } finally {
     // After a successful change the profile flag flips, so this re-locks the field.
-    _nameBusy = false;
-    const locked = usernameLocked();
-    btn.disabled = locked;
-    $('settings-name').disabled = locked;
+    _nameBusy = false; btn.disabled = false;
+    applyNameLock(usernameLocked());
   }
+}
+
+let _nameBusy = false;
+$('btn-save-name').onclick = () => {
+  if (_nameLocked()) { showNameLockedMsg(); return; }
+  const n = $('settings-name').value.trim();
+  if (!n || _nameBusy) return;
+
+  // Guest (not signed in): local display name only — no account sync, no confirm.
+  if (!isLoggedIn()) {
+    playerName = n; persistSave(); updateMenuName();
+    elHudPlayer.textContent = playerName;
+    return _nameSaved('✓ Saved');
+  }
+
+  // Signed in: validate, then confirm — it's a one-time action.
+  if (!USERNAME_RE.test(n)) return _nameErr('3–20 chars: letters, numbers, spaces, _ or -.');
+  if (n === displayName()) return;   // unchanged
+  openConfirm({
+    text: `Change your name to "${n}"? You can only change your name once — this can't be undone.`,
+    okLabel: 'Change Name',
+    onConfirm: () => persistNameChange(n),
+  });
 };
 $('btn-reset-progress').onclick = () => openConfirm({
   text: 'Reset all progress and scores? This cannot be undone.',
