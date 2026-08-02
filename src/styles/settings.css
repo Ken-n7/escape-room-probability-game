@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    SETTINGS — tabbed layout (VIDEO / AUDIO / CONTROLS / GAME) over the blurred
    game. Loaded LAST so it overrides the older amber #settings-box rules.
-   Accent colour is a placeholder red (--st-red) — swap later for the real theme.
+   Accent colour --st-red is the white theme accent (kept its old name so the
+   many existing var(--st-red) usages didn't all need renaming).
    ═══════════════════════════════════════════════════════════════════════════ */
 :root { --st-red:#f2f3f5; --st-red-hi:#ffffff; --st-ink:#c9ced5; --st-dim:#868c94; }
 

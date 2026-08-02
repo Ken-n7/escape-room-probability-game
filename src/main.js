@@ -711,7 +711,7 @@ let _questionArmTimer     = null;
 let _questionInputReadyAt = 0;
 const QUESTION_ARM_MS     = 700;
 
-// ── Per-question countdown (researchers' req: 15s once answering begins) ──────
+// ── Per-question countdown (per-level: 15/25/30s by difficulty, once answering begins) ──
 let _countdownTimer    = null;
 let _countdownDeadline = 0;
 
@@ -1009,7 +1009,7 @@ function handleScaffoldTap(valStr, btn) {
         if (gState.current !== S.QUESTION) return;
         renderScaffoldOptions(q);
         document.querySelectorAll('#scaffold-options .choice-btn').forEach(b => { b.disabled = false; });
-        startQuestionCountdown(); // fresh 15s for the next blank
+        startQuestionCountdown(); // fresh per-level timer for the next blank
         _attemptStartAt = performance.now();
         _questionAdvanceTimer = null;
       }, 500);
@@ -1117,7 +1117,7 @@ function penalizeWrong() {
     }
     _wrongResetTimer = null;
   }, 700);
-  startQuestionCountdown(); // fresh 15s for the retry
+  startQuestionCountdown(); // fresh per-level timer for the retry
 }
 
 function calcScore(roomIdx) {

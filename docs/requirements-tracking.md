@@ -1,9 +1,10 @@
-# Requirements Tracking — Escape Room Probability Game
+# Requirements Tracking — ProbXcape (Escape Room · Simple Probability)
 
 Tracks the researchers' requirements ("ESCAPE ROOM GAME — General Suggestion and
 Recommendations of the Researchers" PDF + Canva prototype) against the current build.
 
-**Last audited:** 2026-07-18 (`main` @ merge of `feat/loading-screen`)
+**Last audited:** 2026-08-02 (`main`). Game since renamed **Oddscape → ProbXcape**;
+a Supabase backend was added, so §4 (accounts/monitoring) is now fully implemented.
 
 **Legend:**
 - ✅ Implemented
@@ -29,7 +30,7 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 |---|-------------|--------|-------|
 | 2.1 | Exactly 5 problems per level | ✅ | 5 questions per room ([questions.js](../src/data/questions.js)), order shuffled each run. |
 | 2.2 | If time runs out, player restarts the level with a *different* problem | ✅ | On timeout the room resets to Q1 and its 5 problems are re-drawn from the full bank. An in-modal "TIME'S UP" notice shows, then the player re-examines the note to start over. |
-| 2.3 | 15-second answer time limit — starts only when the player begins answering, not while browsing/roaming | ✅ | Countdown bar + seconds in the question modal; starts when the question opens (roaming untimed), resets to 15s on each new question and each wrong-answer retry. P-LEARN mode is untimed. Limit configurable via `CFG.gameplay.answerTimeSeconds`. **Known accepted behavior:** closing the modal cancels the timer (browsing is untimed per spec), so a player can dodge a near-timeout by exiting — flag to researchers if this matters. |
+| 2.3 | Answer time limit — starts only when the player begins answering, not while browsing/roaming | ✅ | Countdown number in the question modal; starts when the question opens (roaming untimed), resets on each new question and each wrong-answer retry. P-LEARN mode is untimed. **Now per-level:** Easy 15s / Moderate 25s / Hard 30s via `CFG.gameplay.answerTimeSeconds = [15, 25, 30]` (was a flat 15s). **Known accepted behavior:** closing the modal cancels the timer (browsing is untimed per spec), so a player can dodge a near-timeout by exiting — flag to researchers if this matters. |
 | 2.4 | Player roams the room to find questions/problems | ✅ | 5 note papers per room at scattered spots: teacher's desk, two student desks, bookshelf side, back wall by the exit sign ([world.js](../src/world/world.js) `noteSpots`). (Container search was built 2026-07-19 and reverted the same day — owner preferred the visible notes; see changelog.) |
 | 2.5 | Questions are NOT continuous — after answering problem 1, the player must find problem 2 elsewhere in the room | ✅ | One question per note; only the next unsolved note is visible/interactable. After a correct answer the modal shows "Find the next note", closes, and the next note appears elsewhere. Timeout resets the hunt to note 1 with fresh problems. |
 | 2.6 | Wrong-answer consequences | ✅ | (Not in PDF, but present) 5 wrong answers per room trigger a chase; caught = lose. Fear staging escalates fog/vignette/audio. |
@@ -50,9 +51,9 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 4.1 | Login/register so players can edit profile and save achievements to an account | ❌ | No backend. Progress (name, best scores, best time) saved to browser `localStorage` only. |
-| 4.2 | Researchers can view/monitor player achievements | ❌ | Nothing is sent anywhere; data lives on each player's device. |
-| 4.3 | Player can change nickname only once | ❌ | Name is editable without limit in Settings. |
+| 4.1 | Login/register so players can edit profile and save achievements to an account | ✅ | **Supabase backend** ([auth.js](../src/net/auth.js), [supabase.js](../src/net/supabase.js)). Email + password sign-up/sign-in with a unique display name; themed in-game login. **Forgot-password** flow: reset email (custom SMTP via Brevo) → recovery session → set new password. Runs/scores/best times persist to the DB per account (still mirrored to `localStorage` for offline/guest play). |
+| 4.2 | Researchers can view/monitor player achievements | ✅ | Admin-only **dashboard** ([dashboard.js](../src/ui/dashboard.js)) over Supabase: per-run scores, accuracy, per-item/behavior stats, and event/attempt logs (`runs`, `plays`, `question_attempts`, `events` tables). Public **leaderboards** (escape score / fastest time / accuracy) via RPCs. `role='admin'` gates the dashboard; RLS restricts each player to their own rows. |
+| 4.3 | Player can change nickname only once | ✅ | Enforced **server-side**: `profiles.username_changed` flag + a BEFORE-UPDATE trigger that rejects a second change ([schema.sql](../supabase/schema.sql)). Settings confirms the one-time action, then greys/locks the field; interacting shows "already used your one name change". |
 
 ## 5. P-Learn Feature
 
@@ -65,7 +66,7 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 6.1 | Player Profile: enter/edit name | ✅ | Name field in Settings, persisted, shown in HUD and menu. |
+| 6.1 | Player Profile: enter/edit name | ✅ | Name field in Settings, shown in HUD and menu. Signed-in: saves to the account (reflected on the leaderboard) with a confirm dialog and the **one-time** limit (4.3); guest: local-only. |
 | 6.2 | Reset progress with confirmation prompt | ✅ | "Reset all progress and scores?" confirm; clears best scores/time. |
 | 6.3 | Sound sensitivity controls for background music, footsteps, and jumpscare volumes | ✅ | Three Settings sliders (Music / Footsteps / Jumpscares, 0–100%) mapped to sound categories in [audio.js](../src/audio/audio.js) (`setCategoryVolume`). Jumpscare category covers stings, screams, whispers, and the tension breathing loop. Values persist in the save and apply live, with a throttled audible preview while dragging. |
 
@@ -87,7 +88,11 @@ Recommendations of the Researchers" PDF + Canva prototype) against the current b
 ## Summary
 
 **Fully implemented:** 5 problems per room · roam-and-interact gameplay · jumpscares/chase/lose ·
-P-Learn lessons · name editing · reset progress · ready screen · About · win/lose/best-time.
+P-Learn lessons · reset progress · ready screen · About · win/lose/best-time · **accounts
+(login/register, forgot-password), account-synced scores, admin monitoring dashboard,
+leaderboards, one-time nickname change** (§4).
+
+**No known open requirements.** Every item in §§1–7 is ✅ or a settled 🟡/decision.
 
 **Settled decisions:**
 
@@ -116,7 +121,10 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
    verbatim; Example 3's PDF errors corrected and flagged (5.1 ❓).
 8. ~~**Sound volume settings (6.3)**~~ ✅ Done 2026-07-18 — Music / Footsteps / Jumpscares
    sliders in Settings, persisted, applied live.
-9. **Accounts + researcher monitoring (4.1–4.3)** — the only backend item; scope TBD.
+9. ~~**Accounts + researcher monitoring (4.1–4.3)**~~ ✅ Done 2026-07/08 — Supabase
+   backend: login/register + forgot-password, account-synced runs/scores, admin
+   dashboard + leaderboards for monitoring, and a server-enforced one-time nickname
+   change.
 
 ## Changelog
 
@@ -180,3 +188,27 @@ P-Learn lessons · name editing · reset progress · ready screen · About · wi
   visible note papers on desks/tables — one note per question, only the next one
   visible. The L-shaped layout, decoys, blank chalkboards, and every other system
   remain in place.
+- 2026-07 — **Supabase backend (closes 4.1–4.3):** email/password accounts with unique
+  display names, themed in-game login, and account-synced runs/scores/best times. Admin
+  dashboard (per-run scores, accuracy, item/behavior stats, event & attempt logs) and
+  public leaderboards (escape score / fastest time / accuracy) for researcher monitoring.
+  RLS restricts each player to their own rows; `role='admin'` gates the dashboard.
+- 2026-08 — **Forgot-password flow:** reset email → recovery session → set new password,
+  with a 60s resend cooldown. Delivery via custom SMTP (Brevo free tier) since the
+  built-in Supabase sender is rate-limited (2/hr).
+- 2026-08 — **One-time nickname change (4.3):** server-enforced via a `username_changed`
+  flag + BEFORE-UPDATE trigger. Settings confirms the action, then locks the field.
+- 2026-08 — **Per-level answer timers (2.3):** Easy 15s / Moderate 25s / Hard 30s (was a
+  flat 15s).
+- 2026-08 — **School interior reskin:** two-tone walls (painted + beige wainscot),
+  suspended acoustic-tile ceiling, VCT floor with worn walk-path, and school fixtures
+  (EXIT sign, water fountain, fire-alarm pull, bulletin board). Classroom doors gained a
+  wire-glass lite, kick plate, and lever handle; door openings resized to a single
+  rectangular door and vacant doorways matched to the classroom proportions.
+- 2026-08 — Chalkboards now show a **generic probability lesson** (formula + random
+  doodles), the same kind on every board so real rooms and decoys stay indistinguishable.
+- 2026-08 — Ghost apparition no longer spawns **inside walls** — placement is clamped to
+  the nearest wall ahead, and falls back to a noise if there's no room to show her whole.
+- 2026-08 — Removed anonymous FPS/perf telemetry (unused, unbounded `perf_samples` table
+  dropped). Renamed the game **Oddscape → ProbXcape** and set the escape-room logo as the
+  app icon. Deleted the superseded `design-exploration-rooms-and-hunting.md` design doc.

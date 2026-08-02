@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CONFIG — world dimensions and game settings.
 //
-//  L-SHAPED LAYOUT (design doc: docs/design-exploration-rooms-and-hunting.md)
+//  L-SHAPED LAYOUT
 //
 //  Leg 1: corridor x ∈ [-3, 3], z ∈ [0, 52]   (spawn at z≈2, walking +z)
 //  Leg 2: corridor x ∈ [3, 44], z ∈ [46, 52]  (corner at x∈[-3,3] z∈[46,52])
@@ -43,7 +43,8 @@ export const CFG = {
 
     // Classrooms in walking order: 3 real levels + 2 decoys that look real.
     // idx = level index (0 Easy / 1 Moderate / 2 Hard), null = decoy.
-    // Chalkboards are blank everywhere, so nothing labels a room as real.
+    // Chalkboards show only generic probability doodles (same kind everywhere),
+    // so nothing labels a room as real.
     classrooms: [
       { key: 'room1',  idx: 0,    orient: 'E', v0:  4, v1: 16, door: [ 7.2,  8.8] },
       { key: 'decoy1', idx: null, orient: 'E', v0: 18, v1: 30, door: [21.2, 22.8] },
