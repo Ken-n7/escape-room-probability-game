@@ -1193,9 +1193,9 @@ function dressCorridors(scene) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  CLASSROOMS — real levels AND decoys share this builder. Decoys get a lying
-//  chalkboard label, desks turned to face the back wall, a faint scrawl, and
-//  no notes. Everything is built in the room's local frame.
+//  CLASSROOMS — real levels AND decoys share this builder. Decoys get desks
+//  turned to face the back wall, a faint scrawl, and no notes. Everything is
+//  built in the room's local frame.
 // ═══════════════════════════════════════════════════════════════════════════════
 function buildClassroom(scene, def, interactiveObjects, containers) {
   const { f, W, P, dLoc, rect, BX, PL } = frameHelpers(def);
@@ -1227,8 +1227,9 @@ function buildClassroom(scene, def, interactiveObjects, containers) {
   const r2 = rect(0, D + 0.3, W, W + 0.3); _addBox(r2.minX, r2.maxX, r2.minZ, r2.maxZ);
   const r3 = rect(D, D + 0.3, 0, W);       _addBox(r3.minX, r3.maxX, r3.minZ, r3.maxZ);
 
-  // Chalkboard — blank in every classroom (owner request 2026-07-19): no room
-  // labels means real rooms and decoys are indistinguishable at a glance.
+  // Chalkboard — a generic probability lesson (formula + random doodles), the
+  // same KIND on every board so real rooms and decoys stay indistinguishable at a
+  // glance. No room-identifying label (owner request 2026-07-19).
   const cbW = 4.5, cbH = 2.0;
   const cbPos = P(D - 0.12, W/2);
   const cbMesh = new THREE.Mesh(
