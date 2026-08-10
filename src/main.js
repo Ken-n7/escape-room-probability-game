@@ -120,6 +120,7 @@ function normalizeSensitivity(value) {
 
 let _save      = loadSave();
 let playerName = _save.playerName || 'Student';
+let guestActive = false;   // "Play as Guest" chosen — unlocks menu, no account
 let bestScores = _save.bestScores || [null, null, null];
 let bestTime   = _save.bestTime   || null;
 setLookSensitivity(normalizeSensitivity(_save.lookSensitivity));
@@ -149,6 +150,7 @@ Object.entries(soundVols).forEach(([cat, v]) => {
 });
 
 function persistSave() {
+  if (guestActive) return;   // guest = ephemeral: never touch localStorage, wiped on leave
   writeSave({ playerName, bestScores, bestTime, lookSensitivity, soundVols, brightness });
 }
 
@@ -619,6 +621,8 @@ function openSettings(from = 'menu') {
   settingsFrom = from;
   $('settings-name').value = playerName;
   $('settings-saved').textContent = '';
+  // Renaming needs an account — hide the whole row for guests.
+  $('settings-name-row').hidden = !isLoggedIn();
   // A signed-in user gets one name change only. Show the locked style; the
   // "already used" message appears only when they try to interact.
   applyNameLock(isLoggedIn() && usernameLocked());
@@ -629,6 +633,8 @@ function openSettings(from = 'menu') {
   updateSettingsFullscreenBtn();
   updateSettingsScores();
   $('btn-settings-logout').hidden = !isLoggedIn();   // account action, only when signed in
+  $('btn-settings-login').hidden  = isLoggedIn();    // guests: a way back to the auth screen
+  $('btn-settings-signup').hidden = isLoggedIn();
   showSettingsTab('display');        // always open on the first tab
   showScreen('settings');
 }
@@ -1792,6 +1798,11 @@ document.addEventListener('click', e => {
 
 // ── Button wiring ─────────────────────────────────────────────────────────────
 $('btn-play').onclick       = () => { CFG.gameplay.pLearnMode = false; goToStory(); };
+$('btn-menu-guest').onclick = () => {
+  guestActive = true; playerName = 'Guest';
+  bestScores = [null, null, null]; bestTime = null;   // guest starts fresh (session only)
+  applyMenuAuthState();
+};
 $('btn-plearn').onclick     = goToPlearn;
 $('btn-yes').onclick        = () => startGame({ transition: true });
 $('btn-no').onclick         = () => window.goHome();
@@ -2049,53 +2060,6 @@ if (import.meta.env.DEV) {
   window.__devWin     = triggerDevWin;
   // Render the dashboard regardless of admin role (dev only) for UI testing.
   window.__openDash   = () => { showScreen('admin'); return mountDashboard({ onBack: () => showScreen('menu') }); };
-
-  // ── Spector.js GPU frame profiler (opt-in: visit with ?spector) ──────────────
-  // Lazy-loaded, ONE-SHOT only. We deliberately do NOT call displayUI() — its
-  // toolbar does a per-frame readPixels that stalls weak phones to a crawl (looks
-  // like a stuck loading screen). Instead: a big touch button captures a single
-  // frame, and the draw-call summary renders ON-SCREEN so it's readable/shareable
-  // straight from the phone (no console needed).
-  if (new URLSearchParams(location.search).has('spector')) {
-    import('spectorjs').then(mod => {
-      const SPECTOR = window.SPECTOR || mod?.default || mod;
-      const spector = new SPECTOR.Spector();
-
-      const panel = document.createElement('div');
-      panel.style.cssText = 'position:fixed;left:8px;right:8px;bottom:64px;z-index:100000;max-height:46vh;'
-        + 'overflow:auto;padding:10px 12px;background:rgba(0,0,0,.86);color:#9effa0;'
-        + 'font:600 12px/1.5 monospace;border-radius:8px;white-space:pre-wrap;display:none;';
-      const btn = document.createElement('button');
-      btn.textContent = '📷 Capture GPU frame';
-      btn.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:100001;padding:12px 16px;'
-        + 'background:#1c3a1c;color:#9effa0;font:700 14px monospace;border:1px solid #3a6a3a;'
-        + 'border-radius:8px;';
-      document.body.append(panel, btn);
-
-      spector.onCapture.add(result => {
-        try {
-          const cmds = result.commands || [];
-          const isDraw = c => /^draw(Elements|Arrays)/i.test(c.name || '');
-          const draws  = cmds.filter(isDraw).length;
-          const tally  = {};
-          for (const c of cmds) tally[c.name] = (tally[c.name] || 0) + 1;
-          const top = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 14)
-            .map(([name, n]) => `  ${String(n).padStart(4)}  ${name}`).join('\n');
-          const text = `DRAW CALLS: ${draws}\nGL COMMANDS: ${cmds.length}\n\ntop commands:\n${top}`;
-          panel.textContent = text; panel.style.display = 'block';
-          console.log(`[spector] draw calls: ${draws} · total GL commands: ${cmds.length}`);
-        } catch (e) { panel.textContent = 'summary failed: ' + e.message; panel.style.display = 'block'; }
-      });
-
-      const capture = () => {
-        panel.textContent = 'capturing next frame…'; panel.style.display = 'block';
-        spector.captureCanvas(renderer.domElement);
-      };
-      btn.addEventListener('click', capture);
-      window.__capture = capture;
-      console.log('[spector] ready — tap “Capture GPU frame”, or run __capture()');
-    }).catch(e => console.warn('[spector] load failed', e));
-  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2131,12 +2095,15 @@ async function enterFromAuth() {
 // Toggle the menu between logged-in (Play/etc.) and logged-out (Log In/Sign Up).
 function applyMenuAuthState() {
   const authed = isLoggedIn();
-  screens.menu.dataset.authed = authed ? 'true' : 'false';
-  if (authed) {
-    playerName = displayName();
+  if (authed) guestActive = false;           // a real sign-in ends the guest session
+  const unlocked = authed || guestActive;    // guest gets the full menu, minus account bits
+  screens.menu.dataset.authed = unlocked ? 'true' : 'false';
+  if (unlocked) {
+    playerName = authed ? displayName() : 'Guest';
     elHudPlayer.textContent = playerName;
-    $('btn-admin').hidden = !isAdmin();
+    $('btn-admin').hidden = !isAdmin();      // guest is never admin → stays hidden
   }
+  $('btn-menu-exit').hidden = !guestActive;  // guests only: a way back to the auth screen
   updateMenuName();
 }
 
@@ -2347,6 +2314,9 @@ onPasswordRecovery(() => { recoveryPending = true; openAuth('recover'); });
 // Menu's lower-right Log In / Sign Up buttons open the modal in the right mode.
 $('btn-menu-login').onclick  = () => openAuth('signin');
 $('btn-menu-signup').onclick = () => openAuth('signup');
+$('btn-settings-login').onclick  = () => openAuth('signin');
+$('btn-settings-signup').onclick = () => openAuth('signup');
+$('btn-menu-exit').onclick = () => { guestActive = false; applyMenuAuthState(); };
 $('btn-settings-logout').onclick = () => openConfirm({
   text: `Log out of "${displayName()}"?`,
   okLabel: 'Log Out',

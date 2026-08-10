@@ -78,14 +78,14 @@ export function unlockPointer() {
   if (document.pointerLockElement) document.exitPointerLock();
 }
 
-export function capturePointer(el, pointerId) {
+function capturePointer(el, pointerId) {
   try { el.setPointerCapture?.(pointerId); } catch {}
 }
 
 // ── Look delta queue ──────────────────────────────────────────────────────────
 let _queuedDX = 0, _queuedDY = 0;
 
-export function applyLookDelta(dx, dy, multiplier = 1) {
+function applyLookDelta(dx, dy, multiplier = 1) {
   look.yaw   -= dx * BASE_LOOK_SENS * lookSensitivity * multiplier;
   look.pitch -= dy * BASE_LOOK_SENS * lookSensitivity * multiplier;
   look.pitch  = Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.45, look.pitch));

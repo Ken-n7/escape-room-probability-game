@@ -42,7 +42,6 @@ export function endPlay({ outcome, roomsCompleted = 0, totalScore = null, bestTi
 }
 
 export const hasActivePlay = () => Boolean(_play);
-export const currentPlayId = () => _play?.id ?? null;
 
 // Checkpoint the active run as 'abandoned' during page teardown / tab-hide, using
 // a keepalive PATCH that survives the page unloading (a normal fire-and-forget

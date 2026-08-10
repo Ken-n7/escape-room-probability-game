@@ -33,8 +33,8 @@ export const elHudPlayer       = $('hud-player');
 export const elOptionsConfirm  = $('options-confirm');
 export const elOptionsConfirmText = $('options-confirm-text');
 export const elPersistentFsBtn = $('persistent-fs-btn');
-export const elFsIconEnter     = $('fs-icon-enter');
-export const elFsIconExit      = $('fs-icon-exit');
+const elFsIconEnter     = $('fs-icon-enter');
+const elFsIconExit      = $('fs-icon-exit');
 
 // ── Screen management ─────────────────────────────────────────────────────────
 export function setCanInteract(canInteract) {

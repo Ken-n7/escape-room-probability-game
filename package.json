@@ -14,7 +14,6 @@
   },
   "devDependencies": {
     "playwright": "^1.60.0",
-    "spectorjs": "^0.9.30",
     "vite": "^5.0.0"
   }
 }

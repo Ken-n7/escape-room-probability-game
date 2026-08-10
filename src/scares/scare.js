@@ -183,7 +183,7 @@ export function clearScareSprite() {
 // exclusive (double-dimming would corrupt the saved light intensities).
 const _blackout = { active: false, timers: [] };
 
-export function clearBlackout() {
+function clearBlackout() {
   _blackout.timers.forEach(clearTimeout);
   _blackout.timers = [];
   if (_blackout.active) {

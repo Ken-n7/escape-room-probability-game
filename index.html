@@ -145,10 +145,14 @@
     <button class="menu-btn" id="btn-admin" hidden>
       <span>ADMIN</span>
     </button>
+    <button class="menu-btn" id="btn-menu-exit" type="button" hidden>
+      <span>EXIT</span>
+    </button>
     <!-- Shown only when logged out — same brush buttons, under the title. -->
     <div id="menu-auth">
       <button class="menu-btn" id="btn-menu-login" type="button"><span>LOG IN</span></button>
       <button class="menu-btn" id="btn-menu-signup" type="button"><span>SIGN UP</span></button>
+      <button class="menu-btn" id="btn-menu-guest" type="button"><span>GUEST</span></button>
     </div>
   </div>
 </div>
@@ -377,6 +381,8 @@
         <button class="st-tab" type="button" data-tab="controls" role="tab">Controls</button>
         <button class="st-tab" type="button" data-tab="game" role="tab">Game</button>
         <button class="st-tab st-back" id="btn-settings-about" type="button">About</button>
+        <button class="st-tab st-back" id="btn-settings-login" type="button" hidden>Log In</button>
+        <button class="st-tab st-back" id="btn-settings-signup" type="button" hidden>Sign Up</button>
         <button class="st-tab st-back" id="btn-settings-logout" type="button" hidden>Log Out</button>
       </nav>
 
@@ -434,7 +440,7 @@
 
         <!-- GAME / PROFILE -->
         <section class="st-panel" data-panel="game" role="tabpanel" hidden>
-          <div class="settings-row">
+          <div class="settings-row" id="settings-name-row">
             <label for="settings-name">Player Name</label>
             <div class="st-name-row">
               <input id="settings-name" type="text" maxlength="20" placeholder="Enter your name"/>
