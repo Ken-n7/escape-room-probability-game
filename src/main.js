@@ -1,6 +1,6 @@
 import * as THREE                  from 'three';
 import { CFG }                    from './core/config.js';
-import { ROOMS, EXIT_CODE, QUESTIONS_PER_ROOM } from './data/questions.js';
+import { ROOMS, QUESTIONS_PER_ROOM } from './data/questions.js';
 import { buildWorld, flickerLights, DOOR_OPEN_ANGLE } from './world/world.js';
 import { AudioManager }            from './audio/audio.js';
 import { S, gState, look, keys }   from './core/game-state.js';
@@ -158,6 +158,7 @@ function persistSave() {
 let roomProgress      = [0, 0, 0];
 let roomDone          = [false, false, false];
 let codeDigits        = ['_', '_', '_'];
+let runCode           = ['4', '7', '9'];   // exit code, re-rolled each run (resetProgress)
 let roomWrong         = [0, 0, 0];
 let correctStreak     = 0;
 let gameStartTime     = 0;
@@ -313,6 +314,7 @@ function resetProgress() {
   roomProgress  = [0, 0, 0];
   roomDone      = [false, false, false];
   codeDigits    = ['_', '_', '_'];
+  runCode       = Array.from({ length: 3 }, () => String(Math.floor(Math.random() * 10)));
   roomWrong     = [0, 0, 0];
   correctStreak = 0;
   shuffleRooms();
@@ -1055,7 +1057,7 @@ function advanceAfterCorrect() {
 
   if (activeQIdx >= shuffledQuestions[answeredRoomIdx].length) {
     roomDone[answeredRoomIdx]   = true;
-    codeDigits[answeredRoomIdx] = ROOMS[answeredRoomIdx].codeDigit;
+    codeDigits[answeredRoomIdx] = runCode[answeredRoomIdx];
 
     const score = calcScore(answeredRoomIdx);
     if (bestScores[answeredRoomIdx] === null || score > bestScores[answeredRoomIdx]) {
@@ -1828,7 +1830,7 @@ $('btn-options-confirm-yes').onclick = () => {
 $('btn-question-exit').onclick = leaveQuestion;
 $('btn-code-submit').onclick   = () => {
   const val = $('code-input').value.trim();
-  if (val === EXIT_CODE) triggerWin();
+  if (val === runCode.join('')) triggerWin();
   else {
     $('code-error').textContent = '✗ Incorrect code. Try again.'; AudioManager.play('jumpscare');
     logEvent('code_fail', { entered: val });
@@ -2009,7 +2011,7 @@ function triggerDevWin() {
   roomDone      = [true, true, true];
   roomProgress  = shuffledQuestions.map(qs => qs.length);
   roomWrong     = [0, 0, 0];
-  codeDigits    = ROOMS.map(room => room.codeDigit);
+  codeDigits    = [...runCode];
   bestScores    = [100, 100, 100];
   correctStreak = 0;
   gameStartTime = Date.now();

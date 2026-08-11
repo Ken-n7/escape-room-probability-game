@@ -27,7 +27,6 @@ export const ROOMS = [
     id: 1,
     name: 'ROOM 1',
     label: 'EASY',
-    codeDigit: '4',
     questions: [
       {
         text: 'A mathematical concept that deals with the possibility of the occurrence of a particular happening or event.',
@@ -146,7 +145,6 @@ export const ROOMS = [
     id: 2,
     name: 'ROOM 2',
     label: 'MODERATE',
-    codeDigit: '7',
     questions: [
       {
         text: 'A bag contains 3 red balls, 5 blue balls, and 2 green balls. The number of favorable outcomes for drawing a blue ball is 5, and the total number of possible outcomes is 10. Find the probability of drawing a blue ball.',
@@ -226,7 +224,6 @@ export const ROOMS = [
     id: 3,
     name: 'ROOM 3',
     label: 'HARD',
-    codeDigit: '9',
     questions: [
       {
         text: 'A board game uses a six-sided die. A player earns bonus points when an even number is rolled. What is the probability of earning bonus points?',
@@ -296,6 +293,3 @@ export const ROOMS = [
 // Number of questions drawn per room each run (researchers' requirement:
 // exactly 5 problems per level, different problems on replay).
 export const QUESTIONS_PER_ROOM = 5;
-
-// Exit code = the three codeDigits joined  →  "479"
-export const EXIT_CODE = ROOMS.map(r => r.codeDigit).join('');
