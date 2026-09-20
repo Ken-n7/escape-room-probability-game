@@ -145,10 +145,7 @@
       padding:28px;
       text-align:center;
       pointer-events:auto;
-      background:
-        linear-gradient(180deg, rgba(0,0,0,.76), rgba(24,2,4,.92)),
-        url('/assets/hallway_bg.jpg') center/cover no-repeat,
-        #050607;
+      background:#050607;
       color:#e7dfcc;
     }
     #rotate-phone::before {
