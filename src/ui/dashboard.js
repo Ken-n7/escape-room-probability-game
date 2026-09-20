@@ -9,6 +9,7 @@ import { donutChart, gaugeChart, areaChart, lineChart, barChart, icon, mountChar
 const TABS = [
   { id: 'overview', label: 'Overview',      icon: 'layout-dashboard' },
   { id: 'players',  label: 'Players',       icon: 'users' },
+  { id: 'dailies',  label: 'Daily boards',  icon: 'calendar' },
   { id: 'items',    label: 'Item analysis', icon: 'clipboard-list' },
   { id: 'behavior', label: 'Behavior',      icon: 'brain' },
 ];
@@ -19,6 +20,9 @@ let _onBack = null;
 let _loading = false;
 let _drill = null;       // null | { player } | { player, playId } — drill-down view
 let _keyBound = false;   // Escape handler bound once, guarded across remounts
+
+// Daily boards tab: which calendar day (local) + which board to show.
+const _daily = { date: new Date(), board: 'escape' };
 
 // Per-table interactive state (search box text + sorted column).
 const _query = { players: '', items: '' };
@@ -160,6 +164,8 @@ export async function mountDashboard({ onBack } = {}) {
   // #dash-body persists across renders, so one listener handles every rebuilt view.
   const dashBody = root.querySelector('#dash-body');
   dashBody.addEventListener('click', e => {
+    const chip = e.target.closest('.dly-chip');
+    if (chip) { _daily.board = chip.dataset.board; render(); return; }
     const sortTh = e.target.closest('[data-sort]');
     if (sortTh) {
       const tab = sortTh.dataset.sortTab, key = sortTh.dataset.sort, s = _sort[tab];
@@ -181,6 +187,15 @@ export async function mountDashboard({ onBack } = {}) {
     if (!inp) return;
     _query[inp.dataset.searchTab] = inp.value;
     applyFilter(inp.dataset.searchTab);
+  });
+
+  // Daily boards date picker — rebuild that day's board on change.
+  dashBody.addEventListener('change', e => {
+    const d = e.target.closest('#dly-date');
+    if (!d || !d.value) return;
+    const [y, m, day] = d.value.split('-').map(Number);
+    _daily.date = new Date(y, m - 1, day);   // local midnight, immune to TZ drift
+    render();
   });
 
   // Escape steps back out of a drill-down, then leaves the dashboard.
@@ -245,6 +260,7 @@ function render() {
     _tab === 'overview' ? renderOverview()
     : _tab === 'items'  ? renderItems()
     : _tab === 'players' ? renderPlayers()
+    : _tab === 'dailies' ? renderDailyBoard()
     : renderBehavior();
 
   // Restore the active search filter after any full-body rebuild (e.g. re-sort).
@@ -592,6 +608,75 @@ function renderBehavior() {
           <div class="ms-row"><span>Practiced in P-Learn</span><b>${plearnPlays} runs</b></div>
         </div>
         <div class="card-note">Signals of friction — high timeouts or deaths flag content that's too hard or unclear.</div></div>
+    </div>`;
+}
+
+// ── DAILY BOARDS (admin-only, from the already-loaded games) ──────────────────
+// Rebuilds a past day's leaderboard client-side from game_accuracy rows — RLS
+// gives admins the full set, so no extra fetch and no server changes. Mirrors
+// the player leaderboard formulas exactly (escape blends accuracy + speed).
+const DLY_LIMIT  = 25;
+const DLY_BOARDS = {
+  escape:   { label: 'Escape Score', value: r => r.escape,       sort: (a, b) => b.escape - a.escape || b.n - a.n },
+  speed:    { label: 'Fastest Time', value: r => isFinite(r.best) ? fmtTime(Math.round(r.best)) : '—', sort: (a, b) => a.best - b.best },
+  accuracy: { label: 'Top Accuracy', value: r => r.top + '%',     sort: (a, b) => b.top - a.top || b.n - a.n },
+};
+const dlyPad = n => String(n).padStart(2, '0');
+const dlyInputValue = d => `${d.getFullYear()}-${dlyPad(d.getMonth() + 1)}-${dlyPad(d.getDate())}`;
+
+// start (inclusive) → start+1 day (exclusive) in LOCAL time.
+function dailyRows(date) {
+  const start = new Date(date); start.setHours(0, 0, 0, 0);
+  const end = new Date(start);  end.setDate(end.getDate() + 1);
+  const map = new Map();
+  for (const g of _data.games || []) {
+    if (g.outcome !== 'won' || g.plearn) continue;      // runs table only holds timed wins
+    const fin = new Date(new Date(g.started_at).getTime() + (Number(g.duration_sec) || 0) * 1000);
+    if (fin < start || fin >= end) continue;
+    const best  = Number(g.best_time) || 0;
+    const speed = Math.min(100, Math.round(180 / Math.max(best, 1) * 100));
+    const r = map.get(g.username) || { username: g.username, best: Infinity, top: -1, n: 0, escape: -1 };
+    r.best   = Math.min(r.best,   best || Infinity);
+    r.top    = Math.max(r.top,    g.total_score);
+    r.n     += 1;
+    r.escape = Math.max(r.escape, Math.round(0.7 * g.total_score + 0.3 * speed));
+    map.set(g.username, r);
+  }
+  return [...map.values()];
+}
+
+function renderDailyBoard() {
+  const games = _data.games || [];
+  if (!games.length) return emptyCard('No plays recorded yet. Play a run (while signed in) to see data here.', '👻');
+  const dateFmt = _daily.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const chips = Object.keys(DLY_BOARDS).map(k =>
+    `<button type="button" class="dly-chip${k === _daily.board ? ' active' : ''}" data-board="${k}">${DLY_BOARDS[k].label}</button>`).join('');
+  const toolbar = `
+    <div class="dly-toolbar">
+      <label class="dly-label" for="dly-date">Board for</label>
+      <input type="date" id="dly-date" value="${dlyInputValue(_daily.date)}">
+      <div class="dly-chips">${chips}</div>
+    </div>`;
+
+  const rows = dailyRows(_daily.date);
+  if (!rows.length) return `${toolbar}${emptyCard(`No finished runs on ${dateFmt}.`)}`;
+
+  const cfg  = DLY_BOARDS[_daily.board];
+  const show = rows.sort(cfg.sort).slice(0, DLY_LIMIT);
+  const bodyRows = show.map((r, i) => `
+    <tr>
+      <td class="num">${i + 1}</td>
+      <td>${esc(r.username)}</td>
+      <td class="num">${cfg.value(r)}</td>
+      <td class="num">${r.n}</td>
+    </tr>`).join('');
+  return `${toolbar}
+    <div class="card"><h3>${cfg.label} · ${dateFmt}</h3>
+      <div class="dash-table-wrap"><table class="dash-table">
+        <thead><tr><th class="num">Rank</th><th>Player</th><th class="num">${cfg.label}</th><th class="num">Runs</th></tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table></div>
+      <div class="card-note">Runs finished on the chosen day (top ${DLY_LIMIT}). Press Refresh to pull newer plays.</div>
     </div>`;
 }
 

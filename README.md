@@ -20,6 +20,7 @@ Built with **Three.js** for the 3D world and **Supabase** for accounts, leaderbo
 - [Getting started](#getting-started)
 - [Supabase setup](#supabase-setup)
 - [Build & deploy](#build--deploy)
+  - [Running the E2E tests](#running-the-e2e-tests)
 - [Configuration reference](#configuration-reference)
 - [Documentation](#documentation)
 
@@ -201,6 +202,14 @@ Deploy on **Vercel** by importing the GitHub repo. Settings (auto-detected, or s
 - Output directory: `dist`
 
 `vercel.json` adds long-lived cache headers for hashed JS/CSS and media assets, while keeping `index.html` always revalidated.
+
+### Running the E2E tests
+
+```bash
+npm run test:e2e   # boots its own dev server on :5199 if none is running
+```
+
+`tests/e2e.mjs` drives a real headless Chromium against the app — leaderboard windows, the ⟳ refresh cooldown, and the admin dashboard's Daily boards (with stubbed data). Leaderboard RPCs hit the live Supabase project, so this is an integration check (needs network access to `https://idhhdqbxtssiujuwopcq.supabase.co`); the dashboard assertions use fabricated rows and need no admin login. Exits nonzero on any failure.
 
 ---
 

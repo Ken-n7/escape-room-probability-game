@@ -1791,6 +1791,7 @@ document.addEventListener('click', e => {
   if (!PRE_GAME_SCREENS.some(name => !screens[name].classList.contains('hidden'))) return;
   const control = e.target.closest(PRE_GAME_CONTROLS);
   if (!control) return;
+  if (control.id === 'btn-lb-refresh') return;   // ⟳ spins silently, no uiClick
   if (
     (control.classList.contains('nav-back') || control.classList.contains('nav-fwd')) &&
     (!screens.story.classList.contains('hidden') || !screens.plearn.classList.contains('hidden'))
@@ -2359,6 +2360,7 @@ onSignedOut(() => {
 // the pure clock; Top Accuracy is pure knowledge. Each has an all-time / weekly
 // window. `value` formats the metric cell; `sort` ranks the raw rows.
 const LB_LIMIT  = 25;
+const LB_REFRESH_COOLDOWN_MS = 15000;              // spam guard for the ⟳ button
 const LB_CONFIG = {
   escape:   { value: r => r.escape_score, sort: (a, b) => b.escape_score - a.escape_score || b.runs - a.runs },
   speed:    { value: r => formatTime(Math.round(r.best_time)), sort: (a, b) => a.best_time - b.best_time },
@@ -2371,17 +2373,23 @@ function lbRowHtml(i, name, val, me) {
   const cls = 'lb-row' + (i === 0 ? ' top1' : '') + (name === me ? ' me' : '');
   return `<div class="${cls}"><span class="lb-rank">${i + 1}</span><span class="lb-name">${escapeHtml(name)}</span><span class="lb-val">${val}</span></div>`;
 }
-async function renderLeaderboard() {
+async function renderLeaderboard(force = false) {
   const list = $('lb-list');
   const gen  = `${lbBoard}:${lbWindow}`;
   list.dataset.gen = gen;                    // token; a newer click overwrites it
   list.innerHTML = '<div class="lb-empty">Loading…</div>';
   const me  = displayName();
   const cfg = LB_CONFIG[lbBoard];
-  const rows = (await fetchLeaderboard(lbBoard, lbWindow)).sort(cfg.sort).slice(0, LB_LIMIT);
+  const fetched = await fetchLeaderboard(lbBoard, lbWindow, { force });
   if (list.dataset.gen !== gen) return;      // superseded by a later tab/window click
+  if (fetched.timedOut) {
+    // RPC hung and there were no stale rows: say so instead of "no scores yet".
+    list.innerHTML = '<div class="lb-empty">Couldn\'t load the leaderboard. Tap ⟳ to retry.</div>';
+    return;
+  }
+  const rows = fetched.sort(cfg.sort).slice(0, LB_LIMIT);
   if (!rows.length) {
-    const scope = lbWindow === 'week' ? 'this week' : 'yet';
+    const scope = lbWindow === 'week' ? 'this week' : lbWindow === 'day' ? 'today' : 'yet';
     list.innerHTML = `<div class="lb-empty">No scores ${scope}. Be the first!</div>`;
     return;
   }
@@ -2401,11 +2409,36 @@ document.querySelectorAll('.lb-tab').forEach(tab => {
 });
 document.querySelectorAll('.lb-win').forEach(btn => {
   btn.onclick = () => {
+    if (!btn.dataset.window) return;         // the ⟳ button rides along as a .lb-win
     lbWindow = btn.dataset.window;
     document.querySelectorAll('.lb-win').forEach(b => b.classList.toggle('active', b === btn));
     renderLeaderboard();
   };
 });
+
+// Manual refresh — bypasses the 60s cache. The button is NEVER disabled: it
+// stays fully styled and every click replays the ⟳ spin so it always feels
+// responsive, but a click inside the 15s cooldown window is a silent no-op.
+// Own submit saves already invalidate the cache, so this only matters for
+// waiting on others' runs.
+const lbRefreshBtn = $('btn-lb-refresh');
+let lbRefreshUntil = 0;
+let lbRefreshBusy  = false;
+function lbRefreshSpin() {                           // restart the CSS animation
+  lbRefreshBtn.classList.remove('spinning');
+  void lbRefreshBtn.offsetWidth;                     // force reflow → replays
+  lbRefreshBtn.classList.add('spinning');
+}
+lbRefreshBtn.onclick = () => {
+  const now = Date.now();
+  lbRefreshSpin();                                   // always feel like refreshing
+  if (now < lbRefreshUntil || lbRefreshBusy) return; // cooldown / in-flight: no-op
+  lbRefreshBusy = true;
+  renderLeaderboard(true).finally(() => {
+    lbRefreshBusy = false;
+    lbRefreshUntil = Date.now() + LB_REFRESH_COOLDOWN_MS;
+  });
+};
 
 // ── Admin dashboard (clean analytics UI — see src/ui/dashboard.js) ────────────
 async function openAdmin() {

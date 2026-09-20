@@ -144,7 +144,8 @@
     }
     .lb-tab.active { background:#26282c; color:#f2f3f5; border-color:rgba(255,255,255,.32); }
     /* All-time / weekly window toggle */
-    #lb-window { display:flex; justify-content:center; gap:6px; margin-bottom:16px; }
+    /* position:relative anchors the absolute ⟳ to the right edge */
+    #lb-window { position:relative; display:flex; justify-content:center; gap:6px; margin-bottom:16px; }
     .lb-win {
       padding:5px 14px; cursor:pointer; border-radius:999px;
       background:transparent; border:1px solid #2a2c30;

@@ -853,8 +853,9 @@
 .lb-tab:hover { color:#e2e6ea; }
 .lb-tab.active { color:#16181c; text-shadow:none; background:none; border-color:transparent; }
 .lb-tab.active::after { opacity:1; }
-/* All-time / This week — plain text toggle with a white underline when active */
-#lb-window { display:flex; justify-content:center; gap:clamp(12px, 4vw, 26px); margin-bottom:clamp(10px, 2vh, 18px); }
+/* All-time / This week / Today — plain text toggle with a white underline when
+   active. position:relative anchors the absolute ⟳ to the right edge. */
+#lb-window { position:relative; display:flex; justify-content:center; gap:clamp(12px, 4vw, 26px); margin-bottom:clamp(10px, 2vh, 18px); }
 .lb-win {
   background:none; border:none; border-radius:0; cursor:pointer;
   font-family:monospace; text-transform:uppercase; letter-spacing:1px;
@@ -864,6 +865,12 @@
 }
 .lb-win:hover { color:#e2e6ea; }
 .lb-win.active { color:#f2f3f5; background:none; border:none; border-bottom:1px solid var(--st-red); }
+/* ⟳ refresh — anchored to the right of the tabs row, out of flex flow so the 3
+   tabs center exactly. Never disabled: borderless, always clickable. */
+.lb-refresh-btn { position:absolute; top:0; bottom:0; right:0; margin:auto 0; border:none; border-radius:0; padding:4px 2px; letter-spacing:0; }
+.lb-refresh-btn:hover { color:#e2e6ea; }
+.lb-refresh-btn.spinning { animation:lb-spin .55s ease; }
+@keyframes lb-spin { to { transform:rotate(360deg); } }
 /* List — only scroll region; rows are separators, not boxes */
 #lb-list {
   flex:1 1 auto; overflow-y:auto; min-height:100px; margin:0;
