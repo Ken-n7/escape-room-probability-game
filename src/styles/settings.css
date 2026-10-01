@@ -751,6 +751,17 @@
   background:none !important; border-color:rgba(255,139,144,.4); color:#ff8b90 !important;
   text-decoration:line-through;
 }
+/* HARD typed answer — the input wears the choice styling, dashed underline */
+#typed-answer:not([hidden]) { display:grid; gap:clamp(6px, 1.6vh, 12px); }
+#question-answers #typed-answer-input { cursor:text; text-align:center; outline:none; }
+#question-answers #typed-answer button[type=submit] { text-align:center; }
+#question-answers #typed-answer-input:focus { border-bottom-color:rgba(231,223,204,.6); }
+/* Touch fraction keypad (replaces the OS keyboard, which hides the note) */
+#typed-keypad:not([hidden]) { display:grid; grid-template-columns:repeat(6, 1fr); gap:4px; }
+#question-answers #typed-keypad .choice-btn {
+  text-align:center; padding:clamp(4px, 1.2vh, 10px) 0;
+  border:1px solid rgba(231,223,204,.22); border-radius:4px;
+}
 #question-wrong-count {
   font-family:Georgia, 'Times New Roman', serif; color:#ff8b90;
   text-shadow:0 2px 8px rgba(0,0,0,.7);

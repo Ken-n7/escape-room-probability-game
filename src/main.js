@@ -824,6 +824,7 @@ function openDecoyNote() {
   $('hint-box').style.display = 'none';
   $('scaffold').hidden = true;
   $('choices-grid').style.display = 'none';
+  $('typed-answer').hidden = true;
   $('question-wrong-count').textContent = '';
   $('question-box').classList.add('is-decoy');   // no choices → centre the note
   showScreen('question');
@@ -874,6 +875,7 @@ function showQuestionUI() {
 
   _questionInputReadyAt = performance.now() + QUESTION_ARM_MS;
 
+  $('typed-answer').hidden = true;
   if (q.steps) {
     // MODERATE: tap-to-fill solution scaffold instead of plain choices (req 3.2)
     $('choices-grid').style.display = 'none';
@@ -881,6 +883,20 @@ function showQuestionUI() {
     scaffoldStep = 0;
     renderScaffoldLine(q);
     renderScaffoldOptions(q);
+  } else if (room.label === 'HARD') {
+    // HARD: no choices to guess from — the player types the simplified answer.
+    $('choices-grid').style.display = 'none';
+    $('scaffold').hidden = true;
+    $('typed-answer').hidden = false;
+    const input = $('typed-answer-input');
+    input.value = '';
+    input.className = 'choice-btn';
+    input.disabled = true;
+    // Touch: the OS keyboard covers the whole note in landscape, so use the
+    // on-screen fraction keypad instead (inputmode=none keeps the OS one shut).
+    const touch = GameDevice.controls === 'touch';
+    input.inputMode = touch ? 'none' : 'text';
+    $('typed-keypad').hidden = !touch;
   } else {
     $('choices-grid').style.display = '';
     $('scaffold').hidden = true;
@@ -904,6 +920,7 @@ function showQuestionUI() {
   _questionArmTimer = setTimeout(() => {
     if (gState.current !== S.QUESTION) return;
     document.querySelectorAll('.choice-btn').forEach(btn => { btn.disabled = false; });
+    if (!$('typed-answer').hidden && GameDevice.controls !== 'touch') $('typed-answer-input').focus();
     _questionArmTimer = null;
   }, QUESTION_ARM_MS);
 }
@@ -1027,6 +1044,44 @@ function handleScaffoldTap(valStr, btn) {
     penalizeWrong();
   }
 }
+
+// HARD typed answer: must match the answer key's simplest fraction exactly
+// (whitespace ignored), so "2/4" or "0.5" for 1/2 counts as wrong.
+[...'12345⌫67890/'].forEach(k => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'choice-btn';
+  b.textContent = k;
+  b.onclick = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const input = $('typed-answer-input');
+    input.value = k === '⌫' ? input.value.slice(0, -1) : input.value + k;
+  };
+  $('typed-keypad').appendChild(b);
+});
+
+$('typed-answer').addEventListener('submit', e => {
+  e.preventDefault();
+  if (performance.now() < _questionInputReadyAt) return;
+  if (gState.current !== S.QUESTION) return;
+  const input = $('typed-answer-input');
+  const typed = input.value.replace(/\s+/g, '');
+  if (!typed || input.disabled) return;
+  const q = shuffledQuestions[activeRoomIdx][activeQIdx];
+  clearQuestionTimers();
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+
+  const correct = typed === q.choices[q.correct];
+  recordAttempt(q, { isCorrect: correct, selectedText: typed });
+  input.classList.add(correct ? 'correct' : 'wrong');
+  if (correct) {
+    advanceAfterCorrect();
+  } else {
+    penalizeWrong();
+    setTimeout(() => { if (!input.disabled) input.select(); }, 750);
+  }
+});
 
 function handleAnswer(choiceIdx) {
   if (performance.now() < _questionInputReadyAt) return;
