@@ -271,17 +271,17 @@
 
   /* Reading copy — was 1rem / 1.72 line-height, too airy and overflowed */
   #about-box p,
-  #plearn-body { font-size:.84rem; line-height:1.55; }
+  .plearn-body { font-size:.84rem; line-height:1.55; }
   #story-text { font-size:.9rem; line-height:1.5; }
   #question-text { font-size:.95rem; line-height:1.5; margin:12px 0 16px; padding:12px 14px; }
 
   /* Modal titles + section kickers */
-  #plearn-title,
+  .plearn-title,
   #about-box h2,
   #code-box h2 { font-size:1.14rem; margin-bottom:12px; }
   #settings-box h2 { font-size:1.55rem; padding-bottom:8px; }
   #about-box h2 { font-size:1.5rem; }
-  #plearn-slide-label,
+  .plearn-slide-label,
   #question-room-label,
   #settings-scores h3,
   .about-section-title { font-size:.66rem; }

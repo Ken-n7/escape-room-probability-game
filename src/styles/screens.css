@@ -74,7 +74,7 @@
     .story-dot  { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.3); }
     .story-dot.active { background:#f2f3f5; }
 
-    /* ── P-LEARN LESSON SLIDES ───────────────────────────────────────────── */
+    /* ── P-LEARN LESSON SCROLL ───────────────────────────────────────────── */
     #s-plearn {
       background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c12;
     }
@@ -82,31 +82,29 @@
     #plearn-box {
       position:relative; max-width:740px; width:90%;
       background:rgba(5,10,30,0.88); border:1px solid #334488;
-      border-radius:14px; padding:32px 40px; text-align:center;
+      border-radius:14px; padding:32px 40px; text-align:left;
     }
-    #plearn-slide-label {
+    .plearn-lesson { margin-bottom:clamp(28px,4vh,44px); }
+    .plearn-lesson:last-child { margin-bottom:0; }
+    .plearn-slide-label {
       color:#8899cc; font-family:monospace; font-size:0.75rem;
       letter-spacing:3px; margin-bottom:10px;
     }
-    #plearn-title {
+    .plearn-title {
       color:#aabbff; font-family:monospace; font-size:clamp(1.2rem,3vw,1.7rem);
       letter-spacing:2px; margin-bottom:18px;
       text-shadow:0 0 12px #4466ff;
     }
-    #plearn-body {
+    .plearn-body {
       color:#ccd4ee; font-size:clamp(0.9rem,1.8vw,1.05rem);
       line-height:1.8; text-align:left; margin-bottom:16px;
     }
-    #plearn-note {
+    .plearn-note {
       background:rgba(30,50,100,0.7); border:1px solid #334488;
       border-radius:8px; padding:12px 18px;
       color:#aaddff; font-family:monospace; font-size:1rem;
       letter-spacing:1px; text-align:center; margin-top:12px;
-      display:none;
     }
-    #plearn-nav { position:fixed; bottom:28px; display:flex; gap:20px; z-index:25; }
-    .plearn-dot { width:9px; height:9px; border-radius:50%; background:rgba(100,130,255,0.3); }
-    .plearn-dot.active { background:#f2f3f5; }
     /* ── ARE YOU READY ───────────────────────────────────────────────────── */
     #s-ready { background: url('/assets/hallway_bg.jpg') center/cover no-repeat, #080c08; }
     #s-ready::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,0.6); }

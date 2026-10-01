@@ -700,7 +700,6 @@ function returnHomeFromOptions() {
   resetProgress();
   CFG.gameplay.pLearnMode = false;
   storyIdx  = 0;
-  plearnIdx = 0;
   gState.current = S.MENU;
   elVignette.style.cssText = 'opacity:0';
   AudioManager.setVolume('enemyNear', 0, 0.25);
@@ -1404,10 +1403,9 @@ window.storySkip = function() {
 };
 
 window.goHome = function() {
-  stopTyper();                 // stop any in-flight story/P-Learn typing + its sound
+  stopTyper();                 // stop any in-flight story typing + its sound
   abandonPlayIfActive();
   storyIdx = 0;
-  plearnIdx = 0;
   gState.current = S.MENU;
   clearMovementInput();
   resetFear();
@@ -1485,55 +1483,34 @@ const PLEARN_SLIDES = [
     note: 'P(selecting non-fiction) = 10/40 = 1/4',
   },
 ];
-let plearnIdx = 0;
 
-function renderPlearn() {
-  const slide = PLEARN_SLIDES[plearnIdx];
-  $('plearn-slide-label').textContent = slide.label;
-  $('plearn-title').textContent       = slide.title;
-  typeInto($('plearn-body'), slide.body);
-
-  const noteEl = $('plearn-note');
-  if (slide.note) { noteEl.style.display = 'block'; noteEl.textContent = slide.note; }
-  else            { noteEl.style.display = 'none'; }
-
-  $('btn-plearn-prev').disabled = plearnIdx === 0;
-  const plast = plearnIdx === PLEARN_SLIDES.length - 1;
-  $('btn-plearn-next').textContent = plast ? '▶' : '→';
-  $('btn-plearn-next').setAttribute('aria-label', plast ? 'Start' : 'Next');
-
-  const nav = $('plearn-nav');
-  nav.innerHTML = '';
-  PLEARN_SLIDES.forEach((_, i) => {
-    const d = document.createElement('div');
-    d.className = 'plearn-dot' + (i === plearnIdx ? ' active' : '');
-    nav.appendChild(d);
+function buildPlearn() {
+  const wrap = $('plearn-scroll');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  PLEARN_SLIDES.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'plearn-lesson';
+    el.innerHTML = `
+      <div class="plearn-slide-label">${s.label}</div>
+      <h2 class="plearn-title">${s.title}</h2>
+      <div class="plearn-body">${s.body}</div>
+      ${s.note ? `<div class="plearn-note">${s.note}</div>` : ''}
+    `;
+    wrap.appendChild(el);
   });
-
-  screens.plearn.scrollLeft = 0;
-  requestAnimationFrame(() => { screens.plearn.scrollLeft = 0; });
 }
-
-window.plearnStep = function(dir) {
-  if (dir > 0 && isTyping()) { _activeTyper.finish(); return; }   // first Next completes the line
-  AudioManager.play('pageTurn');
-  if (dir > 0 && plearnIdx === PLEARN_SLIDES.length - 1) {
-    setMenuCamera();
-    showScreen('ready');
-    return;
-  }
-  plearnIdx = Math.max(0, Math.min(PLEARN_SLIDES.length - 1, plearnIdx + dir));
-  renderPlearn();
-};
 
 function goToPlearn() {
   CFG.gameplay.pLearnMode = true;
-  plearnIdx = 0;
   setMenuCamera();
-  renderPlearn();
+  if (!$('plearn-scroll')?.innerHTML.trim()) {
+    buildPlearn();
+  }
   showScreen('plearn');
-  // Click anywhere (outside the nav buttons) completes the typing line.
-  screens.plearn.onclick = e => { if (!e.target.closest('button') && isTyping()) _activeTyper.finish(); };
+  // Reset after showing: scrollTop is ignored while the screen is display:none.
+  const box = $('plearn-box');
+  if (box) box.scrollTop = 0;
 }
 
 function updateFlickerLights(t, dt) {
@@ -1807,6 +1784,7 @@ $('btn-menu-guest').onclick = () => {
   applyMenuAuthState();
 };
 $('btn-plearn').onclick     = goToPlearn;
+$('btn-plearn-start').onclick = () => { AudioManager.play('pageTurn'); setMenuCamera(); showScreen('ready'); };
 $('btn-yes').onclick        = () => startGame({ transition: true });
 $('btn-no').onclick         = () => window.goHome();
 $('btn-win-restart').onclick  = () => { CFG.gameplay.pLearnMode = false; window.goHome(); };

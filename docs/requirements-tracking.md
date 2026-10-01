@@ -60,7 +60,7 @@ a Supabase backend was added, so §4 (accounts/monitoring) is now fully implemen
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
 | 5.1 | Lesson content: PDF's P-Learn text verbatim (What is Probability, key terms, formula, Examples 1–3) | ✅ | All 6 slides now carry the PDF text: intro, the 5 key terms, the formula + examples list, and the PDF's own Examples 1–3 (die > 4, coin toss, bookshelf). **❓ Flag for researchers:** the PDF's Example 3 contains copy-paste errors — labels say "P(selecting fiction)" / "P(number greater than 4)" and the closing line says **1/3**, but 10/40 simplifies to **1/4**. Imported with corrected labels and 1/4. |
-| 5.2 | "Pascroll dapat" — scrollable presentation | 🟡 | Implemented as prev/next slides with dot navigation instead of one scrolling page. Confirm slides are acceptable. |
+| 5.2 | "Pascroll dapat" — scrollable presentation | ✅ | Now one scrolling page: all 6 lessons stack in a single `#plearn-box` scroll container (`#plearn-scroll`), with a START button at the end that goes to the ready screen. Prev/next arrows and the dot rail were removed — scroll is the only navigation. Lesson text renders immediately (the 45cps typewriter stayed on the story screen only, since a ~45s wait made no sense across a whole page). |
 
 ## 6. Settings Feature
 

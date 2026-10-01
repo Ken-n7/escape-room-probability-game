@@ -388,23 +388,20 @@
       line-height:1.75;
       text-shadow:0 2px 8px #000;
     }
-    #story-nav,
-    #plearn-nav {
+    #story-nav {
       bottom:36px;
       padding:8px 10px;
       border:1px solid rgba(231,223,204,.14);
       background:rgba(0,0,0,.42);
       gap:10px;
     }
-    .story-dot,
-    .plearn-dot {
+    .story-dot {
       width:28px;
       height:4px;
       border-radius:0;
       background:rgba(231,223,204,.22);
     }
-    .story-dot.active,
-    .plearn-dot.active {
+    .story-dot.active {
       background:#f2f3f5;
     }
 
@@ -443,17 +440,7 @@
       cursor:default;
       opacity:.36;
     }
-    #s-plearn #plearn-nav {
-      position:static;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      padding:0;
-      border:0;
-      background:transparent;
-      gap:8px;
-    }
-    #plearn-slide-label,
+    .plearn-slide-label,
     #question-room-label,
     #settings-scores h3,
     .about-section-title {
@@ -462,7 +449,7 @@
       font-size:.76rem;
       text-transform:uppercase;
     }
-    #plearn-title,
+    .plearn-title,
     #settings-box h2,
     #about-box h2,
     #code-box h2 {
@@ -472,7 +459,7 @@
       font-size:1.45rem;
       margin-bottom:18px;
     }
-    #plearn-body,
+    .plearn-body,
     #about-box p {
       color:var(--paper);
       font-size:1rem;
@@ -482,7 +469,7 @@
       color:var(--amber);
       text-decoration:none;
     }
-    #plearn-note {
+    .plearn-note {
       border-radius:8px;
       background:rgba(9,32,28,.78);
       border:1px solid rgba(143,211,189,.35);
