@@ -4,6 +4,7 @@ import { authState } from './auth.js';
 // Save one finished run. Fire-and-forget from the win screen; never throws so a
 // network hiccup can't break the celebration.
 export async function submitRun({ roomScores, totalScore, bestTime }) {
+  if (import.meta.env.DEV) return { ok: false, reason: 'dev-build' };   // never record dev runs
   if (!authState.user) return { ok: false, reason: 'not-signed-in' };
   const { error } = await supabase.from('runs').insert({
     user_id:     authState.user.id,

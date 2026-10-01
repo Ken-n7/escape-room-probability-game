@@ -8,7 +8,9 @@ import { authState } from './auth.js';
 
 let _play = null;   // { id, startedAt } for the run in progress
 
-const uid = () => authState.user?.id || null;
+// Dev builds (npm run dev) never write: cheat/test runs must not reach the DB.
+// With no uid, startPlay/logAttempt/logEvent no-op and endPlay/beacon have no play.
+const uid = () => (import.meta.env.DEV ? null : authState.user?.id || null);
 const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 function warn(where, error) { if (error) console.warn(`[analytics] ${where}:`, error.message); }

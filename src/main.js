@@ -317,6 +317,7 @@ function resetProgress() {
   runCode       = Array.from({ length: 3 }, () => String(Math.floor(Math.random() * 10)));
   roomWrong     = [0, 0, 0];
   correctStreak = 0;
+  _devCheated   = false;
   shuffleRooms();
   resetAmbientScares();
   cleanupChase();
@@ -1275,10 +1276,12 @@ function buildWinScores() {
   ).join('');
 }
 
+let _devCheated = false;   // a dev cheat was used this run → don't save its time locally
+
 function triggerWin({ recordRun = true } = {}) {
   gState.current = S.WIN;
   buildWinScores();
-  if (recordRun) {
+  if (recordRun && !_devCheated) {
     const elapsed    = getElapsedSeconds();
     const isNewBest  = bestTime === null || elapsed < bestTime;
     if (isNewBest) { bestTime = elapsed; persistSave(); }
@@ -2056,6 +2059,56 @@ function triggerDevWin() {
   triggerWin({ recordRun: false });
 }
 
+// ── Dev cheat panel (dev builds only; analytics.js/scores.js write nothing in DEV) ──
+// Click the buttons (touch / unlocked pointer) or use hotkeys while playing:
+//   1/2/3 clear that room · Shift+1/2/3 open that room's current note · 0 win
+function devClearRoom(i) {
+  if (roomDone[i]) return;
+  _devCheated     = true;
+  roomDone[i]     = true;
+  roomProgress[i] = shuffledQuestions[i].length;
+  codeDigits[i]   = runCode[i];
+  resetFear();
+  updateNoteVisibility();
+  updateDoorLocks();   // opens the next room's door
+  updateHUD();
+}
+
+function devOpenNote(i) {
+  _devCheated = true;
+  openQuestion(i);     // no-op if the room is already cleared
+}
+
+function initDevCheats() {
+  const panel = document.createElement('div');
+  panel.id = 'dev-cheats';
+  // Top-centre row: clear of the code tracker, pause button and mobile joystick/jump.
+  panel.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:4px;max-width:min(640px, 62vw);z-index:99;pointer-events:all;';
+  const btn = (label, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.style.cssText = 'background:rgba(20,90,42,0.78);color:#c9ffd4;border:1px solid #5fae72;padding:4px 10px;font-size:0.7rem;letter-spacing:1px;cursor:pointer;';
+    b.addEventListener('click', e => { e.stopPropagation(); if (gState.current === S.PLAYING) fn(); });
+    panel.appendChild(b);
+  };
+  ROOMS.forEach((r, i) => {
+    btn(`[${i + 1}] CLEAR ${r.label}`, () => devClearRoom(i));
+    btn(`[⇧${i + 1}] OPEN ${r.label} NOTE`, () => devOpenNote(i));
+  });
+  btn('[0] WIN', triggerDevWin);
+  $('hud').appendChild(panel);
+
+  document.addEventListener('keydown', e => {
+    if (gState.current !== S.PLAYING || e.target.closest?.('input, textarea')) return;
+    const n = /^Digit([0-3])$/.exec(e.code)?.[1];
+    if (n === undefined) return;
+    if (n === '0') triggerDevWin();
+    else if (e.shiftKey) devOpenNote(+n - 1);
+    else devClearRoom(+n - 1);
+  });
+}
+
 // ── Dev helpers ───────────────────────────────────────────────────────────────
 if (import.meta.env.DEV) {
   window.__escapeRoomDebug = {
@@ -2086,9 +2139,7 @@ if (import.meta.env.DEV) {
       return hit ? +hit.distance.toFixed(3) : null;
     },
   };
-  const devScareBtn = $('dev-scare-btn');
-  devScareBtn?.removeAttribute('hidden');
-  devScareBtn?.addEventListener('click', triggerDevWin);
+  initDevCheats();
   window.__devPlay    = () => { resetProgress(); startGame(); };
   window.__devBlackout = triggerBlackout;
   window.__scene      = scene;
