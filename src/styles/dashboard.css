@@ -56,23 +56,29 @@
     .dash-btn .spin { display:inline-block; animation:dash-spin .7s linear infinite; }
     .dash-btn.spinning .nav-ico svg { animation:dash-spin .7s linear infinite; }
     @keyframes dash-spin { to { transform:rotate(360deg); } }
-    /* Mobile: the rail becomes a horizontal scroll bar on top */
-    @media (max-width:720px) {
+    /* Mobile (portrait, or a phone on its side): the rail becomes a horizontal
+       bar on top — a 224px rail + sticky header would eat a 450px-tall screen */
+    @media (max-width:720px), (max-height:500px) {
       .dash-shell { flex-direction:column; }
       .dash-sidebar {
         position:static; flex:none; width:100%; min-height:0;
         flex-direction:row; align-items:center; gap:4px; overflow-x:auto;
         border-right:none; border-bottom:1px solid var(--line); padding:8px 10px;
       }
+      .dash-sidebar { scrollbar-width:none; }
+      .dash-sidebar::-webkit-scrollbar { display:none; }
       .dash-brand { display:none; }
       .dash-nav { flex-direction:row; }
       .dash-navitem { white-space:nowrap; padding:8px 12px; }
-      .dash-back { margin-top:0; margin-left:auto; }
-      .dash-pagehead { padding:14px 16px; margin-bottom:16px; }
+      /* way out stays visible: pinned first, icon-only */
+      .dash-back { order:-1; flex:0 0 auto; width:auto; margin:0 4px 0 0; padding:8px 10px; }
+      .dash-back .nav-label { display:none; }
+      .dash-pagehead { position:static; padding:14px 16px; margin-bottom:16px; }
       .dash-h1 { font-size:1.25rem; }
       .dash-main > :not(.dash-pagehead) { margin-left:16px; margin-right:16px; }
     }
     .dash-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:13px; margin-bottom:20px; }
+    .lvl-grid { grid-template-columns:repeat(3, 1fr); margin-bottom:0; }   /* Easy/Mod/Hard always side by side */
     .stat-card { position:relative; background:var(--card); border:1px solid var(--line); border-radius:13px;
       padding:16px 18px; box-shadow:var(--shadow); overflow:hidden; transition:box-shadow .14s, transform .14s; }
     .stat-card:hover { box-shadow:0 4px 14px rgba(15,23,42,.09); transform:translateY(-1px); }

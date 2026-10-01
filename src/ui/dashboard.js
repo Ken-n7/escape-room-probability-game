@@ -131,7 +131,7 @@ export async function mountDashboard({ onBack } = {}) {
         <nav class="dash-nav">
           ${TABS.map(t => `<button class="dash-navitem${t.id === _tab ? ' active' : ''}" data-tab="${t.id}" type="button"><span class="nav-ico">${icon(t.icon)}</span>${t.label}</button>`).join('')}
         </nav>
-        <button class="dash-navitem dash-back" id="dash-back" type="button"><span class="nav-ico">${icon('arrow-left')}</span>Back to game</button>
+        <button class="dash-navitem dash-back" id="dash-back" type="button" aria-label="Back to game"><span class="nav-ico">${icon('arrow-left')}</span><span class="nav-label">Back to game</span></button>
       </aside>
       <main class="dash-main">
         <header class="dash-pagehead">
@@ -466,18 +466,18 @@ function renderPlayerDetail(username) {
     : emptyCard('No timed runs yet — the learning curve needs real (non-P-Learn) games.', '📈');
 
   // Per-level totals across every timed run (same first-try data as the chart).
-  const levelTotal = (name, nk, ck, accent, ico) => {
+  const levelTotal = (name, nk, ck, accent) => {
     const n = timed.reduce((s, g) => s + (g[nk] || 0), 0);
     const c = timed.reduce((s, g) => s + (g[ck] || 0), 0);
-    return statCard(n ? accOf(c, n) + '%' : '—', name, n ? `${c}/${n} right first try` : 'no timed answers', accent, ico);
+    return statCard(n ? accOf(c, n) + '%' : '—', name, n ? `${c}/${n} right first try` : 'no timed answers', accent);
   };
   const answered = timed.filter(g => g.ft_n > 0).length;
   const totals = `
     <div class="card"><h3>Totals by level (all timed games)</h3>
-    <div class="dash-grid">
-      ${levelTotal('Easy',     'easy_n', 'easy_correct', 'green', 'signal-low')}
-      ${levelTotal('Moderate', 'mod_n',  'mod_correct',  'amber', 'signal-medium')}
-      ${levelTotal('Hard',     'hard_n', 'hard_correct', 'red',   'signal-high')}
+    <div class="dash-grid lvl-grid">
+      ${levelTotal('Easy',     'easy_n', 'easy_correct', 'green')}
+      ${levelTotal('Moderate', 'mod_n',  'mod_correct',  'amber')}
+      ${levelTotal('Hard',     'hard_n', 'hard_correct', 'red')}
     </div>
     <div class="card-note">First-try accuracy per level over ${answered} timed game${answered === 1 ? '' : 's'} with answers — any outcome (escaped, caught or quit); P-Learn practice excluded.</div></div>`;
 

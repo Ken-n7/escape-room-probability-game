@@ -26,6 +26,8 @@
     /* Hidden during gameplay — it's all gameplay in-game; fullscreen lives in
        Settings. The button stays on the pre-game screens. */
     body[data-hud-visible="true"] #persistent-fs-btn { display:none; }
+    /* …and on the admin dashboard, where it covers the Export button */
+    #s-admin:not(.hidden) ~ #persistent-fs-btn { display:none; }
 
     /* ═══ AUTH — in-theme restyle + logged-out menu (overrides earlier) ═════ */
     /* Login screen floats over the hallway: translucent veil, no opaque bg. */
