@@ -465,6 +465,22 @@ function renderPlayerDetail(username) {
       <div class="card-note">Each point is one timed run, oldest → newest — hover for the date. Rising line = learning; flat = stuck; falling = slipping.</div>`
     : emptyCard('No timed runs yet — the learning curve needs real (non-P-Learn) games.', '📈');
 
+  // Per-level totals across every timed run (same first-try data as the chart).
+  const levelTotal = (name, nk, ck, accent, ico) => {
+    const n = timed.reduce((s, g) => s + (g[nk] || 0), 0);
+    const c = timed.reduce((s, g) => s + (g[ck] || 0), 0);
+    return statCard(n ? accOf(c, n) + '%' : '—', name, n ? `${c}/${n} right first try` : 'no timed answers', accent, ico);
+  };
+  const answered = timed.filter(g => g.ft_n > 0).length;
+  const totals = `
+    <div class="card"><h3>Totals by level (all timed games)</h3>
+    <div class="dash-grid">
+      ${levelTotal('Easy',     'easy_n', 'easy_correct', 'green', 'signal-low')}
+      ${levelTotal('Moderate', 'mod_n',  'mod_correct',  'amber', 'signal-medium')}
+      ${levelTotal('Hard',     'hard_n', 'hard_correct', 'red',   'signal-high')}
+    </div>
+    <div class="card-note">First-try accuracy per level over ${answered} timed game${answered === 1 ? '' : 's'} with answers — any outcome (escaped, caught or quit); P-Learn practice excluded.</div></div>`;
+
   const runRows = [...gs].reverse().map(g => {
     const ftAcc = accOf(g.ft_correct, g.ft_n);
     return `
@@ -480,6 +496,7 @@ function renderPlayerDetail(username) {
 
   return `${crumb}${banner}${cards}
     <div class="card"><h3>First-try accuracy across games</h3>${chart}</div>
+    ${totals}
     <div class="card"><h3>Every game (newest first)</h3>
     <div class="dash-table-wrap"><table class="dash-table">
       <thead><tr><th>When</th><th>Outcome</th><th class="num">Reached</th><th class="num">Score</th><th class="num">First-try</th><th>Mode</th></tr></thead>

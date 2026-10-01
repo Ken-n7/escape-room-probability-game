@@ -8,12 +8,14 @@ import {
   LayoutDashboard, Users, ClipboardList, Brain, ArrowLeft, RefreshCw, Download, ChevronRight,
   // stat-card glyphs
   Gamepad2, Trophy, Timer, Ghost, Lightbulb, Hourglass, Skull, Smartphone, Target, Calendar, TrendingUp,
+  SignalLow, SignalMedium, SignalHigh,
 } from 'lucide';
 
 // Only the icons we actually reference — keeps the lazy chunk small (tree-shaken).
 const lucideIcons = {
   LayoutDashboard, Users, ClipboardList, Brain, ArrowLeft, RefreshCw, Download, ChevronRight,
   Gamepad2, Trophy, Timer, Ghost, Lightbulb, Hourglass, Skull, Smartphone, Target, Calendar, TrendingUp,
+  SignalLow, SignalMedium, SignalHigh,
 };
 
 export { Chart, createIcons, lucideIcons };
