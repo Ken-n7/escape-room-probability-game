@@ -1,4 +1,4 @@
-import { fetchGameAccuracy, fetchOverviewStats, fetchItemStats, fetchBehaviorStats, fetchRunDetail } from '../net/scores.js';
+import { fetchGameAccuracy, fetchOverviewStats, fetchItemStats, fetchBehaviorStats, fetchRunDetail, fetchStudents, adminPlayerAction } from '../net/scores.js';
 import { donutChart, gaugeChart, areaChart, lineChart, barChart, icon, mountCharts, mountIcons, resetCharts } from './charts.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -146,6 +146,7 @@ export async function mountDashboard({ onBack } = {}) {
         </header>
         <div id="dash-body">${skeleton()}</div>
       </main>
+      <div id="dash-toast" class="dash-toast" role="status" aria-live="polite"></div>
     </div>`;
 
   root.querySelector('#dash-back').onclick    = () => _onBack?.();
@@ -173,6 +174,8 @@ export async function mountDashboard({ onBack } = {}) {
       else { s.key = key; s.dir = (key === 'u' || key === 'diff' || key === 'qid') ? 1 : -1; }
       render(); return;
     }
+    const act = e.target.closest('[data-act]');
+    if (act) { managePlayer(act.dataset.act, act.dataset.uid, act.dataset.name); return; }
     const back = e.target.closest('[data-back]');
     if (back) { _drill = back.dataset.back === 'players' ? null : { player: _drill?.player }; render(); return; }
     const run = e.target.closest('[data-run]');
@@ -215,6 +218,74 @@ export async function mountDashboard({ onBack } = {}) {
   if (_data) render(); else await refresh();
 }
 
+// Transient status message (role=status region lives in the shell, so it's announced).
+let _toastT;
+function toast(msg) {
+  const t = document.getElementById('dash-toast');
+  if (!t) return;
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => t.classList.remove('show'), 4500);
+}
+
+// Reset (wipe progress, keep account) or remove (delete account). A native <dialog>
+// gives focus trap + Esc + aria-modal; "remove" also needs the username typed.
+function managePlayer(kind, uid, name) {
+  const remove = kind === 'remove';
+  const n = gamesForUser(name).length;
+  const games = `${n} game${n === 1 ? '' : 's'}`;
+  const label = remove ? 'Remove player' : 'Reset progress';
+  const dlg = document.createElement('dialog');
+  dlg.className = 'dash-dlg';
+  dlg.setAttribute('aria-labelledby', 'dlg-title');
+  dlg.setAttribute('aria-describedby', 'dlg-desc');
+  dlg.innerHTML = `
+    <form>
+      <h2 id="dlg-title">${label}?</h2>
+      <p id="dlg-desc">${remove
+        ? `<b>${esc(name)}</b>'s account and all their data (${games}) will be permanently deleted.`
+        : `All of <b>${esc(name)}</b>'s data (${games}, scores and answers) will be wiped. They keep their account and can start fresh.`}
+        This can't be undone.</p>
+      ${remove ? `<label for="dlg-type">Type <b>${esc(name)}</b> to confirm</label>
+        <input id="dlg-type" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
+      <div class="dlg-err" role="alert"></div>
+      <div class="dlg-actions">
+        <button type="button" class="dash-btn" data-cancel>Cancel</button>
+        <button type="submit" class="dash-btn danger-fill" ${remove ? 'disabled' : ''}>${label}</button>
+      </div>
+    </form>`;
+  document.getElementById('dash-root').appendChild(dlg);
+
+  const form = dlg.querySelector('form'), ok = form.querySelector('[type=submit]');
+  const input = dlg.querySelector('#dlg-type'), err = dlg.querySelector('.dlg-err');
+  let busy = false;
+  const close = () => { if (!busy) dlg.close(); };
+  input?.addEventListener('input', () => { ok.disabled = input.value.trim().toLowerCase() !== name.toLowerCase(); });
+  dlg.querySelector('[data-cancel]').onclick = close;
+  dlg.addEventListener('cancel', e => { if (busy) e.preventDefault(); });          // Esc is blocked mid-request
+  dlg.addEventListener('click', e => { if (e.target === dlg) close(); });          // backdrop click
+  dlg.addEventListener('close', () => dlg.remove());
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (busy || ok.disabled) return;
+    busy = true; ok.disabled = true; ok.textContent = remove ? 'Removing…' : 'Resetting…'; err.textContent = '';
+    const msg = await adminPlayerAction(remove ? 'admin_remove_player' : 'admin_reset_player', uid);
+    busy = false;
+    if (msg) {
+      err.textContent = `Couldn't ${label.toLowerCase()}: ${msg}. Nothing was changed.`;
+      ok.textContent = label; ok.disabled = !!input && input.value.trim().toLowerCase() !== name.toLowerCase();
+      return;
+    }
+    dlg.close();
+    _drill = null;
+    toast(remove ? `${name} was removed.` : `${name}'s progress was reset.`);
+    await refresh();
+  });
+
+  dlg.showModal();
+  (input || dlg.querySelector('[data-cancel]')).focus();   // safe default: never land on the destructive button
+}
+
 const setBtnText = (btn, txt) => { const t = btn?.querySelector('.btn-txt'); if (t) t.textContent = txt; };
 
 async function refresh() {
@@ -225,10 +296,10 @@ async function refresh() {
   const body = document.getElementById('dash-body');
   if (body) { resetCharts(); body.innerHTML = skeleton(); }
   try {
-    const [overview, items, behavior, games] = await Promise.all([
-      fetchOverviewStats(), fetchItemStats(), fetchBehaviorStats(), fetchGameAccuracy(),
+    const [overview, items, behavior, games, students] = await Promise.all([
+      fetchOverviewStats(), fetchItemStats(), fetchBehaviorStats(), fetchGameAccuracy(), fetchStudents(),
     ]);
-    _data = { overview, items, behavior, games };
+    _data = { overview, items, behavior, games, students };
   } finally {
     _loading = false;
     if (btn) { btn.disabled = false; btn.classList.remove('spinning'); setBtnText(btn, 'Refresh'); }
@@ -378,8 +449,10 @@ function renderItems() {
 // first-try accuracy here is correct — not truncated by the API row cap).
 function rosterStats() {
   const byU = new Map();
+  const blank = (u, uid) => ({ u, uid, games: 0, timed: 0, wins: 0, ftN: 0, ftC: 0, days: new Set(), lastMs: 0 });
+  for (const s of (_data.students || [])) byU.set(s.username, blank(s.username, s.id));   // incl. never-played
   for (const g of (_data.games || [])) {
-    if (!byU.has(g.username)) byU.set(g.username, { u: g.username, games: 0, timed: 0, wins: 0, ftN: 0, ftC: 0, days: new Set(), lastMs: 0 });
+    if (!byU.has(g.username)) byU.set(g.username, blank(g.username, g.user_id));
     const r = byU.get(g.username);
     r.games++;
     r.lastMs = Math.max(r.lastMs, new Date(g.started_at).getTime());
@@ -394,7 +467,6 @@ function rosterStats() {
 }
 
 function renderPlayers() {
-  if (!(_data.games || []).length) return emptyCard('No players have played yet.', '🎮');
   const rows = applySort(rosterStats(), _sort.players);
   return `
     <div class="card">
@@ -433,7 +505,10 @@ function verdictText(v) {
 function renderPlayerDetail(username) {
   const crumb = `<div class="crumb"><span class="link" data-back="players">Players</span> <span class="crumb-sep">/</span> <b>${esc(username)}</b></div>`;
   const gs = gamesForUser(username);
-  if (!gs.length) return `${crumb}${emptyCard('No games recorded for this player yet.', '🎮')}`;
+  const uid = gs[0]?.user_id || (_data.students || []).find(s => s.username === username)?.id;
+  const manage = uid ? `<div class="card-toolbar manage-bar">${[['reset', 'rotate-ccw', 'Reset progress'], ['remove', 'trash-2', 'Remove player']].map(([k, ico, txt]) =>
+    `<button type="button" class="dash-btn danger" data-act="${k}" data-uid="${esc(uid)}" data-name="${esc(username)}"><span class="nav-ico">${icon(ico)}</span>${txt}</button>`).join('')}</div>` : '';
+  if (!gs.length) return `${crumb}${manage}${emptyCard('No games recorded for this player yet.', '🎮')}`;
 
   const timed = gs.filter(g => !g.plearn);
   const v = learningVerdict(username);
@@ -494,7 +569,7 @@ function renderPlayerDetail(username) {
       </tr>`;
   }).join('');
 
-  return `${crumb}${banner}${cards}
+  return `${crumb}${manage}${banner}${cards}
     <div class="card"><h3>First-try accuracy across games</h3>${chart}</div>
     ${totals}
     <div class="card"><h3>Every game (newest first)</h3>

@@ -90,6 +90,20 @@ export async function fetchGameAccuracy() {
   return data ?? [];
 }
 
+// Every student account, including ones that never played (admins read all profiles via RLS).
+export async function fetchStudents() {
+  const { data, error } = await supabase.from('profiles').select('id, username').eq('role', 'student');
+  if (error) { console.warn('[scores] fetchStudents failed:', error.message); return []; }
+  return data ?? [];
+}
+
+// Admin-only (server re-checks). fn: 'admin_reset_player' | 'admin_remove_player'.
+// Returns an error message, or null on success.
+export async function adminPlayerAction(fn, userId) {
+  const { error } = await supabase.rpc(fn, { p_user: userId });
+  return error ? error.message : null;
+}
+
 export async function fetchOverviewStats() {
   const { data, error } = await supabase.rpc('overview_stats');
   if (error) { console.warn('[scores] overview_stats failed:', error.message); return null; }

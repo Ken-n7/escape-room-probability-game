@@ -488,3 +488,41 @@ $$;
 grant execute on function public.behavior_stats() to authenticated;
 
 create index if not exists qa_difficulty_idx on public.question_attempts (difficulty);
+
+-- ── admin_reset_player / admin_remove_player: manage a player from the dashboard ─
+-- RLS has no delete policies on purpose, so these SECURITY DEFINER functions are
+-- the ONLY way to delete, and each checks is_admin() itself.
+--   reset  = wipe progress (runs, plays, answers, events); the account stays.
+--   remove = delete the account (auth user) — the profile and all data cascade.
+-- Admin accounts can't be removed, so you can't lock yourself out.
+create or replace function public.admin_reset_player(p_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then raise exception 'not_admin'; end if;
+  delete from public.runs where user_id = p_user;
+  delete from public.plays where user_id = p_user;   -- cascades attempts/events tied to a play
+  delete from public.question_attempts where user_id = p_user;
+  delete from public.events where user_id = p_user;
+end;
+$$;
+grant execute on function public.admin_reset_player(uuid) to authenticated;
+
+create or replace function public.admin_remove_player(p_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then raise exception 'not_admin'; end if;
+  if exists (select 1 from public.profiles where id = p_user and role = 'admin') then
+    raise exception 'cannot_remove_admin';
+  end if;
+  delete from auth.users where id = p_user;
+end;
+$$;
+grant execute on function public.admin_remove_player(uuid) to authenticated;
