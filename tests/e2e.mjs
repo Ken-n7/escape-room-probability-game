@@ -217,7 +217,7 @@ async function sectionDailies(browser) {
   await sleep(600);
   const hdr = await page.locator('#dash-body .card h3').innerText();
   rows = await page.locator('#dash-body tbody tr').allInnerTexts();
-  check('3e  yesterday: re-renders — Dave 97, Carol 76', hdr.includes('Sep') && rows[0] && rows[0].includes('Dave') && rows[0].includes('97') &&
+  check('3e  yesterday: re-renders — Dave 97, Carol 76', hdr.includes(yesterday.toLocaleDateString('en-US', { month: 'short' })) && rows[0] && rows[0].includes('Dave') && rows[0].includes('97') &&
     rows[1] && rows[1].includes('Carol') && rows[1].includes('76'), `hdr="${hdr}" ${JSON.stringify(rows)}`);
 
   await page.evaluate(() => document.querySelector('.dly-chip[data-board="speed"]').click());
