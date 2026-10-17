@@ -26,6 +26,8 @@ const _daily = { date: new Date(), board: 'escape' };
 
 // Per-table interactive state (search box text + sorted column).
 const _query = { players: '', items: '' };
+const _filter = { players: 'all' };   // all | active | never (never-played accounts)
+const _sel = new Map();               // Players tab bulk selection: uid → username
 const _sort  = {
   players: { key: 'lastMs',   dir: -1 },   // default: most recently active first
   items:   { key: 'firstAcc', dir:  1 },   // default: hardest (lowest first-try) first
@@ -115,9 +117,26 @@ function applySort(rows, { key, dir }) {
 // Hide table rows whose data-search text doesn't contain the query. No re-render.
 function applyFilter(tab) {
   const q = (_query[tab] || '').trim().toLowerCase();
+  const st = tab === 'players' ? _filter.players : 'all';
   document.querySelectorAll('#dash-body .dash-table tbody tr[data-search]').forEach(tr => {
-    tr.classList.toggle('filtered-out', !!q && !(tr.dataset.search || '').includes(q));
+    const hide = (!!q && !(tr.dataset.search || '').includes(q)) || (st !== 'all' && tr.dataset.status !== st);
+    tr.classList.toggle('filtered-out', hide);
+    if (hide) { const cb = tr.querySelector('.sel'); if (cb) _sel.delete(cb.dataset.uid); }   // selection = what you see
   });
+  if (tab === 'players') syncBulk();
+}
+
+// Reflect _sel in the checkboxes, the select-all box and the bulk bar (no re-render).
+function syncBulk() {
+  const bar = document.getElementById('bulk-bar');
+  if (!bar) return;
+  document.querySelectorAll('#dash-body .sel').forEach(cb => { cb.checked = _sel.has(cb.dataset.uid); });
+  bar.hidden = !_sel.size;
+  document.getElementById('bulk-count').textContent = `${_sel.size} selected`;
+  const vis = [...document.querySelectorAll('#dash-body tbody tr:not(.filtered-out) .sel')];
+  const all = document.getElementById('sel-all'), n = vis.filter(cb => cb.checked).length;
+  all.checked = !!vis.length && n === vis.length;
+  all.indeterminate = n > 0 && n < vis.length;
 }
 
 // ── shell ────────────────────────────────────────────────────────────────────
@@ -136,7 +155,7 @@ export async function mountDashboard({ onBack } = {}) {
       <main class="dash-main">
         <header class="dash-pagehead">
           <div>
-            <h1 class="dash-h1" id="dash-heading">Overview</h1>
+            <h1 class="dash-h1" id="dash-heading" tabindex="-1">Overview</h1>
             <div class="dash-sub" id="dash-sub">Loading…</div>
           </div>
           <div class="dash-actions">
@@ -174,8 +193,16 @@ export async function mountDashboard({ onBack } = {}) {
       else { s.key = key; s.dir = (key === 'u' || key === 'diff' || key === 'qid') ? 1 : -1; }
       render(); return;
     }
+    if (e.target.closest('.sel-cell')) return;           // checkboxes: handled on 'change', never drill in
+    const chipP = e.target.closest('.pf-chip');
+    if (chipP) { _filter.players = chipP.dataset.pf; render(); return; }
     const act = e.target.closest('[data-act]');
-    if (act) { managePlayer(act.dataset.act, act.dataset.uid, act.dataset.name); return; }
+    if (act) { managePlayers(act.dataset.act, [{ uid: act.dataset.uid, name: act.dataset.name }]); return; }
+    const bulk = e.target.closest('[data-bulk]');
+    if (bulk) {
+      if (bulk.dataset.bulk === 'clear') { _sel.clear(); syncBulk(); return; }
+      managePlayers(bulk.dataset.bulk, [..._sel].map(([uid, name]) => ({ uid, name }))); return;
+    }
     const back = e.target.closest('[data-back]');
     if (back) { _drill = back.dataset.back === 'players' ? null : { player: _drill?.player }; render(); return; }
     const run = e.target.closest('[data-run]');
@@ -194,6 +221,14 @@ export async function mountDashboard({ onBack } = {}) {
 
   // Daily boards date picker — rebuild that day's board on change.
   dashBody.addEventListener('change', e => {
+    const cb = e.target.closest('.sel');
+    if (cb) { cb.checked ? _sel.set(cb.dataset.uid, cb.dataset.name) : _sel.delete(cb.dataset.uid); syncBulk(); return; }
+    if (e.target.id === 'sel-all') {
+      document.querySelectorAll('#dash-body tbody tr:not(.filtered-out) .sel').forEach(c => {
+        e.target.checked ? _sel.set(c.dataset.uid, c.dataset.name) : _sel.delete(c.dataset.uid);
+      });
+      syncBulk(); return;
+    }
     const d = e.target.closest('#dly-date');
     if (!d || !d.value) return;
     const [y, m, day] = d.value.split('-').map(Number);
@@ -228,13 +263,24 @@ function toast(msg) {
   _toastT = setTimeout(() => t.classList.remove('show'), 4500);
 }
 
-// Reset (wipe progress, keep account) or remove (delete account). A native <dialog>
-// gives focus trap + Esc + aria-modal; "remove" also needs the username typed.
-function managePlayer(kind, uid, name) {
-  const remove = kind === 'remove';
-  const n = gamesForUser(name).length;
-  const games = `${n} game${n === 1 ? '' : 's'}`;
-  const label = remove ? 'Remove player' : 'Reset progress';
+const ago = ms => { const d = (Date.now() - ms) / 864e5; return d < 1 ? 'today' : d < 2 ? 'yesterday' : `${Math.floor(d)} days ago`; };
+
+// Reset (wipe progress, keep accounts) or remove (delete accounts) for one or many
+// players. A native <dialog> gives focus trap + Esc + aria-modal. The dialog spells
+// out the cost, and removing (or any bulk action) needs a typed phrase.
+function managePlayers(kind, targets) {
+  if (!targets.length) return;
+  const remove = kind === 'remove', one = targets.length === 1, n = targets.length;
+  const games = targets.reduce((t, x) => t + gamesForUser(x.name).length, 0);
+  const gTxt = `${games} game${games === 1 ? '' : 's'}`;
+  const verb = remove ? 'Remove' : 'Reset';
+  const label = one ? (remove ? 'Remove player' : 'Reset progress') : `${verb} ${n} players`;
+  const names = targets.slice(0, 5).map(x => `<b>${esc(x.name)}</b>`).join(', ') + (n > 5 ? ` and ${n - 5} more` : '');
+  const last = one ? Math.max(0, ...gamesForUser(targets[0].name).map(g => new Date(g.started_at).getTime())) : 0;
+  const cost = one ? (games ? `Last played ${ago(last)} · ${gTxt}.` : 'No games recorded.') : `${gTxt} in total.`;
+  const phrase = remove ? (one ? targets[0].name : `REMOVE ${n}`) : (one ? '' : `RESET ${n}`);
+  const same = v => v.trim().toLowerCase() === phrase.toLowerCase();
+
   const dlg = document.createElement('dialog');
   dlg.className = 'dash-dlg';
   dlg.setAttribute('aria-labelledby', 'dlg-title');
@@ -243,15 +289,15 @@ function managePlayer(kind, uid, name) {
     <form>
       <h2 id="dlg-title">${label}?</h2>
       <p id="dlg-desc">${remove
-        ? `<b>${esc(name)}</b>'s account and all their data (${games}) will be permanently deleted.`
-        : `All of <b>${esc(name)}</b>'s data (${games}, scores and answers) will be wiped. They keep their account and can start fresh.`}
-        This can't be undone.</p>
-      ${remove ? `<label for="dlg-type">Type <b>${esc(name)}</b> to confirm</label>
+        ? `${names}${one ? "'s account and all their data" : ' — accounts and all their data'} will be permanently deleted.`
+        : `All data for ${names} will be wiped; ${one ? 'they keep their account' : 'they keep their accounts'} and can start fresh.`}
+        <span class="dlg-cost">${cost}</span> This can't be undone.</p>
+      ${phrase ? `<label for="dlg-type">Type <b>${esc(phrase)}</b> to confirm</label>
         <input id="dlg-type" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
       <div class="dlg-err" role="alert"></div>
       <div class="dlg-actions">
         <button type="button" class="dash-btn" data-cancel>Cancel</button>
-        <button type="submit" class="dash-btn danger-fill" ${remove ? 'disabled' : ''}>${label}</button>
+        <button type="submit" class="dash-btn danger-fill" ${phrase ? 'disabled' : ''}>${label}</button>
       </div>
     </form>`;
   document.getElementById('dash-root').appendChild(dlg);
@@ -260,7 +306,7 @@ function managePlayer(kind, uid, name) {
   const input = dlg.querySelector('#dlg-type'), err = dlg.querySelector('.dlg-err');
   let busy = false;
   const close = () => { if (!busy) dlg.close(); };
-  input?.addEventListener('input', () => { ok.disabled = input.value.trim().toLowerCase() !== name.toLowerCase(); });
+  input?.addEventListener('input', () => { ok.disabled = !same(input.value); });
   dlg.querySelector('[data-cancel]').onclick = close;
   dlg.addEventListener('cancel', e => { if (busy) e.preventDefault(); });          // Esc is blocked mid-request
   dlg.addEventListener('click', e => { if (e.target === dlg) close(); });          // backdrop click
@@ -269,17 +315,20 @@ function managePlayer(kind, uid, name) {
     e.preventDefault();
     if (busy || ok.disabled) return;
     busy = true; ok.disabled = true; ok.textContent = remove ? 'Removing…' : 'Resetting…'; err.textContent = '';
-    const msg = await adminPlayerAction(remove ? 'admin_remove_player' : 'admin_reset_player', uid);
+    const msg = await adminPlayerAction(remove ? 'admin_remove_players' : 'admin_reset_players', targets.map(x => x.uid));
     busy = false;
     if (msg) {
       err.textContent = `Couldn't ${label.toLowerCase()}: ${msg}. Nothing was changed.`;
-      ok.textContent = label; ok.disabled = !!input && input.value.trim().toLowerCase() !== name.toLowerCase();
+      ok.textContent = label; ok.disabled = !!input && !same(input.value);
       return;
     }
     dlg.close();
+    _sel.clear(); syncBulk();                               // hide the bulk bar now, not after the refetch
     _drill = null;
-    toast(remove ? `${name} was removed.` : `${name}'s progress was reset.`);
-    await refresh();
+    toast(one ? (remove ? `${targets[0].name} was removed.` : `${targets[0].name}'s progress was reset.`)
+              : `${n} players ${remove ? 'removed' : 'reset'}.`);
+    await refresh(true);
+    document.getElementById('dash-heading')?.focus();       // focus was on a now-gone control
   });
 
   dlg.showModal();
@@ -288,13 +337,13 @@ function managePlayer(kind, uid, name) {
 
 const setBtnText = (btn, txt) => { const t = btn?.querySelector('.btn-txt'); if (t) t.textContent = txt; };
 
-async function refresh() {
+async function refresh(quiet = false) {
   if (_loading) return;
   _loading = true;
   const btn = document.getElementById('dash-refresh');
   if (btn) { btn.disabled = true; btn.classList.add('spinning'); setBtnText(btn, 'Refreshing…'); }
   const body = document.getElementById('dash-body');
-  if (body) { resetCharts(); body.innerHTML = skeleton(); }
+  if (body && !quiet) { resetCharts(); body.innerHTML = skeleton(); }   // quiet = keep the table (and scroll) in place
   try {
     const [overview, items, behavior, games, students] = await Promise.all([
       fetchOverviewStats(), fetchItemStats(), fetchBehaviorStats(), fetchGameAccuracy(), fetchStudents(),
@@ -462,25 +511,39 @@ function rosterStats() {
   }
   return [...byU.values()].map(r => {
     const v = learningVerdict(r.u);
-    return { ...r, days: r.days.size, ftAcc: accOf(r.ftC, r.ftN), trend: v, trendDiff: v.diff };
+    return { ...r, days: r.days.size, ftAcc: accOf(r.ftC, r.ftN), trend: v, trendDiff: v.diff, never: r.games === 0 };
   });
 }
 
 function renderPlayers() {
-  const rows = applySort(rosterStats(), _sort.players);
+  const all = rosterStats();
+  if (!all.length) return emptyCard('No players yet.', '🎮');
+  const rows = applySort(all, _sort.players);
+  const nNever = all.filter(r => r.never).length;
+  const chips = [['all', 'All', all.length], ['active', 'Active', all.length - nNever], ['never', 'Never played', nNever]]
+    .map(([k, t, n]) => `<button type="button" class="pf-chip${_filter.players === k ? ' active' : ''}" data-pf="${k}" aria-pressed="${_filter.players === k}">${t} <span class="pf-n">${n}</span></button>`).join('');
   return `
     <div class="card">
     <div class="card-toolbar"><h3>Class progress — who's learning</h3>${searchBox('players', 'Search players…')}</div>
+    <div class="pf-chips" role="group" aria-label="Filter players">${chips}</div>
+    <div class="bulk-bar" id="bulk-bar" hidden>
+      <span class="bulk-count" id="bulk-count" role="status"></span>
+      <button type="button" class="dash-btn danger" data-bulk="reset"><span class="nav-ico">${icon('rotate-ccw')}</span>Reset selected</button>
+      <button type="button" class="dash-btn danger" data-bulk="remove"><span class="nav-ico">${icon('trash-2')}</span>Remove selected</button>
+      <button type="button" class="dash-btn" data-bulk="clear">Clear</button>
+    </div>
     <div class="dash-table-wrap"><table class="dash-table">
       <thead><tr>
+        <th class="sel-cell"><label class="sel-hit"><input type="checkbox" id="sel-all" aria-label="Select all shown players"></label></th>
         ${th('players', 'u', 'Player')}${th('players', 'trendDiff', 'Trend')}
         ${th('players', 'ftAcc', 'First-try acc', 'num')}${th('players', 'games', 'Games', 'num')}
         ${th('players', 'timed', 'Timed', 'num')}${th('players', 'days', 'Days', 'num')}
         ${th('players', 'wins', 'Wins', 'num')}${th('players', 'lastMs', 'Last played', 'num')}
       </tr></thead>
       <tbody>${rows.map(r => `
-        <tr class="row-link" data-player="${esc(r.u)}" data-search="${esc(r.u.toLowerCase())}">
-          <td>${esc(r.u)} <span class="chev">›</span></td>
+        <tr class="row-link" data-player="${esc(r.u)}" data-search="${esc(r.u.toLowerCase())}" data-status="${r.never ? 'never' : 'active'}">
+          <td class="sel-cell"><label class="sel-hit"><input type="checkbox" class="sel" data-uid="${esc(r.uid)}" data-name="${esc(r.u)}" aria-label="Select ${esc(r.u)}"${_sel.has(r.uid) ? ' checked' : ''}></label></td>
+          <td>${esc(r.u)}${r.never ? ' <span class="pill mid">No games yet</span>' : ''} <span class="chev">›</span></td>
           <td>${trendPill(r.trend)}</td>
           <td class="num">${r.ftAcc == null ? '—' : accPill(r.ftAcc)}</td>
           <td class="num">${r.games}</td>
@@ -490,7 +553,7 @@ function renderPlayers() {
           <td class="num">${r.lastMs ? fmtDateTime(new Date(r.lastMs).toISOString()) : '—'}</td>
         </tr>`).join('')}</tbody>
     </table></div>
-    <div class="card-note">Click a player for their learning curve. Trend = recent vs early first-try accuracy on timed runs (P-Learn practice excluded — its hints inflate accuracy). Sort by Trend to surface who's slipping.</div></div>`;
+    <div class="card-note">Click a player for their learning curve; tick boxes to reset or remove several at once. Trend = recent vs early first-try accuracy on timed runs (P-Learn practice excluded — its hints inflate accuracy). Sort by Trend to surface who's slipping.</div></div>`;
 }
 
 // ── PLAYER DETAIL (drill-down: one player's learning over their games) ──────────
@@ -506,9 +569,11 @@ function renderPlayerDetail(username) {
   const crumb = `<div class="crumb"><span class="link" data-back="players">Players</span> <span class="crumb-sep">/</span> <b>${esc(username)}</b></div>`;
   const gs = gamesForUser(username);
   const uid = gs[0]?.user_id || (_data.students || []).find(s => s.username === username)?.id;
-  const manage = uid ? `<div class="card-toolbar manage-bar">${[['reset', 'rotate-ccw', 'Reset progress'], ['remove', 'trash-2', 'Remove player']].map(([k, ico, txt]) =>
-    `<button type="button" class="dash-btn danger" data-act="${k}" data-uid="${esc(uid)}" data-name="${esc(username)}"><span class="nav-ico">${icon(ico)}</span>${txt}</button>`).join('')}</div>` : '';
-  if (!gs.length) return `${crumb}${manage}${emptyCard('No games recorded for this player yet.', '🎮')}`;
+  const manage = uid ? `<div class="card danger-zone"><h3>Manage player</h3>
+    <div class="card-note">Reset clears their games but keeps the account. Remove deletes the account and all its data. Neither can be undone.</div>
+    <div class="manage-bar">${[['reset', 'rotate-ccw', 'Reset progress'], ['remove', 'trash-2', 'Remove player']].map(([k, ico, txt]) =>
+    `<button type="button" class="dash-btn danger" data-act="${k}" data-uid="${esc(uid)}" data-name="${esc(username)}"><span class="nav-ico">${icon(ico)}</span>${txt}</button>`).join('')}</div></div>` : '';
+  if (!gs.length) return `${crumb}${emptyCard('No games recorded for this player yet.', '🎮')}${manage}`;
 
   const timed = gs.filter(g => !g.plearn);
   const v = learningVerdict(username);
@@ -569,7 +634,7 @@ function renderPlayerDetail(username) {
       </tr>`;
   }).join('');
 
-  return `${crumb}${manage}${banner}${cards}
+  return `${crumb}${banner}${cards}
     <div class="card"><h3>First-try accuracy across games</h3>${chart}</div>
     ${totals}
     <div class="card"><h3>Every game (newest first)</h3>
@@ -577,7 +642,7 @@ function renderPlayerDetail(username) {
       <thead><tr><th>When</th><th>Outcome</th><th class="num">Reached</th><th class="num">Score</th><th class="num">First-try</th><th>Mode</th></tr></thead>
       <tbody>${runRows || '<tr><td colspan="6" class="dash-empty">No games.</td></tr>'}</tbody>
     </table></div>
-    <div class="card-note">Click a game to see every answer and event from it.</div></div>`;
+    <div class="card-note">Click a game to see every answer and event from it.</div></div>${manage}`;
 }
 
 // ── RUN DETAIL (drill-down: everything from one run) ───────────────────────────

@@ -97,10 +97,10 @@ export async function fetchStudents() {
   return data ?? [];
 }
 
-// Admin-only (server re-checks). fn: 'admin_reset_player' | 'admin_remove_player'.
+// Admin-only (server re-checks). fn: 'admin_reset_players' | 'admin_remove_players'.
 // Returns an error message, or null on success.
-export async function adminPlayerAction(fn, userId) {
-  const { error } = await supabase.rpc(fn, { p_user: userId });
+export async function adminPlayerAction(fn, userIds) {
+  const { error } = await supabase.rpc(fn, { p_users: userIds });
   return error ? error.message : null;
 }
 

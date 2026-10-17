@@ -17,7 +17,7 @@ import path from 'node:path';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const BASE = 'http://localhost:5199';
-const watchdog = setTimeout(() => { console.error('WATCHDOG TIMEOUT'); process.exit(2); }, 420_000);
+const watchdog = setTimeout(() => { console.error('WATCHDOG TIMEOUT'); process.exit(2); }, 900_000);
 watchdog.unref();
 
 const checks = [];
@@ -297,10 +297,85 @@ async function sectionTimeout(browser) {
   await ctx.close();
 }
 
+// ── 6. Dashboard player management (reset/remove, bulk, filters) ───────────────
+// All server calls are stubbed: admin RPCs + the profiles read return fixtures,
+// and the delete RPCs just record what the page sent.
+async function sectionRoster(browser) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 800 } });   // phone width: also checks fit
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(10_000);
+  page.on('pageerror', e => pageErrors.push(String(e)));
+  const now = new Date().toISOString();
+  const g = (u, id) => ({ user_id: 'u-' + u, username: u, play_id: id, started_at: now, outcome: 'won', total_score: 90,
+    best_time: 150, rooms_completed: 3, duration_sec: 500, plearn: false, ft_n: 5, ft_correct: 4,
+    easy_n: 2, easy_correct: 2, mod_n: 2, mod_correct: 1, hard_n: 1, hard_correct: 1 });
+  const GAMES = [g('Alice', 'p1'), g('Alice', 'p2'), g('Bob', 'p3')];
+  const STUDENTS = ['Alice', 'Bob', 'Newbie', 'Zed'].map(u => ({ id: 'u-' + u, username: u }));
+  const calls = [];
+  await page.route('**/rpc/game_accuracy*', r => r.fulfill({ json: GAMES }));
+  await page.route('**/rest/v1/profiles*', r => r.fulfill({ json: STUDENTS }));
+  await page.route('**/rpc/admin_*', r => { calls.push([new URL(r.request().url()).pathname.split('/').pop(), JSON.parse(r.request().postData())]); r.fulfill({ status: 204, body: '' }); });
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await page.waitForSelector('#s-menu:not(.hidden)', { timeout: 60_000 });
+  await navClick(page, '#btn-menu-guest');
+  await page.evaluate(() => window.__openDash && window.__openDash());
+  await page.waitForFunction(() => document.querySelector('.dash-navitem[data-tab="players"]'), { timeout: 20_000 });
+  await page.evaluate(() => document.querySelector('.dash-navitem[data-tab="players"]').click());
+  await page.waitForSelector('tr[data-player="Zed"]');
+
+  check('6a  roster lists never-played accounts with a badge',
+    (await page.locator('tbody tr').count()) === 4 && (await page.locator('tr[data-player="Zed"]').innerText()).includes('No games yet'));
+  check('6b  no horizontal page overflow at phone width',
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+
+  await page.click('.pf-chip[data-pf="never"]');
+  const vis = await page.locator('tbody tr:not(.filtered-out)').count();
+  check('6c  "Never played" filter shows only those 2', vis === 2, `visible=${vis}`);
+
+  await page.check('#sel-all');
+  check('6d  select-all ticks only the visible rows; bulk bar shows count',
+    (await page.locator('.sel:checked').count()) === 2 && (await page.locator('#bulk-count').innerText()) === '2 selected');
+  await page.click('.pf-chip[data-pf="all"]');
+  check('6e  selection survives widening the filter (still 2)', (await page.locator('.sel:checked').count()) === 2);
+  await page.click('.pf-chip[data-pf="active"]');
+  check('6f  hiding selected rows drops them from the selection', (await page.locator('#bulk-bar:not([hidden])').count()) === 0);
+
+  await page.click('.pf-chip[data-pf="never"]');
+  await page.check('#sel-all');
+  await page.click('[data-bulk="reset"]');
+  const ok = page.locator('.dash-dlg [type=submit]');
+  check('6g  bulk reset: dialog states the count and demands a typed phrase',
+    (await page.locator('#dlg-title').innerText()).includes('2 players') && await ok.isDisabled());
+  await page.fill('#dlg-type', 'RESET 2');
+  await ok.click();
+  await page.waitForSelector('dialog', { state: 'detached' });
+  const c = calls[0] || [];
+  check('6h  bulk reset sends one call with both ids', c[0] === 'admin_reset_players' && JSON.stringify(c[1].p_users.sort()) === '["u-Newbie","u-Zed"]', JSON.stringify(calls));
+  check('6i  success toast shown, selection cleared',
+    (await page.locator('#dash-toast').innerText()).includes('2 players reset') && (await page.locator('.sel:checked').count()) === 0);
+
+  await page.click('.pf-chip[data-pf="all"]');
+  await page.click('tr[data-player="Alice"]');
+  await page.waitForSelector('.danger-zone');
+  const order = await page.evaluate(() => {
+    const b = document.getElementById('dash-body'), z = b.querySelector('.danger-zone'), v = b.querySelector('.verdict');
+    return !!(v.compareDocumentPosition(z) & Node.DOCUMENT_POSITION_FOLLOWING) && b.lastElementChild === z;
+  });
+  check('6j  player page: destructive actions live in a danger zone at the bottom', order);
+  await page.click('[data-act="remove"]');
+  check('6k  single remove: dialog shows last played + games, needs the username',
+    (await page.locator('#dlg-desc').innerText()).includes('2 games') && (await ok.isDisabled()));
+  await page.keyboard.press('Escape');
+  check('6l  Esc cancels with no call made', (await page.locator('dialog').count()) === 0 && calls.length === 1);
+  await ctx.close();
+}
+
 // ── Runner ────────────────────────────────────────────────────────────────────
 // One section crash becomes a failed check instead of killing the whole run —
 // the earlier sections' results are still reported.
 async function runSection(name, fn) {
+  if (process.env.ONLY && !name.startsWith(process.env.ONLY)) return;   // ONLY=6 npm run test:e2e
   const t0 = Date.now();
   try { await fn(browser); }
   catch (e) { check(`${name} section crashed`, false, String(e).split('\n')[0]); }
@@ -316,6 +391,7 @@ try {
   await runSection('3 dailies', sectionDailies);
   await runSection('4 mobile', sectionMobile);
   await runSection('5 timeout', sectionTimeout);
+  await runSection('6 roster', sectionRoster);
 
   check('no uncaught page errors across all scenarios', pageErrors.length === 0, pageErrors.slice(0, 3).join(' || ') || 'none');
 
