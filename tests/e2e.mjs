@@ -16,7 +16,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const BASE = 'http://localhost:5199';
+const PORT = Number(process.env.E2E_PORT || 5199);
+const BASE = `http://localhost:${PORT}`;
 const watchdog = setTimeout(() => { console.error('WATCHDOG TIMEOUT'); process.exit(2); }, 900_000);
 watchdog.unref();
 
@@ -33,7 +34,7 @@ const ping = url => new Promise(res => http.get(url, r => { r.resume(); res(true
 async function ensureServer() {
   if (await ping(BASE)) return null;
   console.log(`No server on ${BASE} — starting Vite…`);
-  const proc = spawn('npx', ['vite', '--port', '5199', '--strictPort', '--host', '127.0.0.1'], {
+  const proc = spawn(process.execPath, [path.join(ROOT, 'node_modules/vite/bin/vite.js'), '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
   });
   proc.stderr.on('data', d => process.stderr.write('[vite] ' + d));

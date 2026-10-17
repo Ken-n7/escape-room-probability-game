@@ -147,7 +147,7 @@ The `src/net/` layer talks to Supabase:
 
 The database schema (`supabase/schema.sql`) is production-grade and **idempotent** (safe to re-run — it's also the upgrade path). Highlights:
 
-- **`profiles`** — one row per account, `role` is `student` or `admin`. A `handle_new_user()` trigger creates the profile **inside the signup transaction**, so an auth user can never exist without a profile, and `role` is forced to `student` server-side so it can't be spoofed. Usernames are validated by DB constraints (3–20 chars, restricted charset) and enforced **case-insensitively** unique.
+- **`profiles`** — one row per account, `role` is `student` or `admin`. A `handle_new_user()` trigger creates the profile **inside the signup transaction**, so an auth user can never exist without a profile, and `role` is forced to `student` server-side so it can't be spoofed. Browser clients can update only `username`; role changes require trusted administration. Usernames are validated by DB constraints (3–20 chars, restricted charset) and enforced **case-insensitively** unique.
 - **`runs`** — one row per finished playthrough (`room_scores`, `total_score` 0–100, `best_time`).
 - **`plays` / attempts / events** — fine-grained analytics tables tied to the user, protected by **Row Level Security** so only the player and admins can read them.
 - **`username_available()`** — `SECURITY DEFINER` function so the signup form can pre-check a name without exposing profile data.
@@ -186,6 +186,10 @@ Then open the local URL Vite prints. Controls: **WASD** to move, **mouse** to lo
 
 > Note: the anon key is a public, RLS-guarded key by design. Access control is enforced by Row Level Security in the database, not by hiding the key.
 
+Existing installations can apply [the permission-hardening migration](supabase/migrations/20261017163317_harden_profile_and_cleanup_permissions.sql) without rerunning the entire schema. `sweep_stale_plays()` is maintenance-only: run it as the database owner or trusted `service_role`, never with a browser key. The cutoff must be a positive number of minutes.
+
+To verify the permissions, run `tests/security.sql` as the database owner in SQL Editor or with `psql`. It checks blocked role escalation, public cleanup access, row ownership, and the one-time rename. All fixture accounts and changes are rolled back.
+
 ---
 
 ## Build & deploy
@@ -207,6 +211,8 @@ Deploy on **Vercel** by importing the GitHub repo. Settings (auto-detected, or s
 
 ```bash
 npm run test:e2e   # boots its own dev server on :5199 if none is running
+# Use a fresh server/port to verify a dependency upgrade:
+E2E_PORT=5201 npm run test:e2e
 ```
 
 `tests/e2e.mjs` drives a real headless Chromium against the app — leaderboard windows, the ⟳ refresh cooldown, and the admin dashboard's Daily boards (with stubbed data). Leaderboard RPCs hit the live Supabase project, so this is an integration check (needs network access to `https://idhhdqbxtssiujuwopcq.supabase.co`); the dashboard assertions use fabricated rows and need no admin login. Exits nonzero on any failure.

@@ -19,6 +19,7 @@ pnpm-debug.log*
 # Tool caches and test output
 .vite/
 .cache/
+supabase/.temp/
 coverage/
 .nyc_output/
 playwright-report/

@@ -118,17 +118,25 @@ drop policy if exists "profiles_select" on public.profiles;
 create policy "profiles_select" on public.profiles
   for select using ( id = auth.uid() or public.is_admin() );
 
--- Let a user rename themselves (change username) — own row only. The column's
--- format check + case-insensitive unique index still guard bad/duplicate names.
+-- Players may update ONLY their username. Row ownership alone does not protect
+-- role: a table-level UPDATE grant would let any student promote themselves.
+-- Revoke both table and any pre-existing column grants before the allowlist.
+revoke update on table public.profiles from public, anon, authenticated;
+revoke update (id, username, role, username_changed, created_at)
+  on table public.profiles from public, anon, authenticated;
+grant update (username) on table public.profiles to authenticated;
+
+-- The format check + case-insensitive unique index still guard invalid names.
 drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles
-  for update using ( id = auth.uid() ) with check ( id = auth.uid() );
+  for update to authenticated
+  using ( id = (select auth.uid()) ) with check ( id = (select auth.uid()) );
 
 -- One-time rename: a user may change their username only ONCE. Enforced in a
 -- trigger so it can't be bypassed from the client, and the flag is trigger-
 -- controlled (a client can't reset it to false).
 create or replace function public.enforce_username_change_once()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = '' as $$
 begin
   if new.username is distinct from old.username then
     if old.username_changed then
@@ -305,6 +313,8 @@ create policy "events_select" on public.events for select using ( user_id = auth
 -- kills a backgrounded tab), the row is orphaned at 'in_progress' forever. This
 -- backstop marks such rows 'abandoned' when they are either older than a cutoff
 -- OR superseded by a newer run from the same player (a stronger staleness signal).
+-- Maintenance only: SQL owners and the trusted service role may call it, never
+-- browser clients. No service key belongs in the frontend.
 create or replace function public.sweep_stale_plays(p_minutes int default 30)
 returns integer
 language plpgsql
@@ -313,6 +323,10 @@ set search_path = public
 as $$
 declare n integer;
 begin
+  if p_minutes is null or p_minutes < 1 then
+    raise exception 'p_minutes must be a positive integer' using errcode = '22023';
+  end if;
+
   update public.plays p
      set outcome      = 'abandoned',
          ended_at     = coalesce(p.ended_at, now()),
@@ -326,7 +340,8 @@ begin
   return n;
 end;
 $$;
-grant execute on function public.sweep_stale_plays(int) to authenticated;
+revoke execute on function public.sweep_stale_plays(int) from public, anon, authenticated;
+grant execute on function public.sweep_stale_plays(int) to service_role;
 
 -- Clean up whatever orphans already exist (idempotent — safe on every re-run).
 select public.sweep_stale_plays(30);
