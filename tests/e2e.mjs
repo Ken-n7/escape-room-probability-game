@@ -372,6 +372,62 @@ async function sectionRoster(browser) {
   await ctx.close();
 }
 
+// ── 7. A delayed pointer capture must not trap the pause menu ──────────────────
+// Hold the native request until the confirmation is visible, then really grant
+// capture. This reproduces the race independently of browser/GPU timing.
+async function sectionPointerLock(browser) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  try {
+    const page = await boot(ctx);
+    await page.evaluate(() => {
+      const canvas = document.querySelector('body > canvas');
+      const nativeRequest = canvas.requestPointerLock.bind(canvas);
+      window.__lockEvents = [];
+      document.addEventListener('pointerlockchange', () => {
+        window.__lockEvents.push(document.pointerLockElement === canvas);
+      }, true);
+      let resolveRequest;
+      canvas.requestPointerLock = () => {
+        window.__lockRequestedState = window.__escapeRoomDebug.getState().state;
+        return new Promise(resolve => { resolveRequest = resolve; });
+      };
+      window.__releaseDelayedLock = async () => {
+        canvas.requestPointerLock = nativeRequest;
+        await nativeRequest();
+        resolveRequest();
+      };
+    });
+
+    for (const selector of ['#btn-play', '#btn-story-skip', '#btn-yes']) await navClick(page, selector);
+    await page.waitForFunction(() => window.__escapeRoomDebug.getState().state === 1);
+    check('7a  startup requests capture only after entering gameplay',
+      await page.evaluate(() => window.__lockRequestedState === 1));
+
+    await page.keyboard.press('p');
+    await page.waitForSelector('#s-options:not(.hidden)');
+    await navClick(page, '#btn-options-home');
+    await page.waitForSelector('#confirm-dialog:not(.hidden)');
+    await page.evaluate(() => window.__releaseDelayedLock());
+    await page.waitForFunction(() => window.__lockEvents.includes(true) && !document.pointerLockElement);
+    check('7b  late native capture is released while the confirmation is open',
+      await page.evaluate(() => window.__escapeRoomDebug.getState().state === 2));
+
+    await page.click('#confirm-ok');  // Real mouse click, not a DOM shortcut.
+    await page.waitForSelector('#s-menu:not(.hidden)');
+    check('7c  the Home confirmation remains clickable after late capture',
+      await page.locator('#s-menu:not(.hidden)').count() === 1);
+
+    for (const selector of ['#btn-play', '#btn-story-skip', '#btn-yes']) await navClick(page, selector);
+    await page.waitForFunction(() => document.pointerLockElement && window.__escapeRoomDebug.getState().state === 1);
+    await page.keyboard.press('p');
+    await page.waitForFunction(() => !document.pointerLockElement && window.__escapeRoomDebug.getState().state === 2);
+    await page.click('#btn-options-resume');
+    await page.waitForFunction(() => document.pointerLockElement && window.__escapeRoomDebug.getState().state === 1);
+    check('7d  normal start, pause, and resume still acquire/release capture',
+      await page.evaluate(() => Boolean(document.pointerLockElement) && window.__escapeRoomDebug.getState().state === 1));
+  } finally { await ctx.close(); }
+}
+
 // ── Runner ────────────────────────────────────────────────────────────────────
 // One section crash becomes a failed check instead of killing the whole run —
 // the earlier sections' results are still reported.
@@ -393,6 +449,7 @@ try {
   await runSection('4 mobile', sectionMobile);
   await runSection('5 timeout', sectionTimeout);
   await runSection('6 roster', sectionRoster);
+  await runSection('7 pointer lock', sectionPointerLock);
 
   check('no uncaught page errors across all scenarios', pageErrors.length === 0, pageErrors.slice(0, 3).join(' || ') || 'none');
 

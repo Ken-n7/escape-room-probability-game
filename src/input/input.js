@@ -63,8 +63,12 @@ Object.values(DEVICE_QUERIES).forEach(q => {
 });
 
 // ── Pointer lock ──────────────────────────────────────────────────────────────
+function canLockPointer() {
+  return GameDevice.usePointerLock && (gState.current === S.PLAYING || gState.current === S.CHASE);
+}
+
 export function lockPointer() {
-  if (!GameDevice.usePointerLock) return;
+  if (!canLockPointer()) return;
   if (document.pointerLockElement !== renderer.domElement) {
     renderer.domElement.focus({ preventScroll: true });
     try {
@@ -217,6 +221,13 @@ export function initInput(callbacks = {}) {
 
   document.addEventListener('pointerlockchange', () => {
     _prevX = null; _prevY = null;
+    // Capture is asynchronous: a request made during gameplay can finish
+    // after pause/question/menu UI has opened. Release that late capture so
+    // mouse clicks reach the visible controls instead of staying on the canvas.
+    if (document.pointerLockElement === renderer.domElement && !canLockPointer()) {
+      document.exitPointerLock();
+      return;
+    }
     if (_suppressUnlockPause) { _suppressUnlockPause = false; return; }
     if (!document.pointerLockElement && gState.current === S.PLAYING) {
       _cb.onPause?.();

@@ -1324,10 +1324,10 @@ function finishStartGame() {
   showHUD();
   gameStartTime  = Date.now();
   prevTime = performance.now();
+  gState.current = S.PLAYING;
   lockPointer();
   setCameraView(START_CAMERA_VIEW);
   _holdStartViewFrames = 5;
-  gState.current = S.PLAYING;
   startPlay({ plearn: CFG.gameplay.pLearnMode, device: GameDevice.mode });
   AudioManager.init().catch(err => console.warn('Audio init failed.', err));
 }
