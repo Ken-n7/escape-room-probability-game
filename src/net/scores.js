@@ -2,18 +2,27 @@ import { supabase } from './supabase.js';
 import { authState } from './auth.js';
 
 // Save one finished run. Fire-and-forget from the win screen; never throws so a
-// network hiccup can't break the celebration.
+// network hiccup can't break the celebration. Retries a flaky connection: the
+// row id is fixed client-side, so a retry after a lost response hits the
+// primary key (23505) instead of inserting the run twice.
 export async function submitRun({ roomScores, totalScore, bestTime }) {
   if (import.meta.env.DEV) return { ok: false, reason: 'dev-build' };   // never record dev runs
   if (!authState.user) return { ok: false, reason: 'not-signed-in' };
-  const { error } = await supabase.from('runs').insert({
+  const row = {
+    ...(crypto.randomUUID && { id: crypto.randomUUID() }),   // old browsers: DB default id, no dedupe
     user_id:     authState.user.id,
     room_scores: roomScores,
     total_score: totalScore,
     best_time:   bestTime,
-  });
-  if (error) { console.warn('[scores] submitRun failed:', error.message); return { ok: false, error }; }
-  return { ok: true };
+  };
+  let error;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 2000 * attempt));
+    ({ error } = await supabase.from('runs').insert(row));
+    if (!error || error.code === '23505') return { ok: true };
+  }
+  console.warn('[scores] submitRun failed:', error.message);
+  return { ok: false, error };
 }
 
 // Start of the current ISO week (Monday 00:00, local) as an ISO string — the

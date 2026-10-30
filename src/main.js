@@ -1304,8 +1304,12 @@ function triggerWin({ recordRun = true } = {}) {
     const rooms = bestScores.map(v => v || 0);
     const total = Math.round(rooms.reduce((s, v) => s + v, 0) / rooms.length);
     if (!CFG.gameplay.pLearnMode) {
-      submitRun({ roomScores: rooms, totalScore: total, bestTime: elapsed });
-      invalidateLeaderboardCache();   // player's new score should show on next open
+      submitRun({ roomScores: rooms, totalScore: total, bestTime: elapsed })
+        .then(invalidateLeaderboardCache);   // after the save, so the next open shows it
+      // Guest escapes are never saved — say so instead of letting them hunt the board.
+      if (!isLoggedIn()) $('win-time').textContent += '  · Guest run — log in to be on the leaderboard';
+    } else {
+      $('win-time').textContent += '  · P-Learn practice — not ranked. Use PLAY to get on the leaderboard';
     }
     logEvent('escaped', { time: elapsed, total });
     endPlay({ outcome: 'won', roomsCompleted: 3, totalScore: total, bestTime: elapsed });
