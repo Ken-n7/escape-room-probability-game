@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-//  QUESTIONS  —  transcribed verbatim from the researchers' content document
-//  ("ESCAPE ROOM GAME (CONTENT)" PDF). Do not reword without researcher approval.
+//  QUESTIONS  —  from the researchers' content document
+//  ("ESCAPE ROOM GAME (CONTENT)" PDF), with approved revisions noted below.
+//  Do not reword without researcher approval.
 //
 //  Room 1  EASY     — 15 multiple-choice definition/concept items
 //  Room 2  MODERATE — 10 guided problems; favorable & total outcomes given
@@ -93,14 +94,12 @@ export const ROOMS = [
         hint: 'Read the question again — what value does it want you to find?',
       },
       {
-        // NOTE: the PDF answer key marks "1/2" for this item, but the question
-        // asks for the NUMBER of favorable outcomes, which is 1 (heads).
-        // Imported with the conceptually correct key — flagged for researcher
-        // confirmation in docs/requirements-tracking.md.
-        text: 'A coin is tossed once. What is the probability of getting heads? In this problem, what is the number of favorable outcome/s?',
-        choices: ['0', '1/2', '1', '2'],
+        // Researcher-approved revision (2026-10-30): identify the favorable
+        // outcome rather than its count; this resolves the original key issue.
+        text: 'A coin is tossed once. What is the favorable outcome if the coin lands on heads?',
+        choices: ['Tails', 'Both heads and tails', 'Heads', 'Neither heads nor tails'],
         correct: 2,
-        hint: 'Count the outcomes you want: how many sides of the coin are heads?',
+        hint: 'The favorable outcome is the result that matches the event described.',
       },
       {
         text: 'A standard deck of 52 playing cards is shuffled. One card is drawn. What is the probability of drawing a heart? What is the number of favorable outcomes?',

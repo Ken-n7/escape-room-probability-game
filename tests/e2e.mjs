@@ -428,6 +428,103 @@ async function sectionPointerLock(browser) {
   } finally { await ctx.close(); }
 }
 
+// ── 8. Question retries must preserve the intended progress rules ─────────────
+async function sectionQuestionProgress(browser) {
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+  try {
+    const page = await boot(ctx);
+    await page.clock.install();
+    const state = () => page.evaluate(() => window.__escapeRoomDebug.getState());
+    const openNote = async i => {
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.keyboard.press(`Shift+Digit${i + 1}`);
+      await page.waitForSelector('#s-question:not(.hidden)');
+      await page.waitForFunction(() => {
+        const visible = [...document.querySelectorAll('#question-answers .choice-btn')]
+          .filter(b => b.offsetParent);
+        return visible.length > 0 && visible.every(b => !b.disabled);
+      });
+    };
+    const question = i => page.evaluate(async roomIdx => {
+      const { ROOMS } = await import('/src/data/questions.js');
+      return ROOMS[roomIdx].questions.find(q => q.text === document.getElementById('question-text').textContent);
+    }, i);
+    const answer = async (i, correct) => {
+      const q = await question(i);
+      if (i === 2) {
+        await page.locator('#typed-answer-input').fill(correct ? q.choices[q.correct] : '99/100');
+        await page.locator('#typed-answer-input').press('Enter');
+      } else if (i === 1) {
+        const steps = correct ? q.steps : [null];
+        for (const step of steps) {
+          const buttons = page.locator('#scaffold-options .choice-btn');
+          await buttons.first().waitFor();
+          await page.waitForFunction(() => [...document.querySelectorAll('#scaffold-options .choice-btn')].every(b => !b.disabled));
+          const values = await buttons.allTextContents();
+          const index = correct ? values.indexOf(step) : values.findIndex(v => v !== q.steps[0]);
+          await buttons.nth(index).click();
+        }
+      } else {
+        await page.locator('#choices-grid .choice-btn').nth(correct ? q.correct : (q.correct + 1) % 4).click();
+      }
+      if (correct) await page.waitForFunction(() => window.__escapeRoomDebug.getState().state === 1);
+    };
+
+    for (const [i, label, seconds] of [[0, 'Easy', 15], [1, 'Moderate', 25], [2, 'Hard', 30]]) {
+      await page.evaluate(() => window.__devPlay());
+      for (let j = 0; j < i; j++) await page.keyboard.press(`Digit${j + 1}`);
+      for (let j = 0; j < 2; j++) {
+        await openNote(i);
+        await answer(i, true);
+      }
+      await openNote(i);
+      const original = await question(i);
+      const drawn = await page.evaluate(() => window.__escapeRoomDebug.getDrawnQuestions());
+      const doors = (await state()).doorsOpen;
+      check(`8 ${label}: two correct answers advance to Q3/5`,
+        (await page.locator('#question-room-label').innerText()).includes('3 / 5'));
+
+      await answer(i, false);
+      check(`8 ${label}: wrong answer keeps Q3/5 and records one penalty`,
+        (await page.locator('#question-room-label').innerText()).includes('3 / 5') &&
+        (await page.locator('#question-wrong-count').innerText()).includes('(1/5)'));
+      await page.waitForFunction(() => !document.querySelector('#question-answers .choice-btn:disabled'));
+      // Jump the browser clock past the real per-level deadline; do not call
+      // the timeout handler directly or replace the game's countdown.
+      await page.clock.fastForward(seconds * 1000 + 100);
+      await page.waitForFunction(() => document.getElementById('question-wrong-count').textContent.includes("TIME'S UP"));
+      check(`8 ${label}: timeout keeps doors and completed rooms`,
+        JSON.stringify((await state()).doorsOpen) === JSON.stringify(doors));
+      await page.waitForFunction(() => window.__escapeRoomDebug.getState().state === 1);
+      await openNote(i);
+      const expected = i === 2 ? 3 : 1;
+      check(`8 ${label}: timeout resumes at Q${expected}/5`,
+        (await page.locator('#question-room-label').innerText()).includes(`${expected} / 5`));
+      if (i === 2) {
+        const replaced = await question(i);
+        const after = await page.evaluate(() => window.__escapeRoomDebug.getDrawnQuestions());
+        check('8 Hard: five distinct questions remain', new Set(after[i]).size === 5);
+        check('8 Hard: timeout replaces only the failed item',
+          original.text !== replaced.text && drawn[i].every((q, j) => j === 2 || q === after[i][j]));
+        await page.clock.fastForward(seconds * 1000 + 100);
+        await page.waitForFunction(() => window.__escapeRoomDebug.getState().state === 1);
+        await openNote(i);
+        check('8 Hard: repeated timeout still keeps Q3/5',
+          (await page.locator('#question-room-label').innerText()).includes('3 / 5'));
+        for (let j = 2; j < 5; j++) {
+          if (j > 2) await openNote(i);
+          await answer(i, true);
+        }
+        await page.keyboard.press('p');
+        await navClick(page, '#btn-options-settings');
+        await page.waitForSelector('#s-settings:not(.hidden)');
+        check('8 Hard: completion keeps the 80% score after one wrong answer',
+          (await page.locator('#score-room-2').innerText()) === '80%');
+      }
+    }
+  } finally { await ctx.close(); }
+}
+
 // ── Runner ────────────────────────────────────────────────────────────────────
 // One section crash becomes a failed check instead of killing the whole run —
 // the earlier sections' results are still reported.
@@ -450,6 +547,7 @@ try {
   await runSection('5 timeout', sectionTimeout);
   await runSection('6 roster', sectionRoster);
   await runSection('7 pointer lock', sectionPointerLock);
+  await runSection('8 question progress', sectionQuestionProgress);
 
   check('no uncaught page errors across all scenarios', pageErrors.length === 0, pageErrors.slice(0, 3).join(' || ') || 'none');
 

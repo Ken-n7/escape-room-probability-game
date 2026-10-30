@@ -46,7 +46,7 @@ Three concepts drive the design:
   - **Room 1 · EASY** — 15-item multiple-choice bank on probability definitions/concepts.
   - **Room 2 · MODERATE** — 10 guided problems with a tap-to-fill `P(…) = (…)/(…)` solution scaffold.
   - **Room 3 · HARD** — 10 real-life word problems: identify the data, then compute.
-- **Watch the clock.** In PLAY mode each question has a **15-second** limit; a timeout resets that room to question 1 with newly drawn problems.
+- **Watch the clock.** In PLAY mode the time limits are **15 / 25 / 30 seconds** for Easy / Moderate / Hard. Easy and Moderate restart at question 1 with newly drawn problems after a timeout. Hard keeps completed answers and the level score, replacing only the timed-out item with a different problem on the same note.
 - **Don't get too many wrong.** Up to **5 wrong answers** per room are tolerated before the **chase** penalty triggers (a monster pursuit, blackout, and jumpscare set pieces).
 - **Assemble the code.** Each cleared room yields one digit; combine all three to open the exit door and **win**.
 - **P-Learn mode** — an optional practice toggle that shows a hint before each question.
@@ -128,7 +128,7 @@ Atmosphere is tuned with exponential **fog**, near-black ambient light, flickeri
 
 ## Questions & the exit code
 
-All learning content lives in `src/data/questions.js`, transcribed verbatim from the researchers' content document (do not reword without approval).
+All learning content lives in `src/data/questions.js`, sourced from the researchers' content document with approved revisions recorded in `docs/requirements-tracking.md` (do not reword without approval).
 
 - Each room defines a `codeDigit`. Room 1 → `4`, Room 2 → `7`, Room 3 → `9`.
 - The exit code is **derived**, not hard-coded: `EXIT_CODE = ROOMS.map(r => r.codeDigit).join('')` → `"479"`.
@@ -215,7 +215,7 @@ npm run test:e2e   # boots its own dev server on :5199 if none is running
 E2E_PORT=5201 npm run test:e2e
 ```
 
-`tests/e2e.mjs` drives a real headless Chromium against the app — leaderboard windows, the ⟳ refresh cooldown, and the admin dashboard's Daily boards (with stubbed data). Leaderboard RPCs hit the live Supabase project, so this is an integration check (needs network access to `https://idhhdqbxtssiujuwopcq.supabase.co`); the dashboard assertions use fabricated rows and need no admin login. Exits nonzero on any failure.
+`tests/e2e.mjs` drives a real headless Chromium against the app — leaderboard windows, the ⟳ refresh cooldown, the admin dashboard's Daily boards (with stubbed data), pointer lock, and question progress across all three levels. The question checks cover wrong answers, timeouts, repeated Hard retries, and the final room score; run them alone with `ONLY=8 npm run test:e2e`. Leaderboard RPCs hit the live Supabase project, so this is an integration check (needs network access to `https://idhhdqbxtssiujuwopcq.supabase.co`); the dashboard assertions use fabricated rows and need no admin login. Exits nonzero on any failure.
 
 ---
 
@@ -230,7 +230,7 @@ Key tuning knobs in `src/core/config.js` (`CFG`):
 | `player.radius` | `0.35` | Collision radius |
 | `player.interactR` | `2.2` | Max distance to show the "Press E" prompt |
 | `gameplay.maxWrongAnswers` | `5` | Wrong answers per room before the chase penalty |
-| `gameplay.answerTimeSeconds` | `15` | Per-question time limit (PLAY mode) |
+| `gameplay.answerTimeSeconds` | `[15, 25, 30]` | Per-question time limits for Easy / Moderate / Hard (PLAY mode) |
 | `gameplay.pLearnMode` | `false` | Show a hint before each question |
 | `fog.density` | `0.030` | Corridor fog thickness |
 

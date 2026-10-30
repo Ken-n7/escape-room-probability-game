@@ -162,8 +162,8 @@ let runCode           = ['4', '7', '9'];   // exit code, re-rolled each run (res
 let roomWrong         = [0, 0, 0];
 let correctStreak     = 0;
 let gameStartTime     = 0;
-// Each run draws QUESTIONS_PER_ROOM random items from each room's full bank,
-// so replays (and answer timeouts) present different problems.
+// Each run draws QUESTIONS_PER_ROOM random items from each room's full bank.
+// Easy/Moderate timeouts redraw the level; Hard replaces only the failed item.
 function drawQuestionsForRoom(roomIdx) {
   const a = [...ROOMS[roomIdx].questions];
   for (let i = a.length - 1; i > 0; i--) {
@@ -755,15 +755,26 @@ function startQuestionCountdown() {
   }, 100);
 }
 
-// Time ran out: back to the start of this level with different problems.
+// Time ran out: Easy/Moderate restart; Hard keeps completed answers and retries
+// the current note with a different problem, without changing the score.
 function handleQuestionTimeout() {
   if (gState.current !== S.QUESTION) { stopQuestionCountdown(); return; }
   const roomIdx = activeRoomIdx;
   clearQuestionTimers();
   logEvent('question_timeout', { room: ROOMS[roomIdx].id, difficulty: ROOMS[roomIdx].label, qid: shuffledQuestions[roomIdx][activeQIdx]?.qid });
-  shuffledQuestions[roomIdx] = drawQuestionsForRoom(roomIdx);
-  roomProgress[roomIdx] = 0;
-  activeQIdx    = 0;
+  const keepProgress = ROOMS[roomIdx].label === 'HARD';
+  if (keepProgress) {
+    // Exclude every item already in this run so completed and upcoming notes
+    // stay intact and the replacement cannot repeat another note's question.
+    const alternatives = ROOMS[roomIdx].questions.filter(q => !shuffledQuestions[roomIdx].includes(q));
+    if (alternatives.length) {
+      shuffledQuestions[roomIdx][activeQIdx] = alternatives[Math.floor(Math.random() * alternatives.length)];
+    }
+  } else {
+    shuffledQuestions[roomIdx] = drawQuestionsForRoom(roomIdx);
+    roomProgress[roomIdx] = 0;
+    activeQIdx = 0;
+  }
   correctStreak = 0;
   AudioManager.play('randomScareWhisper');
   flashWrongVignette(roomWrong[roomIdx]);
@@ -772,8 +783,9 @@ function handleQuestionTimeout() {
 
   // Show the verdict inside the modal, then return the player to the room.
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
-  $('question-wrong-count').textContent =
-    "⏰ TIME'S UP! The problems have changed — examine the note to start over.";
+  $('question-wrong-count').textContent = keepProgress
+    ? "⏰ TIME'S UP! Your completed answers are kept — examine the note to retry this item."
+    : "⏰ TIME'S UP! The problems have changed — examine the note to start over.";
   _questionAdvanceTimer = setTimeout(() => {
     if (gState.current === S.QUESTION && activeRoomIdx === roomIdx) closeQuestion();
   }, 2200);
