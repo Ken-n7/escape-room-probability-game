@@ -1,5 +1,9 @@
 # 🔦 ProbXcape — Escape Room · Simple Probability
 
+![ProbXcape title screen: a dark 3D school corridor lit by a flickering ceiling light](https://ken-n7.github.io/portfolio/previews/probxcape.jpg)
+
+**[Play it](https://probxcape.vercel.app)** · [Watch the trailer](https://ken-n7.github.io/portfolio/previews/probxcape-trailer.mp4)
+
 A browser-based **3D horror escape room** that teaches **simple probability**. Players are trapped in a dim, fog-filled L-shaped school corridor and must survive three classrooms — **Easy**, **Moderate**, and **Hard** — answering probability questions to earn digits of the exit code. Get too many wrong and something starts *chasing* you.
 
 Built with **Three.js** for the 3D world and **Supabase** for accounts, leaderboards, and gameplay analytics, then shipped as a static site on **Vercel**.
